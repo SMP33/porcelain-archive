@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Просмотр документа</title>
+    <div id="styles-placeholder"></div>
+</head>
+<body>
+    <div id="app">
+        <v-app>
+            <v-layout>
+                <div id="toolbar-placeholder"></div>
+
+                <v-main>
+                    <v-container>
+                        <v-card v-if="!loading && document">
+                            <v-card-title>
+                                {{ document.name }}
+                            </v-card-title>
+                            <v-card-subtitle>
+                                Автор: {{ document.author }} | Создан: {{ document.created_at }}
+                            </v-card-subtitle>
+                            <v-card-text>
+                                <p>Это страница для просмотра документа с ID: <strong>{{ document.id }}</strong>.</p>
+                                <p>Здесь будет содержимое документа.</p>
+                            </v-card-text>
+                            <v-card-actions>
+                                <v-btn color="primary" href="/">Назад к списку</v-btn>
+                            </v-card-actions>
+                        </v-card>
+                        <v-progress-circular v-if="loading" indeterminate color="primary"></v-progress-circular>
+                        <v-alert v-if="error" type="error">{{ error }}</v-alert>
+                    </v-container>
+                </v-main>
+            </v-layout>
+        </v-app>
+    </div>
+
+    <!-- Подключение скриптов Vue, Vuetify и Axios -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vuetify@3/dist/vuetify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <script>
+        // Функция для загрузки HTML-фрагментов
+        async function loadFragments() {
+            const fragments = {
+                '#styles-placeholder': '/static/_styles.html',
+                '#toolbar-placeholder': '/static/_toolbar.html'
+                // '#scripts-placeholder' больше не нужен
+            };
+            for (const placeholder in fragments) {
+                const response = await fetch(fragments[placeholder]);
+                const html = await response.text();
+                document.querySelector(placeholder).outerHTML = html;
+            }
+        }
+
+        loadFragments().then(() => {
+            const { createApp, ref, onMounted } = Vue;
+            const { createVuetify } = Vuetify;
+            const vuetify = createVuetify();
+
+            createApp({
+                setup() {
+                    const document = ref(null);
+                    const loading = ref(true);
+                    const error = ref(null);
+                    // Здесь будет логика загрузки данных конкретного документа
+                    return { document, loading, error };
+                }
+            }).use(vuetify).mount('#app');
+        });
+    </script>
+</body>
+</html>

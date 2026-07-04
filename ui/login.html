@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход в систему</title>
+    <!-- Подключение стилей Vuetify и иконок -->
+    <link href="https://cdn.jsdelivr.net/npm/vuetify@3/dist/vuetify.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@5/css/materialdesignicons.min.css" rel="stylesheet">
+    <style>
+        html, body, #app, .v-application {
+            height: 100%;
+        }
+        .v-application__wrap {
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <v-app>
+        <v-layout class="d-flex align-center justify-center">
+            <v-card width="400" class="pa-4">
+                <v-card-title class="text-center">Авторизация</v-card-title>
+                <v-card-text>
+                    <v-form @submit.prevent="handleLogin">
+                        <v-text-field
+                            v-model="username"
+                            label="Логин"
+                            prepend-inner-icon="mdi-account"
+                            required
+                        ></v-text-field>
+                        <v-text-field
+                            v-model="password"
+                            label="Пароль"
+                            type="password"
+                            prepend-inner-icon="mdi-lock"
+                            required
+                        ></v-text-field>
+                        <v-alert v-if="error" type="error" density="compact" class="mb-4">{{ error }}</v-alert>
+                        <v-btn type="submit" color="primary" block :loading="loading">Войти</v-btn>
+                    </v-form>
+                </v-card-text>
+            </v-card>
+        </v-layout>
+    </v-app>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vuetify@3/dist/vuetify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+<script>
+    const { createApp, ref } = Vue;
+    const { createVuetify } = Vuetify;
+    const vuetify = createVuetify();
+
+    createApp({
+        setup() {
+            const username = ref('admin');
+            const password = ref('admin');
+            const loading = ref(false);
+            const error = ref('');
+
+            const handleLogin = async () => {
+                loading.value = true;
+                error.value = '';
+                try {
+                    // FastAPI ожидает данные в формате `application/x-www-form-urlencoded`
+                    const params = new URLSearchParams();
+                    params.append('username', username.value);
+                    params.append('password', password.value);
+
+                    await axios.post('/api/users/login', params, { withCredentials: true });
+                    window.location.href = '/'; // Перенаправляем на главную страницу
+                } catch (err) {
+                    error.value = 'Неверный логин или пароль.';
+                    console.error("Ошибка входа:", err);
+                } finally {
+                    loading.value = false;
+                }
+            };
+
+            return { username, password, loading, error, handleLogin };
+        }
+    }).use(vuetify).mount('#app');
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+<v-app-bar color="primary" density="compact">
+  <v-app-bar-title>Архив</v-app-bar-title>
+  <v-spacer></v-spacer>
+
+  <!-- Показывается, если пользователь авторизован -->
+  <template v-if="user">
+    <span class="mr-2">{{ user.username }}</span>
+    <v-btn icon @click="handleLogout">
+      <v-icon>mdi-logout</v-icon>
+    </v-btn>
+  </template>
+  <!-- Показывается, если пользователь НЕ авторизован -->
+  <v-btn v-else href="/login">Войти</v-btn>
+</v-app-bar>

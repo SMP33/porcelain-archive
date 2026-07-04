@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environment
+.venv/
+
+# Secrets / local config
+secret/
+.private/
+
+# Generated / working output
+out/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
