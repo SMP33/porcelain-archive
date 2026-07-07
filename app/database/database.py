@@ -1,62 +1,134 @@
-import psycopg2
 import os
 import configparser
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, Dict, List, Optional, Sequence
+
+from psycopg import AsyncConnection
+from psycopg_pool import AsyncConnectionPool
+
 
 class Database:
     """
-    Класс-синглтон для управления соединением с базой данных PostgreSQL.
+    Класс-синглтон для управления пулом асинхронных соединений с базой данных PostgreSQL.
 
-    Соединение устанавливается при первом создании экземпляра
+    Пул создаётся (но не открывается) при первом создании экземпляра.
+    Открытие пула и создание таблиц выполняется асинхронно в init().
     """
     _instance = None
-    _connection = None
+    _pool: Optional[AsyncConnectionPool] = None
+    _initialized = False
 
     def __new__(cls, *args, **kwargs):
         """
         Реализация паттерна Singleton.
-        Создает экземпляр и соединение с БД только при первом вызове.
+        Создает экземпляр только при первом вызове, при повторных - возвращает его же.
         """
         if cls._instance is None:
             cls._instance = super(Database, cls).__new__(cls)
-            
-            # Получаем параметры подключения из .ini файла
-            config = configparser.ConfigParser()
-            config_path = f"{os.path.dirname(__file__)}/../../secret/database.ini"
-            
-            if not os.path.exists(config_path):
-                raise FileNotFoundError(f"Файл конфигурации не найден: {os.path.abspath(config_path)}")
-                
-            config.read(config_path)
-            
-            # Устанавливаем соединение
-            cls._connection = psycopg2.connect(
-                dbname=config.get('General', 'dbname'),
-                user=config.get('General', 'user'),
-                password=config.get('General', 'password'),
-                host=config.get('General', 'host'),
-                port=config.getint('General', 'port')
-            )
-            
-            print("Database connection established.")
-
-            # Выполняем скрипт для создания таблиц
-            sql_file_path = os.path.join(os.path.dirname(__file__), 'create_tables.sql')
-            with open(sql_file_path, 'r', encoding='utf-8') as f:
-                sql_script = f.read()
-            with cls._connection.cursor() as cursor:
-                cursor.execute(sql_script)
-                cls._connection.commit()
-            print("Database tables initialized/verified.")
-
         return cls._instance
-    
-    def init(self):
-        """Инициализация."""
-        return self.get_connection()
 
-    def get_connection(self):
-        """Возвращает активное соединение с базой данных."""
-        return self._connection
+    def __init__(self):
+        """
+        Читает конфиг и создаёт (но не открывает) пул соединений с БД.
+        Выполняется только один раз, даже если Database() будет вызван повторно.
+        """
+        if self.__class__._initialized:
+            return
+        self.__class__._initialized = True
 
-# Создаем единственный экземпляр для импорта в других частях приложения
+        config = configparser.ConfigParser()
+        config_path = f"{os.path.dirname(__file__)}/../../.secret/config.ini"
+
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Файл конфигурации не найден: {os.path.abspath(config_path)}")
+
+        config.read(config_path)
+
+        self.conninfo = (
+            f"dbname={config.get('Database', 'dbname')} "
+            f"user={config.get('Database', 'user')} "
+            f"password={config.get('Database', 'password')} "
+            f"host={config.get('Database', 'host')} "
+            f"port={config.getint('Database', 'port')}"
+        )
+
+        # open=False: открытие пула требует сетевого I/O и должно происходить
+        # внутри работающего event loop (см. init()), а не в момент импорта модуля.
+        self._pool = AsyncConnectionPool(self.conninfo, open=False)
+
+    async def init(self) -> None:
+        """
+        Открывает пул соединений и выполняет create_tables.sql.
+        Должна вызываться из async-контекста (lifespan FastAPI при старте сервера).
+        """
+        await self._pool.open()
+
+        async with self._pool.connection() as conn:
+            files = ['create_tables.sql', 'create_triggers.sql', 'fill_initial_data.sql']
+            
+            sql_script=''
+            for file in files:
+                sql_file_path = os.path.join(os.path.dirname(__file__), file)
+                with open(sql_file_path, 'r', encoding='utf-8') as f:
+                    sql_script += f.read() + '\n'
+            
+            await conn.execute(sql_script)
+
+        print("Database pool opened, tables initialized/verified.")
+
+    async def close(self) -> None:
+        """Закрывает пул соединений (вызывается при остановке сервера)."""
+        await self._pool.close()
+
+    @asynccontextmanager
+    async def transaction(self) -> AsyncIterator[AsyncConnection]:
+        """
+        Выделяет отдельное соединение из пула на время одной транзакции.
+        Коммитит при успешном завершении блока, откатывает при исключении.
+        Каждый вызов transaction() полностью изолирован от остальных запросов -
+        в отличие от одного общего соединения на всё приложение, конкурентные
+        запросы больше не могут перепутать состояние транзакций друг друга.
+
+        Использование:
+            async with db.transaction() as conn:
+                await conn.execute(...)
+                await conn.execute(...)
+        """
+        async with self._pool.connection() as conn:
+            yield conn
+
+    async def execute_read(self, query: str, params: Optional[Sequence[Any]] = None) -> List[Any]:
+        """
+        Выполняет READ-запрос (SELECT) в отдельном соединении из пула
+        и возвращает все строки результата.
+        """
+        async with self.transaction() as conn:
+            cursor = await conn.execute(query, params)
+            return await cursor.fetchall()
+
+    async def execute_write(self, query: str, params: Optional[Sequence[Any]] = None) -> int:
+        """
+        Выполняет WRITE-запрос (INSERT/UPDATE/DELETE) в отдельном соединении из пула.
+        Каждый вызов - отдельная, независимая транзакция.
+
+        :return: Количество затронутых строк.
+        """
+        async with self.transaction() as conn:
+            cursor = await conn.execute(query, params)
+            return cursor.rowcount
+
+    async def get_user_permissions(self, user_id: int) -> Dict[str, bool]:
+        """
+        Проверяет права пользователя: can_create и can_review.
+        """
+        rows = await self.execute_read(
+            "SELECT can_create, can_review FROM member WHERE id = %s",
+            (user_id,)
+        )
+        if not rows:
+            return {"can_create": False, "can_review": False}
+        can_create, can_review = rows[0]
+        return {"can_create": bool(can_create), "can_review": bool(can_review)}
+
+
 db = Database()

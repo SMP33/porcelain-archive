@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Просмотр документа</title>
     <div id="styles-placeholder"></div>
+    <style>[v-cloak] { display: none; }</style>
 </head>
 <body>
-    <div id="app">
+    <div id="app" v-cloak>
         <v-app>
             <v-layout>
                 <div id="toolbar-placeholder"></div>
@@ -51,7 +52,7 @@
                 // '#scripts-placeholder' больше не нужен
             };
             for (const placeholder in fragments) {
-                const response = await fetch(fragments[placeholder]);
+                const response = await fetch(fragments[placeholder], { cache: 'no-store' });
                 const html = await response.text();
                 document.querySelector(placeholder).outerHTML = html;
             }
@@ -67,8 +68,98 @@
                     const document = ref(null);
                     const loading = ref(true);
                     const error = ref(null);
-                    // Здесь будет логика загрузки данных конкретного документа
-                    return { document, loading, error };
+                    const user = ref(null);
+
+                    const goHome = () => {
+                        window.location.href = '/';
+                    };
+
+                    const checkAuth = async () => {
+                        try {
+                            const response = await axios.get('/api/users/me', { withCredentials: true });
+                            user.value = response.data;
+                        } catch (err) {
+                            user.value = null;
+                        }
+                    };
+
+                    const handleLogout = async () => {
+                        try {
+                            await axios.post('/api/users/logout', {}, { withCredentials: true });
+                            user.value = null;
+                            window.location.reload();
+                        } catch (err) {
+                            console.error("Ошибка при выходе:", err);
+                        }
+                    };
+
+                    const showResetPasswordDialog = ref(false);
+                    const oldPassword = ref('');
+                    const newPassword = ref('');
+                    const resetPasswordLoading = ref(false);
+                    const resetPasswordError = ref('');
+
+                    const handleResetPassword = async () => {
+                        resetPasswordLoading.value = true;
+                        resetPasswordError.value = '';
+                        try {
+                            await axios.post(
+                                '/api/users/reset_password',
+                                { old_password: oldPassword.value, new_password: newPassword.value },
+                                { withCredentials: true }
+                            );
+                            showResetPasswordDialog.value = false;
+                            oldPassword.value = '';
+                            newPassword.value = '';
+                        } catch (err) {
+                            resetPasswordError.value = 'Не удалось сменить пароль.';
+                            console.error("Ошибка при смене пароля:", err);
+                        } finally {
+                            resetPasswordLoading.value = false;
+                        }
+                    };
+
+                    const showSetDisplayNameDialog = ref(false);
+                    const displayNameInput = ref('');
+                    const setDisplayNameLoading = ref(false);
+                    const setDisplayNameError = ref('');
+
+                    const handleSetDisplayName = async () => {
+                        setDisplayNameLoading.value = true;
+                        setDisplayNameError.value = '';
+                        try {
+                            const response = await axios.post(
+                                '/api/users/set_display_name',
+                                { display_name: displayNameInput.value },
+                                { withCredentials: true }
+                            );
+                            if (user.value) {
+                                user.value.display_name = response.data.display_name;
+                            }
+                            showSetDisplayNameDialog.value = false;
+                        } catch (err) {
+                            setDisplayNameError.value = 'Не удалось изменить ФИО.';
+                            console.error("Ошибка при изменении ФИО:", err);
+                        } finally {
+                            setDisplayNameLoading.value = false;
+                        }
+                    };
+
+                    onMounted(() => {
+                        // ID документа берётся из пути /document/<id>
+                        const parts = window.location.pathname.split('/').filter(Boolean);
+                        const id = parts[parts.length - 1];
+                        // TODO: загрузка реальных данных документа по id с backend
+                        document.value = { id, name: `Документ №${id}`, author: '', created_at: '' };
+                        loading.value = false;
+                        checkAuth();
+                    });
+
+                    return {
+                        document, loading, error, goHome, user, handleLogout,
+                        showResetPasswordDialog, oldPassword, newPassword, resetPasswordLoading, resetPasswordError, handleResetPassword,
+                        showSetDisplayNameDialog, displayNameInput, setDisplayNameLoading, setDisplayNameError, handleSetDisplayName,
+                    };
                 }
             }).use(vuetify).mount('#app');
         });

@@ -10,18 +10,16 @@ from docx.text.paragraph import Paragraph
 import pythoncom
 from win32com.client import Dispatch
 
-# Константы Word
 wdStatisticPages = 2
 wdActiveEndPageNumber = 3
 wdHorizontalPositionRelativeToPage = 5
 wdVerticalPositionRelativeToPage = 6
 wdMainTextStory = 1
-# Единицы измерения в Open XML - EMU (English Metric Units)
-# 1 дюйм = 914400 EMU
-# 1 см = 360000 EMU
+
+# Open XML использует EMU (English Metric Units): 1 дюйм = 914400 EMU, 1 см = 360000 EMU.
 EMU_PER_CM = 360000
 EMU_PER_INCH = 914400
-# 1 дюйм = 1440 твипов (Twips)
+# 1 дюйм = 1440 твипов.
 TWIPS_PER_CM = 567
 
 def process_docx_file(filename):
@@ -33,27 +31,18 @@ def process_docx_file(filename):
         pythoncom.CoInitialize()
         try:
             word = Dispatch("Word.Application")
-            word.Visible = False # Работаем в фоновом режиме
+            word.Visible = False
 
-            # Открываем документ и конвертируем номера списков в текст
             doc = word.Documents.Open(os.path.abspath(filename))
             doc.Range().ListFormat.ConvertNumbersToText()
 
             num_pages = doc.ComputeStatistics(wdStatisticPages)
             print(f"Документ содержит {num_pages} страниц.")
 
-            # Словарь для хранения данных по страницам
             pages_data = defaultdict(lambda: {"blocks": []})
 
-            # Обработка обычных абзацев в основном тексте документа
             for para in doc.Paragraphs:
-                # Пропускаем абзацы, которые не являются частью основного текста
-                # (например, в текстовых рамках, колонтитулах и т.д.)
-                if para.Range.StoryType != wdMainTextStory:
-                    continue
-
-                # Пропускаем абзацы, которые не являются частью основного текста
-                # (например, в текстовых рамках, колонтитулах и т.д.)
+                # Пропускаем текстовые рамки, колонтитулы и т.п. - не основной текст.
                 if para.Range.StoryType != wdMainTextStory:
                     continue
 
@@ -61,22 +50,19 @@ def process_docx_file(filename):
                 if not text:
                     continue
 
-                # Получаем номер страницы и размеры
                 page_num = para.Range.Information(wdActiveEndPageNumber)
                 page_setup = para.Range.PageSetup
                 page_w_pt = page_setup.PageWidth
                 page_h_pt = page_setup.PageHeight
 
-                # Получаем координаты абзаца в пунктах (points)
                 try:
                     x_pt = para.Range.Information(wdHorizontalPositionRelativeToPage)
                     y_pt = para.Range.Information(wdVerticalPositionRelativeToPage)
-                    # Расчет ширины и высоты - это аппроксимация
+                    # Ширина/высота - аппроксимация, точных границ блока Word не даёт.
                     w_pt = page_w_pt - para.LeftIndent - para.RightIndent
                     h_pt = para.SpaceAfter + para.SpaceBefore + para.LineSpacing
                 except Exception:
-                    # Если координаты получить не удалось (например, для пустых строк),
-                    # пропускаем этот блок, чтобы избежать ошибок.
+                    # Не удалось получить координаты (например, для пустых строк).
                     continue
 
                 pages_data[page_num]["blocks"].append({
@@ -90,9 +76,7 @@ def process_docx_file(filename):
                     }
                 })
 
-            # Обработка всех фигур (текстовых рамок) в документе
             for shape in doc.Shapes:
-                # Пропускаем фигуры без текстовой рамки
                 if not shape.TextFrame.HasText:
                     continue
 
@@ -101,21 +85,17 @@ def process_docx_file(filename):
                 if not text:
                     continue
 
-                # Получаем номер страницы для фигуры
                 page_num = text_range.Information(wdActiveEndPageNumber)
-                
-                # Получаем размеры страницы, на которой находится фигура
+
                 page_setup = text_range.PageSetup
                 page_w_pt = page_setup.PageWidth
                 page_h_pt = page_setup.PageHeight
 
-                # Координаты и размеры фигуры в пунктах (points)
                 x_pt = shape.Left
                 y_pt = shape.Top
                 w_pt = shape.Width
                 h_pt = shape.Height
 
-                # Добавляем блок в данные соответствующей страницы
                 pages_data[page_num]["blocks"].append({
                     "text": text,
                     "type": "text",
@@ -127,10 +107,9 @@ def process_docx_file(filename):
                     }
                 })
             
-            # Закрываем документ без сохранения изменений, сделанных ConvertNumbersToText
+            # Не сохраняем изменения, сделанные ConvertNumbersToText - они нужны только для парсинга.
             doc.Close(SaveChanges=0)
-            
-            # Сохраняем JSON для каждой страницы
+
             output_dir_json = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out')
             os.makedirs(output_dir_json, exist_ok=True)
             
@@ -155,6 +134,5 @@ def process_docx_file(filename):
         traceback.print_exc()
 
 if __name__ == "__main__":
-    # Замените 'your_document.docx' на путь к вашему файлу
     file_to_process = 'C:/Users/user/Documents/099_01.docx'
     process_docx_file(file_to_process)

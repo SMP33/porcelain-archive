@@ -14,10 +14,13 @@
         .v-application__wrap {
             min-height: 100vh;
         }
+        [v-cloak] {
+            display: none;
+        }
     </style>
 </head>
 <body>
-<div id="app">
+<div id="app" v-cloak>
     <v-app>
         <v-layout class="d-flex align-center justify-center">
             <v-card width="400" class="pa-4">

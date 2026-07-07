@@ -1,37 +1,50 @@
 -- Список пользователей
-CREATE TABLE IF NOT EXISTS member (
-    id BIGSERIAL PRIMARY KEY, -- Уникальный id
-    name TEXT UNIQUE NOT NULL, -- Имя
-    email TEXT UNIQUE, -- Почтовый адрес
-    hash TEXT, -- Хеш сумма пароля
-    can_create  INTEGER DEFAULT 0, -- Может ли создавать документы
-    can_review  INTEGER DEFAULT 0 -- Может ли одобрять правки
-);
+CREATE    TABLE IF NOT EXISTS member (
+          id BIGSERIAL PRIMARY KEY, -- Уникальный id
+          name TEXT UNIQUE NOT NULL, -- Имя
+          display_name TEXT, -- ФИО
+          email TEXT UNIQUE, -- Почтовый адрес
+          hash TEXT, -- Хеш сумма пароля
+          can_create INTEGER DEFAULT 0, -- Может ли создавать документы
+          can_review INTEGER DEFAULT 0 -- Может ли одобрять правки
+          );
 
 -- Сессии пользователей
-CREATE TABLE IF NOT EXISTS session (
-    user_id BIGINT NOT NULL REFERENCES member(id) ON DELETE CASCADE, -- Пользователь
-    id BIGSERIAL PRIMARY KEY, -- Уникальный id
-    token TEXT UNIQUE NOT NULL, -- Токен сессии
-    is_active INTEGER DEFAULT 1 -- Активна ли сессия
-);
+CREATE    TABLE IF NOT EXISTS session (
+          user_id BIGINT NOT NULL REFERENCES member (id) ON DELETE CASCADE, -- Пользователь
+          id BIGSERIAL PRIMARY KEY, -- Уникальный id
+          token TEXT UNIQUE NOT NULL, -- Токен сессии
+          is_active INTEGER DEFAULT 1 -- Активна ли сессия
+          );
 
 -- Документы
-CREATE TABLE IF NOT EXISTS document (
-    id BIGSERIAL PRIMARY KEY, -- Уникальный id
-    name TEXT NOT NULL, -- Имя
-    is_visible INTEGER DEFAULT 0 -- Виден ли обычным пользователям
-);
+CREATE    TABLE IF NOT EXISTS document (
+          id BIGSERIAL PRIMARY KEY, -- Уникальный id
+          name TEXT NOT NULL, -- Имя
+          meta JSONB, -- Мета информация о документе: теги, авторы, дата выхода...
+          is_visible INTEGER DEFAULT 0, -- Виден ли обычным пользователям
+          is_created INTEGER DEFAULT 0 -- Существует ли репозиторий
+          );
+
+-- Задачи
+CREATE    TABLE IF NOT EXISTS task (
+          id BIGSERIAL PRIMARY KEY, -- Уникальный id
+          author_id BIGINT REFERENCES member (id) ON DELETE SET NULL, -- Автор
+          type TEXT NOT NULL, -- Тип
+          data JSONB, -- Данные
+          created_time TIMESTAMP, -- Время создания
+          started_time TIMESTAMP, -- Время начала выполнения
+          finished_time TIMESTAMP, -- Время завершения
+          status TEXT NOT NULL DEFAULT 'new' -- Статус задачи
+          CHECK (status IN ('new', 'queued', 'running', 'success', 'error'))
+          );
 
 -- Наборы изменений
-CREATE TABLE IF NOT EXISTS branch (
-    id BIGSERIAL PRIMARY KEY, -- Уникальный id
-    author_id BIGINT NOT NULL REFERENCES member(id) ON DELETE CASCADE, -- Создатель набора изменений
-    reviewer_id BIGINT NOT NULL REFERENCES member(id) ON DELETE CASCADE, -- Ревьюер
-    name TEXT NOT NULL, -- Название ветки
-    sha_begin TEXT, -- Коммит, с которого начинаются изменения 
-    sha_merge TEXT -- Коммит, на котором произошло слияние
-);
-
--- Начальные данные
-INSERT INTO member (name, email, hash, can_create, can_review) VALUES ('admin', NULL, NULL, 1, 1) ON CONFLICT(name) DO NOTHING;
+CREATE    TABLE IF NOT EXISTS branch (
+          id BIGSERIAL PRIMARY KEY, -- Уникальный id
+          author_id BIGINT REFERENCES member (id) ON DELETE SET NULL, -- Создатель набора изменений
+          reviewer_id BIGINT REFERENCES member (id) ON DELETE SET NULL, -- Ревьюер
+          name TEXT NOT NULL, -- Название ветки
+          sha_begin TEXT, -- Коммит, с которого начинаются изменения 
+          sha_merge TEXT -- Коммит, на котором произошло слияние
+          );

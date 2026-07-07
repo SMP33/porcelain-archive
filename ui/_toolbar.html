@@ -1,14 +1,69 @@
 <v-app-bar color="primary" density="compact">
-  <v-app-bar-title>Архив</v-app-bar-title>
+  <v-app-bar-title style="cursor: pointer;" @click="goHome">Архив</v-app-bar-title>
   <v-spacer></v-spacer>
 
-  <!-- Показывается, если пользователь авторизован -->
-  <template v-if="user">
-    <span class="mr-2">{{ user.username }}</span>
-    <v-btn icon @click="handleLogout">
-      <v-icon>mdi-logout</v-icon>
-    </v-btn>
-  </template>
-  <!-- Показывается, если пользователь НЕ авторизован -->
-  <v-btn v-else href="/login">Войти</v-btn>
+  <v-menu>
+    <template v-slot:activator="{ props }">
+      <v-btn icon v-bind="props">
+        <v-icon>mdi-account-circle</v-icon>
+      </v-btn>
+    </template>
+    <v-list>
+      <template v-if="user">
+        <v-list-subheader>{{ user.display_name || user.username }}</v-list-subheader>
+        <v-list-item title="Сменить пароль" @click="showResetPasswordDialog = true"></v-list-item>
+        <v-list-item title="Изменить ФИО" @click="showSetDisplayNameDialog = true"></v-list-item>
+        <v-list-item title="Выйти" @click="handleLogout"></v-list-item>
+      </template>
+      <template v-else>
+        <v-list-item title="Войти" href="/login"></v-list-item>
+      </template>
+    </v-list>
+  </v-menu>
+
+  <v-dialog v-model="showResetPasswordDialog" max-width="400">
+    <v-card>
+      <v-card-title>Смена пароля</v-card-title>
+      <v-card-text>
+        <v-text-field
+          v-model="oldPassword"
+          label="Текущий пароль"
+          type="password"
+          autofocus
+        ></v-text-field>
+        <v-text-field
+          v-model="newPassword"
+          label="Новый пароль"
+          type="password"
+          @keyup.enter="handleResetPassword"
+        ></v-text-field>
+        <v-alert v-if="resetPasswordError" type="error" density="compact">{{ resetPasswordError }}</v-alert>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn @click="showResetPasswordDialog = false">Отмена</v-btn>
+        <v-btn color="primary" :loading="resetPasswordLoading" @click="handleResetPassword">Сохранить</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <v-dialog v-model="showSetDisplayNameDialog" max-width="400">
+    <v-card>
+      <v-card-title>Изменение ФИО</v-card-title>
+      <v-card-text>
+        <v-text-field
+          v-model="displayNameInput"
+          label="ФИО"
+          autofocus
+          @keyup.enter="handleSetDisplayName"
+        ></v-text-field>
+        <v-alert v-if="setDisplayNameError" type="error" density="compact">{{ setDisplayNameError }}</v-alert>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn @click="showSetDisplayNameDialog = false">Отмена</v-btn>
+        <v-btn color="primary" :loading="setDisplayNameLoading" @click="handleSetDisplayName">Сохранить</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </v-app-bar>

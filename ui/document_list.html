@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Архив Документов</title>
     <div id="styles-placeholder"></div>
+    <style>[v-cloak] { display: none; }</style>
   </head>
   <body>
-    <div id="app">
+    <div id="app" v-cloak>
       <v-app>
         <v-layout>
           <div id="toolbar-placeholder"></div>
@@ -15,7 +16,10 @@
           <v-main>
             <v-container>
               <v-card>
-                <v-card-title>Документы</v-card-title>
+                <v-card-title class="d-flex justify-space-between align-center">
+                  <span>Документы</span>
+                  <v-btn v-if="user" color="primary" @click="showCreateDialog = true">Добавить документ</v-btn>
+                </v-card-title>
                 <v-card-text>
                   <!-- Контент страницы списка документов -->
                   <v-data-table-server v-model:items-per-page="itemsPerPage" :headers="headers"
@@ -31,6 +35,26 @@
             </v-container>
           </v-main>
         </v-layout>
+
+        <v-dialog v-model="showCreateDialog" max-width="500">
+          <v-card>
+            <v-card-title>Новый документ</v-card-title>
+            <v-card-text>
+              <v-text-field
+                v-model="newDocumentName"
+                label="Название документа"
+                autofocus
+                @keyup.enter="handleCreateDocument"
+              ></v-text-field>
+              <v-alert v-if="createError" type="error" density="compact">{{ createError }}</v-alert>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn @click="showCreateDialog = false">Отмена</v-btn>
+              <v-btn color="primary" :loading="creating" @click="handleCreateDocument">Создать</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
       </v-app>
     </div>
 
@@ -48,7 +72,7 @@
           // '#scripts-placeholder' больше не нужен
         };
         for (const placeholder in fragments) {
-          const response = await fetch(fragments[placeholder]);
+          const response = await fetch(fragments[placeholder], { cache: 'no-store' });
           const html = await response.text();
           document.querySelector(placeholder).outerHTML = html;
         }
@@ -78,6 +102,22 @@
             const loading = ref(true);
             const totalItems = ref(0);
 
+            const showCreateDialog = ref(false);
+            const newDocumentName = ref('');
+            const creating = ref(false);
+            const createError = ref('');
+
+            const showResetPasswordDialog = ref(false);
+            const oldPassword = ref('');
+            const newPassword = ref('');
+            const resetPasswordLoading = ref(false);
+            const resetPasswordError = ref('');
+
+            const showSetDisplayNameDialog = ref(false);
+            const displayNameInput = ref('');
+            const setDisplayNameLoading = ref(false);
+            const setDisplayNameError = ref('');
+
             const loadItems = async ({ page, itemsPerPage, sortBy }) => {
               loading.value = true;
               try {
@@ -100,7 +140,32 @@
 
             const openDocument = (event, { item }) => {
               // Переходим на страницу документа, передавая его ID
-              window.location.href = `/static/document.html?id=${item.id}`;
+              window.location.href = `/document/${item.id}`;
+            };
+
+            const goHome = () => {
+              window.location.href = '/';
+            };
+
+            const handleCreateDocument = async () => {
+              if (!newDocumentName.value) {
+                return;
+              }
+              creating.value = true;
+              createError.value = '';
+              try {
+                const response = await axios.post(
+                  '/api/documents/create',
+                  { name: newDocumentName.value },
+                  { withCredentials: true }
+                );
+                window.location.href = `/document/${response.data.id}`;
+              } catch (error) {
+                createError.value = 'Не удалось создать документ.';
+                console.error("Ошибка при создании документа:", error);
+              } finally {
+                creating.value = false;
+              }
             };
 
             const checkAuth = async () => {
@@ -124,9 +189,55 @@
               }
             };
 
+            const handleResetPassword = async () => {
+              resetPasswordLoading.value = true;
+              resetPasswordError.value = '';
+              try {
+                await axios.post(
+                  '/api/users/reset_password',
+                  { old_password: oldPassword.value, new_password: newPassword.value },
+                  { withCredentials: true }
+                );
+                showResetPasswordDialog.value = false;
+                oldPassword.value = '';
+                newPassword.value = '';
+              } catch (error) {
+                resetPasswordError.value = 'Не удалось сменить пароль.';
+                console.error("Ошибка при смене пароля:", error);
+              } finally {
+                resetPasswordLoading.value = false;
+              }
+            };
+
+            const handleSetDisplayName = async () => {
+              setDisplayNameLoading.value = true;
+              setDisplayNameError.value = '';
+              try {
+                const response = await axios.post(
+                  '/api/users/set_display_name',
+                  { display_name: displayNameInput.value },
+                  { withCredentials: true }
+                );
+                if (user.value) {
+                  user.value.display_name = response.data.display_name;
+                }
+                showSetDisplayNameDialog.value = false;
+              } catch (error) {
+                setDisplayNameError.value = 'Не удалось изменить ФИО.';
+                console.error("Ошибка при изменении ФИО:", error);
+              } finally {
+                setDisplayNameLoading.value = false;
+              }
+            };
+
             onMounted(checkAuth);
 
-            return { user, itemsPerPage, headers, serverItems, loading, totalItems, loadItems, openDocument, handleLogout };
+            return {
+              user, itemsPerPage, headers, serverItems, loading, totalItems, loadItems, openDocument, handleLogout,
+              showCreateDialog, newDocumentName, creating, createError, handleCreateDocument, goHome,
+              showResetPasswordDialog, oldPassword, newPassword, resetPasswordLoading, resetPasswordError, handleResetPassword,
+              showSetDisplayNameDialog, displayNameInput, setDisplayNameLoading, setDisplayNameError, handleSetDisplayName,
+            };
           }
         });
 

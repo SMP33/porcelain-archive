@@ -7,8 +7,7 @@ __pycache__/
 .venv/
 
 # Secrets / local config
-secret/
-.private/
+.*/
 
 # Generated / working output
 out/
