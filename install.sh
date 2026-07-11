@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Установка зависимостей проекта на Ubuntu (python-пакеты в venv из
-# requirements.txt, Node.js/npm для сборки frontend; PostgreSQL должен
-# быть развёрнут отдельно), плюс создание пустого шаблона config.ini
-# в ~/.config/porcelain-archive (тот же
-# путь, что run_porcelain_archive_server.py использует как запасной по
-# умолчанию) и установка ARCHIVE_CONFIG_INI_PATH для текущего пользователя.
+# Установка python/npm-зависимостей проекта (venv из requirements.txt,
+# npm-пакеты для сборки frontend), плюс создание пустого шаблона config.ini
+# в ~/.config/porcelain-archive (тот же путь, что run_porcelain_archive_server.py
+# использует как запасной по умолчанию) и установка ARCHIVE_CONFIG_INI_PATH
+# для текущего пользователя.
 #
-# Скрипт не использует sudo - команды, требующие системных привилегий
-# (apt-get), нужно выполнять из-под пользователя с уже имеющимися
-# правами (например, из-под root или через "sudo bash install.sh" целиком).
+# Скрипт полностью работает без sudo и не ставит системные пакеты (git,
+# git-lfs, python3-venv, Node.js/npm, PostgreSQL) - только проверяет их
+# наличие и подсказывает команду, если чего-то не хватает. Полный список
+# и точные команды установки - в README.md.
 #
 # Список python-пакетов (requirements.txt) собран по фактическим import'ам
 # в каждом .py файле проекта (модули стандартной библиотеки и локальные
@@ -23,18 +23,17 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-echo "== Обновление списка пакетов =="
-apt-get update
-
-echo "== Установка git =="
-apt-get install -y git
+echo "== Проверка git =="
+if ! command -v git >/dev/null 2>&1; then
+    echo "git не установлен. Установите его вручную (требует sudo):" >&2
+    echo "  sudo apt-get install -y git" >&2
+    exit 1
+fi
 
 echo "== Проверка Git LFS =="
 # git-lfs нужен как отдельный apt-пакет, иначе "git lfs ..." не существует
 # как подкоманда git - именно это вызывает run_git(path, "lfs", "install", ...)
-# в task/run_create_repos.py при создании репозитория документа. Установка
-# через apt-get требует sudo, поэтому скрипт её не делает сам - только
-# проверяет наличие и подсказывает команду, если git-lfs не установлен.
+# в task/run_create_repos.py при создании репозитория документа.
 if ! git lfs version >/dev/null 2>&1; then
     echo "git-lfs не установлен. Установите его вручную (требует sudo):" >&2
     echo "  sudo apt-get install -y git-lfs" >&2
@@ -55,8 +54,17 @@ if [ -z "$(git config --global user.email 2>/dev/null || true)" ]; then
     echo "git config --global user.email не был задан, установлено значение по умолчанию: archive-bot@localhost"
 fi
 
-echo "== Установка venv-пакета Python =="
-apt-get install -y python3-venv python3-pip
+echo "== Проверка python3 и модуля venv =="
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "python3 не установлен. Установите его вручную (требует sudo):" >&2
+    echo "  sudo apt-get install -y python3" >&2
+    exit 1
+fi
+if ! python3 -c "import venv" >/dev/null 2>&1; then
+    echo "Модуль python3-venv не установлен. Установите его вручную (требует sudo):" >&2
+    echo "  sudo apt-get install -y python3-venv python3-pip" >&2
+    exit 1
+fi
 
 echo "== Создание venv (.venv) =="
 if [ -d ".venv" ]; then
@@ -74,13 +82,14 @@ echo "== Установка python-зависимостей из requirements.tx
 echo "== Готово =="
 .venv/bin/pip list --format=columns | grep -iE "fastapi|uvicorn|websockets|multipart|pydantic|psycopg|aiofiles|bcrypt|pillow|pdfminer|colorama|docx" || true
 
-echo "== Установка Node.js/npm =="
-if ! command -v node >/dev/null 2>&1; then
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
-    apt-get install -y nodejs
-else
-    echo "node уже установлен ($(node --version)), пропускаю."
+echo "== Проверка Node.js/npm =="
+if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+    echo "Node.js/npm не установлены. Установите их вручную (требует sudo):" >&2
+    echo "  curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -" >&2
+    echo "  sudo apt-get install -y nodejs" >&2
+    exit 1
 fi
+echo "node $(node --version), npm $(npm --version) найдены."
 # Установка npm-зависимостей и сборка frontend - в start.sh, он
 # выполняется при каждом запуске и подхватывает актуальные исходники.
 
