@@ -25,8 +25,11 @@ if ! command -v pip3 >/dev/null 2>&1; then
     echo "pip3 не найден, устанавливаю через apt..."
     sudo apt-get install -y python3-pip
 fi
-
-python3 -m pip install --upgrade pip --break-system-packages
+# Не обновляем pip через "pip install --upgrade pip": системный pip на
+# Debian/Ubuntu ставится через apt (dpkg) без RECORD-файла, и попытка
+# pip'а деинсталлировать сам себя перед апгрейдом падает с ошибкой
+# "Cannot uninstall pip ..., RECORD file not found". Версия из apt
+# (>=23.0.1) уже поддерживает --break-system-packages, апгрейд не нужен.
 
 # --- app/, task/, task_manager.py, run_server.py, extract_pdf_blocks.py ---
 PACKAGES=(
