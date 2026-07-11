@@ -5,34 +5,28 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-RUN_DIR=".run"
-PID_FILE="$RUN_DIR/server.pid"
+running_pids() {
+    pgrep -f 'python3 run_porcelain_archive_server\.py' || true
+}
 
-if [ ! -f "$PID_FILE" ]; then
-    echo "Сервер не запущен (файл $PID_FILE не найден)."
+PIDS="$(running_pids)"
+
+if [ -z "$PIDS" ]; then
+    echo "Сервер не запущен."
     exit 0
 fi
 
-PID="$(cat "$PID_FILE")"
-
-if ! kill -0 "$PID" 2>/dev/null; then
-    echo "Процесс с PID $PID не найден, удаляю устаревший $PID_FILE."
-    rm -f "$PID_FILE"
-    exit 0
-fi
-
-echo "Останавливаю сервер (PID $PID)..."
-kill "$PID"
+echo "Останавливаю сервер (PID: $PIDS)..."
+kill $PIDS 2>/dev/null || true
 
 for _ in $(seq 1 20); do
-    if ! kill -0 "$PID" 2>/dev/null; then
+    STILL_ALIVE="$(running_pids)"
+    if [ -z "$STILL_ALIVE" ]; then
         echo "Сервер остановлен."
-        rm -f "$PID_FILE"
         exit 0
     fi
     sleep 0.5
 done
 
 echo "Сервер не остановился за 10с, завершаю принудительно (SIGKILL)..."
-kill -9 "$PID" 2>/dev/null || true
-rm -f "$PID_FILE"
+kill -9 $(running_pids) 2>/dev/null || true

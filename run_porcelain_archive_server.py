@@ -1,5 +1,5 @@
 """
-Точка входа для запуска сервера. Запускается напрямую (python run_server.py),
+Точка входа для запуска сервера. Запускается напрямую (python run_porcelain_archive_server.py),
 без run_dev.ps1 - переменная окружения и config.py готовятся тут же.
 
 uvicorn не учитывает asyncio.set_event_loop_policy() - свой event loop он

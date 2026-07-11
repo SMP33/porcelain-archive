@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Установка зависимостей проекта на Ubuntu (python-пакеты системным pip
 # без venv + PostgreSQL), плюс создание пустого шаблона config.ini в
-# /usr/share/porcelain-archive (тот же путь, что run_server.py использует
+# /usr/share/porcelain-archive (тот же путь, что run_porcelain_archive_server.py использует
 # как запасной по умолчанию) и установка ARCHIVE_CONFIG_INI_PATH для
 # текущего пользователя.
 #
@@ -41,10 +41,10 @@ fi
 # "Cannot uninstall pip ..., RECORD file not found". Версия из apt
 # (>=23.0.1) уже поддерживает --break-system-packages, апгрейд не нужен.
 
-# --- app/, task/, task_manager.py, run_server.py, extract_pdf_blocks.py ---
+# --- app/, task/, task_manager.py, run_porcelain_archive_server.py, extract_pdf_blocks.py ---
 PACKAGES=(
     "fastapi==0.138.2"          # app/api/*.py, app/main.py
-    "uvicorn==0.49.0"           # run_server.py
+    "uvicorn==0.49.0"           # run_porcelain_archive_server.py
     "websockets==16.0"          # ASGI-сервер: WebSocket для /api/tasks/ws (app/api/task.py)
     "python-multipart==0.0.32"  # FastAPI File(...)/Form(...) (app/api/document.py)
     "pydantic==2.13.4"          # app/api/*.py, task/info.py
