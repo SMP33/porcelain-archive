@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Установка зависимостей проекта на Ubuntu (python-пакеты системным pip
-# без venv + PostgreSQL), плюс создание пустого шаблона .secret/config.ini.
+# без venv + PostgreSQL), плюс создание пустого шаблона config.ini в
+# ../porcelian-archive-config и установка ARCHIVE_CONFIG_INI_PATH для
+# текущего пользователя.
 #
 # Список python-пакетов собран по фактическим import'ам в каждом .py файле
 # проекта (модули стандартной библиотеки и локальные файлы проекта - app,
@@ -54,12 +56,15 @@ python3 -m pip install --break-system-packages "${PACKAGES[@]}"
 echo "== Готово =="
 python3 -m pip list --format=columns | grep -iE "fastapi|uvicorn|websockets|multipart|pydantic|psycopg|aiofiles|bcrypt|pillow|pdfminer|colorama|docx" || true
 
-echo "== Шаблон .secret/config.ini =="
-CONFIG_PATH=".secret/config.ini"
+echo "== Шаблон config.ini =="
+CONFIG_DIR="$(cd .. && pwd)/porcelian-archive-config"
+CONFIG_PATH="$CONFIG_DIR/config.ini"
+
+mkdir -p "$CONFIG_DIR"
+
 if [ -f "$CONFIG_PATH" ]; then
     echo "$CONFIG_PATH уже существует, не трогаю."
 else
-    mkdir -p .secret
     cat > "$CONFIG_PATH" <<'EOF'
 [Common]
 root =
@@ -79,3 +84,16 @@ log_path =
 EOF
     echo "Создан пустой шаблон $CONFIG_PATH - заполните значения перед запуском."
 fi
+
+echo "== Переменная окружения ARCHIVE_CONFIG_INI_PATH =="
+ENV_LINE="export ARCHIVE_CONFIG_INI_PATH=\"$CONFIG_PATH\""
+PROFILE_FILE="$HOME/.bashrc"
+
+touch "$PROFILE_FILE"
+# убираем прежнюю настройку этой переменной, если была - не плодим дубли
+sed -i '/^export ARCHIVE_CONFIG_INI_PATH=/d' "$PROFILE_FILE"
+echo "$ENV_LINE" >> "$PROFILE_FILE"
+echo "Добавлено в $PROFILE_FILE: $ENV_LINE"
+
+export ARCHIVE_CONFIG_INI_PATH="$CONFIG_PATH"
+echo "В текущей сессии уже действует. Для новых сессий выполните: source $PROFILE_FILE"
