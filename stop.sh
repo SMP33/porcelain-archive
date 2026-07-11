@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Остановка сервера, запущенного через start_server.sh.
+# Остановка сервера, запущенного через start.sh.
 
 set -euo pipefail
 

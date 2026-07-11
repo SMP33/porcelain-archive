@@ -28,6 +28,8 @@ async def read_tasks(
     user = await user_service.get_user_by_token(token)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not await task_service.is_task_list_available(user["id"]):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Список задач недоступен")
 
     tasks = await task_service.get_tasks_paginated(offset=offset, limit=limit)
     total = await task_service.get_task_count()

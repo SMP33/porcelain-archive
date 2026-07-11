@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Запуск сервера (run_porcelain_archive_server.py) в фоне, вывод дублируется в консоль и в лог-файл.
+# Пересобирает frontend (npm install + npm run build) и запускает сервер
+# (run_porcelain_archive_server.py) в фоне, вывод дублируется в консоль и в лог-файл.
 # Если сервер уже запущен - перезапускает его.
 
 set -euo pipefail
@@ -12,6 +13,9 @@ LOG_FILE="$RUN_DIR/server.log"
 mkdir -p "$RUN_DIR"
 
 running_pids() {
+    # Паттерн ищет подстроку "python3 run_porcelain_archive_server.py" -
+    # матчит и системный python3, и ".venv/bin/python3 run_..." (запускаем
+    # именно так ниже), т.к. команда venv-интерпретатора её содержит.
     pgrep -f 'python3 run_porcelain_archive_server\.py' || true
 }
 
@@ -26,8 +30,12 @@ if [ -n "$EXISTING_PIDS" ]; then
     fi
 fi
 
+echo "Сборка frontend..."
+npm --prefix frontend install
+npm --prefix frontend run build
+
 echo "Запуск сервера..."
-python3 run_porcelain_archive_server.py > >(tee -a "$LOG_FILE") 2>&1 &
+.venv/bin/python3 run_porcelain_archive_server.py > >(tee -a "$LOG_FILE") 2>&1 &
 disown
 
 sleep 1

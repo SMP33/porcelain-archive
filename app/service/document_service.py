@@ -52,26 +52,44 @@ class DocumentService:
             "created_at": meta.get("created_at"),
         }
 
-    async def get_document_count(self) -> int:
+    async def _can_see_hidden_documents(self, user_id: Optional[int]) -> bool:
+        """Проверяет, видит ли пользователь скрытые (is_visible=0) документы."""
+        if user_id is None:
+            return False
+        permissions = await db.get_user_permissions(user_id)
+        return permissions["can_create"] or permissions["can_review"]
+
+    async def get_document_count(self, user_id: Optional[int] = None) -> int:
         """
-        Возвращает общее количество документов.
+        Возвращает общее количество документов, доступных пользователю.
+        Скрытые документы учитываются только для create/review.
         """
-        rows = await db.execute_read("SELECT COUNT(*) FROM document")
+        if await self._can_see_hidden_documents(user_id):
+            rows = await db.execute_read("SELECT COUNT(*) FROM document")
+        else:
+            rows = await db.execute_read("SELECT COUNT(*) FROM document WHERE is_visible = 1")
         return rows[0][0]
 
     async def get_documents_paginated(
-        self, offset: int = 0, limit: int = 25
+        self, offset: int = 0, limit: int = 25, user_id: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
-        Возвращает срез списка документов для пагинации.
+        Возвращает срез списка документов для пагинации. Скрытые документы
+        видны только пользователю с правом create/review.
 
         :param offset: Смещение (сколько документов пропустить).
         :param limit: Количество документов для возврата.
         """
-        rows = await db.execute_read(
-            "SELECT id, name, meta FROM document ORDER BY id LIMIT %s OFFSET %s",
-            (limit, offset),
-        )
+        if await self._can_see_hidden_documents(user_id):
+            rows = await db.execute_read(
+                "SELECT id, name, meta FROM document ORDER BY id LIMIT %s OFFSET %s",
+                (limit, offset),
+            )
+        else:
+            rows = await db.execute_read(
+                "SELECT id, name, meta FROM document WHERE is_visible = 1 ORDER BY id LIMIT %s OFFSET %s",
+                (limit, offset),
+            )
         return [self._row_to_document(row) for row in rows]
 
     async def get_document(self, document_id: int) -> Optional[Dict[str, Any]]:
@@ -95,7 +113,7 @@ class DocumentService:
         """
         async with db.transaction() as conn:
             cursor = await conn.execute(
-                "INSERT INTO document (name) VALUES (%s) RETURNING id", (name,)
+                "INSERT INTO document (name, is_visible) VALUES (%s, 1) RETURNING id", (name,)
             )
             row = await cursor.fetchone()
 
@@ -556,4 +574,9 @@ class DocumentService:
         if not text_path.exists():
             return None
 
-        return json.loads(text_path.read_text(encoding="utf-8"))
+        try:
+            return json.loads(text_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            # Повреждённый или недописанный файл кеша (например, из-за упавшей
+            # задачи set_text) - считаем, что текст не задан, а не 500-м.
+            return None

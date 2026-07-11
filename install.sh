@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# Установка зависимостей проекта на Ubuntu (python-пакеты системным pip
-# без venv + PostgreSQL), плюс создание пустого шаблона config.ini в
-# /usr/share/porcelain-archive (тот же путь, что run_porcelain_archive_server.py использует
-# как запасной по умолчанию) и установка ARCHIVE_CONFIG_INI_PATH для
-# текущего пользователя.
+# Установка зависимостей проекта на Ubuntu (python-пакеты в venv из
+# requirements.txt, Node.js/npm для сборки frontend + PostgreSQL), плюс
+# создание пустого шаблона config.ini в ~/.config/porcelain-archive (тот же
+# путь, что run_porcelain_archive_server.py использует как запасной по
+# умолчанию) и установка ARCHIVE_CONFIG_INI_PATH для текущего пользователя.
 #
-# Список python-пакетов собран по фактическим import'ам в каждом .py файле
-# проекта (модули стандартной библиотеки и локальные файлы проекта - app,
-# config, task, extract_pdf_blocks, generate_config - в список не входят,
-# их устанавливать не нужно).
+# Скрипт не использует sudo - команды, требующие системных привилегий
+# (apt-get, systemctl), нужно выполнять из-под пользователя с уже имеющимися
+# правами (например, из-под root или через "sudo bash install.sh" целиком).
+#
+# Список python-пакетов (requirements.txt) собран по фактическим import'ам
+# в каждом .py файле проекта (модули стандартной библиотеки и локальные
+# файлы проекта - app, config, task, extract_pdf_blocks, generate_config -
+# в список не входят, их устанавливать не нужно).
 #
 # Не включены зависимости abbyy_docx_extractor.py, специфичные для Windows
 # (pythoncom, win32com - пакет pywin32) - на Linux этот скрипт всё равно
@@ -19,61 +23,56 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 echo "== Установка PostgreSQL =="
-sudo apt-get update
-sudo apt-get install -y postgresql postgresql-contrib
-sudo systemctl enable --now postgresql
+apt-get update
+apt-get install -y postgresql postgresql-contrib
+systemctl enable --now postgresql
 
 echo "== Установка git + Git LFS =="
 # git-lfs нужен как apt-пакет, иначе "git lfs ..." не существует как
 # подкоманда git - именно это вызывает run_git(path, "lfs", "install", ...)
 # в task/run_create_repos.py при создании репозитория документа.
-sudo apt-get install -y git git-lfs
+apt-get install -y git git-lfs
 git lfs install
 
-echo "== Проверка pip =="
-if ! command -v pip3 >/dev/null 2>&1; then
-    echo "pip3 не найден, устанавливаю через apt..."
-    sudo apt-get install -y python3-pip
+echo "== Установка venv-пакета Python =="
+apt-get install -y python3-venv python3-pip
+
+echo "== Создание venv (.venv) =="
+if [ -d ".venv" ]; then
+    echo ".venv уже существует, не пересоздаю."
+else
+    python3 -m venv .venv
 fi
-# Не обновляем pip через "pip install --upgrade pip": системный pip на
-# Debian/Ubuntu ставится через apt (dpkg) без RECORD-файла, и попытка
-# pip'а деинсталлировать сам себя перед апгрейдом падает с ошибкой
-# "Cannot uninstall pip ..., RECORD file not found". Версия из apt
-# (>=23.0.1) уже поддерживает --break-system-packages, апгрейд не нужен.
 
-# --- app/, task/, task_manager.py, run_porcelain_archive_server.py, extract_pdf_blocks.py ---
-PACKAGES=(
-    "fastapi==0.138.2"          # app/api/*.py, app/main.py
-    "uvicorn==0.49.0"           # run_porcelain_archive_server.py
-    "websockets==16.0"          # ASGI-сервер: WebSocket для /api/tasks/ws (app/api/task.py)
-    "python-multipart==0.0.32"  # FastAPI File(...)/Form(...) (app/api/document.py)
-    "pydantic==2.13.4"          # app/api/*.py, task/info.py
-    "psycopg[binary]==3.3.4"    # app/database/database.py, app/api/task.py, app/service/*.py, task/task_utils.py, task_manager.py
-    "psycopg-pool==3.3.1"       # app/database/database.py
-    "aiofiles==25.1.0"          # app/service/document_service.py
-    "bcrypt==5.0.0"             # app/service/user_service.py
-    "pillow==12.3.0"            # extract_pdf_blocks.py, task/task_utils.py
-    "pdfminer.six==20260107"    # extract_pdf_blocks.py
-    "colorama==0.4.6"           # extract_pdf_blocks.py (CLI-вывод)
-    "python-docx==1.2.0"        # abbyy_docx_extractor.py (сам скрипт всё равно требует Windows COM)
-)
-
-echo "== Установка пакетов =="
-python3 -m pip install --break-system-packages "${PACKAGES[@]}"
+echo "== Установка python-зависимостей из requirements.txt =="
+# Внутри venv pip - обычный самостоятельный pip (не dpkg-управляемый
+# системный), поэтому его можно спокойно обновлять перед установкой.
+.venv/bin/pip install --upgrade pip
+.venv/bin/pip install -r requirements.txt
 
 echo "== Готово =="
-python3 -m pip list --format=columns | grep -iE "fastapi|uvicorn|websockets|multipart|pydantic|psycopg|aiofiles|bcrypt|pillow|pdfminer|colorama|docx" || true
+.venv/bin/pip list --format=columns | grep -iE "fastapi|uvicorn|websockets|multipart|pydantic|psycopg|aiofiles|bcrypt|pillow|pdfminer|colorama|docx" || true
+
+echo "== Установка Node.js/npm =="
+if ! command -v node >/dev/null 2>&1; then
+    curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+    apt-get install -y nodejs
+else
+    echo "node уже установлен ($(node --version)), пропускаю."
+fi
+# Установка npm-зависимостей и сборка frontend - в start.sh, он
+# выполняется при каждом запуске и подхватывает актуальные исходники.
 
 echo "== Шаблон config.ini =="
-CONFIG_DIR="/usr/share/porcelain-archive"
+CONFIG_DIR="$HOME/.config/porcelain-archive"
 CONFIG_PATH="$CONFIG_DIR/config.ini"
 
-sudo mkdir -p "$CONFIG_DIR"
+mkdir -p "$CONFIG_DIR"
 
 if [ -f "$CONFIG_PATH" ]; then
     echo "$CONFIG_PATH уже существует, не трогаю."
 else
-    sudo tee "$CONFIG_PATH" > /dev/null <<'EOF'
+    cat > "$CONFIG_PATH" <<'EOF'
 [Common]
 root =
 
@@ -90,10 +89,6 @@ repos_branch_root =
 cache_path =
 log_path =
 EOF
-    # /usr/share - общий для всех пользователей путь, конфиг должен быть
-    # читаем тем пользователем, из-под которого реально запускается сервер
-    # (не обязательно root/тем, кто ставил зависимости).
-    sudo chmod 644 "$CONFIG_PATH"
     echo "Создан пустой шаблон $CONFIG_PATH - заполните значения перед запуском."
 fi
 

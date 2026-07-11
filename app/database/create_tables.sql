@@ -7,7 +7,7 @@ CREATE    TABLE IF NOT EXISTS member (
           hash TEXT, -- Хеш сумма пароля
           can_create INTEGER DEFAULT 0, -- Может ли создавать документы
           can_review INTEGER DEFAULT 0, -- Может ли одобрять правки
-          is_admin INTEGER DEFAULT 0 -- Может ли создавать пользователей
+          is_admin INTEGER DEFAULT 0 -- Админ
           );
 
 -- Сессии пользователей

@@ -39,12 +39,14 @@ class ResetTextRequest(BaseModel):
 
 
 @router.get("/")
-async def read_documents(offset: int = 0, limit: int = 25) -> Dict[str, Any]:
+async def read_documents(request: Request, offset: int = 0, limit: int = 25) -> Dict[str, Any]:
     """
     Возвращает список документов с пагинацией и общее количество.
+    Скрытые документы видны только пользователю с правом create/review.
     """
-    docs = await document_service.get_documents_paginated(offset=offset, limit=limit)
-    total = await document_service.get_document_count()
+    user_id = await _get_current_user_id(request)
+    docs = await document_service.get_documents_paginated(offset=offset, limit=limit, user_id=user_id)
+    total = await document_service.get_document_count(user_id=user_id)
     return {"items": docs, "total": total}
 
 
@@ -99,6 +101,8 @@ async def read_branches(
     user = await user_service.get_user_by_token(token)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not await document_service.is_branch_list_available(user["id"]):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Список наборов изменений недоступен")
 
     can_review = bool(user.get("can_review"))
     branches = await document_service.get_branches_paginated(

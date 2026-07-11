@@ -12,7 +12,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
-_FALLBACK_CONFIG_PATH = "/usr/share/porcelain-archive/config.ini"
+_FALLBACK_CONFIG_PATH = os.path.expanduser("~/.config/porcelain-archive/config.ini")
 
 _EMPTY_CONFIG_TEMPLATE = """[Common]
 root =
@@ -35,7 +35,7 @@ log_path =
 def _resolve_config_ini_path() -> str:
     """
     Ищет config.ini: сначала .secret/config.ini рядом с проектом, затем
-    /usr/share/porcelain-archive/config.ini. Если ни один не найден,
+    ~/.config/porcelain-archive/config.ini. Если ни один не найден,
     создаёт по второму пути пустой шаблон (только поля, без значений).
     """
     candidates = [
@@ -61,6 +61,16 @@ import generate_config
 import uvicorn
 
 generate_config.regenerate()
+
+from config import config
+
+for _files_path in (
+    config.files.repos_root,
+    config.files.repos_branch_root,
+    config.files.cache_path,
+    config.files.log_path,
+):
+    os.makedirs(_files_path, exist_ok=True)
 
 if __name__ == "__main__":
     loop = "asyncio:SelectorEventLoop" if sys.platform == "win32" else "auto"
