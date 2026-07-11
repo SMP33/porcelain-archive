@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Установка зависимостей проекта на Ubuntu (python-пакеты системным pip
 # без venv + PostgreSQL), плюс создание пустого шаблона config.ini в
-# ../porcelian-archive-config и установка ARCHIVE_CONFIG_INI_PATH для
+# /usr/share/porcelain-archive (тот же путь, что run_server.py использует
+# как запасной по умолчанию) и установка ARCHIVE_CONFIG_INI_PATH для
 # текущего пользователя.
 #
 # Список python-пакетов собран по фактическим import'ам в каждом .py файле
@@ -57,15 +58,15 @@ echo "== Готово =="
 python3 -m pip list --format=columns | grep -iE "fastapi|uvicorn|websockets|multipart|pydantic|psycopg|aiofiles|bcrypt|pillow|pdfminer|colorama|docx" || true
 
 echo "== Шаблон config.ini =="
-CONFIG_DIR="$(cd .. && pwd)/porcelian-archive-config"
+CONFIG_DIR="/usr/share/porcelain-archive"
 CONFIG_PATH="$CONFIG_DIR/config.ini"
 
-mkdir -p "$CONFIG_DIR"
+sudo mkdir -p "$CONFIG_DIR"
 
 if [ -f "$CONFIG_PATH" ]; then
     echo "$CONFIG_PATH уже существует, не трогаю."
 else
-    cat > "$CONFIG_PATH" <<'EOF'
+    sudo tee "$CONFIG_PATH" > /dev/null <<'EOF'
 [Common]
 root =
 
@@ -82,6 +83,10 @@ repos_branch_root =
 cache_path =
 log_path =
 EOF
+    # /usr/share - общий для всех пользователей путь, конфиг должен быть
+    # читаем тем пользователем, из-под которого реально запускается сервер
+    # (не обязательно root/тем, кто ставил зависимости).
+    sudo chmod 644 "$CONFIG_PATH"
     echo "Создан пустой шаблон $CONFIG_PATH - заполните значения перед запуском."
 fi
 
