@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Установка python-зависимостей проекта на Ubuntu системным pip, без venv.
+# Установка зависимостей проекта на Ubuntu (python-пакеты системным pip
+# без venv + PostgreSQL), плюс создание пустого шаблона .secret/config.ini.
 #
-# Список собран по фактическим import'ам в каждом .py файле проекта
-# (модули стандартной библиотеки и локальные файлы проекта - app, config,
-# task, extract_pdf_blocks, generate_config - в список не входят, их
-# устанавливать не нужно).
+# Список python-пакетов собран по фактическим import'ам в каждом .py файле
+# проекта (модули стандартной библиотеки и локальные файлы проекта - app,
+# config, task, extract_pdf_blocks, generate_config - в список не входят,
+# их устанавливать не нужно).
 #
 # Не включены зависимости abbyy_docx_extractor.py, специфичные для Windows
 # (pythoncom, win32com - пакет pywin32) - на Linux этот скрипт всё равно
@@ -12,10 +13,16 @@
 
 set -euo pipefail
 
+cd "$(dirname "$0")"
+
+echo "== Установка PostgreSQL =="
+sudo apt-get update
+sudo apt-get install -y postgresql postgresql-contrib
+sudo systemctl enable --now postgresql
+
 echo "== Проверка pip =="
 if ! command -v pip3 >/dev/null 2>&1; then
     echo "pip3 не найден, устанавливаю через apt..."
-    sudo apt-get update
     sudo apt-get install -y python3-pip
 fi
 
@@ -43,3 +50,29 @@ python3 -m pip install --break-system-packages "${PACKAGES[@]}"
 
 echo "== Готово =="
 python3 -m pip list --format=columns | grep -iE "fastapi|uvicorn|websockets|multipart|pydantic|psycopg|aiofiles|bcrypt|pillow|pdfminer|colorama|docx" || true
+
+echo "== Шаблон .secret/config.ini =="
+CONFIG_PATH=".secret/config.ini"
+if [ -f "$CONFIG_PATH" ]; then
+    echo "$CONFIG_PATH уже существует, не трогаю."
+else
+    mkdir -p .secret
+    cat > "$CONFIG_PATH" <<'EOF'
+[Common]
+root =
+
+[Database]
+host =
+port =
+dbname =
+user =
+password =
+
+[Files]
+repos_root =
+repos_branch_root =
+cache_path =
+log_path =
+EOF
+    echo "Создан пустой шаблон $CONFIG_PATH - заполните значения перед запуском."
+fi
