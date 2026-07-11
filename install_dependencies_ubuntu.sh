@@ -23,6 +23,13 @@ sudo apt-get update
 sudo apt-get install -y postgresql postgresql-contrib
 sudo systemctl enable --now postgresql
 
+echo "== Установка git + Git LFS =="
+# git-lfs нужен как apt-пакет, иначе "git lfs ..." не существует как
+# подкоманда git - именно это вызывает run_git(path, "lfs", "install", ...)
+# в task/run_create_repos.py при создании репозитория документа.
+sudo apt-get install -y git git-lfs
+git lfs install
+
 echo "== Проверка pip =="
 if ! command -v pip3 >/dev/null 2>&1; then
     echo "pip3 не найден, устанавливаю через apt..."

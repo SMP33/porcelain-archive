@@ -87,7 +87,6 @@
 
         const app = createApp({
           setup() {
-            const API_URL = 'http://127.0.0.1:8000';
             const user = ref(null); // Данные о пользователе
 
             const pageDocumentName = ref(null);
@@ -125,7 +124,7 @@
               loading.value = true;
               try {
                 const offset = (page - 1) * itemsPerPage;
-                const response = await axios.get(`${API_URL}/api/documents`, {
+                const response = await axios.get('/api/documents', {
                   params: { offset, limit: itemsPerPage },
                   withCredentials: true // Важно для отправки cookie
                 });

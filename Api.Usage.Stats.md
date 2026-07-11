@@ -29,3 +29,4 @@
 | Изображение страницы ветки | GET /api/documents/branches/{branch_id}/pages/{page_index}/image | ui/edit.html и ui/document.html, полноразмерный просмотр страницы в диалоге |
 | Превью изображения страницы ветки | GET /api/documents/branches/{branch_id}/pages/{page_index}/image/preview | ui/edit.html и ui/document.html, миниатюры в галерее страниц |
 | Текст страницы ветки | GET /api/documents/branches/{branch_id}/pages/{page_index}/text | ui/edit.html и ui/document.html, спаны текста и подсветка в диалоге просмотра страницы |
+| Создание пользователя | POST /api/users/create | ui/user_list.html, диалог "Новый пользователь" (кнопка видна при is_admin) |
