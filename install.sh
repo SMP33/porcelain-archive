@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Установка зависимостей проекта на Ubuntu (python-пакеты в venv из
-# requirements.txt, Node.js/npm для сборки frontend + PostgreSQL), плюс
-# создание пустого шаблона config.ini в ~/.config/porcelain-archive (тот же
+# requirements.txt, Node.js/npm для сборки frontend; PostgreSQL должен
+# быть развёрнут отдельно), плюс создание пустого шаблона config.ini
+# в ~/.config/porcelain-archive (тот же
 # путь, что run_porcelain_archive_server.py использует как запасной по
 # умолчанию) и установка ARCHIVE_CONFIG_INI_PATH для текущего пользователя.
 #
 # Скрипт не использует sudo - команды, требующие системных привилегий
-# (apt-get, systemctl), нужно выполнять из-под пользователя с уже имеющимися
+# (apt-get), нужно выполнять из-под пользователя с уже имеющимися
 # правами (например, из-под root или через "sudo bash install.sh" целиком).
 #
 # Список python-пакетов (requirements.txt) собран по фактическим import'ам
@@ -22,17 +23,37 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-echo "== Установка PostgreSQL =="
+echo "== Обновление списка пакетов =="
 apt-get update
-apt-get install -y postgresql postgresql-contrib
-systemctl enable --now postgresql
 
-echo "== Установка git + Git LFS =="
-# git-lfs нужен как apt-пакет, иначе "git lfs ..." не существует как
-# подкоманда git - именно это вызывает run_git(path, "lfs", "install", ...)
-# в task/run_create_repos.py при создании репозитория документа.
-apt-get install -y git git-lfs
+echo "== Установка git =="
+apt-get install -y git
+
+echo "== Проверка Git LFS =="
+# git-lfs нужен как отдельный apt-пакет, иначе "git lfs ..." не существует
+# как подкоманда git - именно это вызывает run_git(path, "lfs", "install", ...)
+# в task/run_create_repos.py при создании репозитория документа. Установка
+# через apt-get требует sudo, поэтому скрипт её не делает сам - только
+# проверяет наличие и подсказывает команду, если git-lfs не установлен.
+if ! git lfs version >/dev/null 2>&1; then
+    echo "git-lfs не установлен. Установите его вручную (требует sudo):" >&2
+    echo "  sudo apt-get install -y git-lfs" >&2
+    exit 1
+fi
 git lfs install
+
+echo "== Проверка имени и почты git =="
+# git commit падает с ошибкой, если user.name/user.email не заданы - для
+# фоновых задач (git merge/commit в task/run_*.py) это блокирует всё.
+# Реальные данные не нужны, важно лишь, что они не пустые.
+if [ -z "$(git config --global user.name 2>/dev/null || true)" ]; then
+    git config --global user.name "Archive Bot"
+    echo "git config --global user.name не был задан, установлено значение по умолчанию: Archive Bot"
+fi
+if [ -z "$(git config --global user.email 2>/dev/null || true)" ]; then
+    git config --global user.email "archive-bot@localhost"
+    echo "git config --global user.email не был задан, установлено значение по умолчанию: archive-bot@localhost"
+fi
 
 echo "== Установка venv-пакета Python =="
 apt-get install -y python3-venv python3-pip
