@@ -7,6 +7,7 @@ uvicorn не учитывает asyncio.set_event_loop_policy() - свой event
 которая на Windows жёстко возвращает ProactorEventLoop (если не включены
 reload/workers). Поэтому нужный loop указывается явно через параметр loop.
 """
+import argparse
 import os
 import sys
 
@@ -65,7 +66,7 @@ def _resolve_config_ini_path() -> str:
 os.environ["ARCHIVE_CONFIG_INI_PATH"] = _resolve_config_ini_path()
 
 _config_ini_abspath = os.path.abspath(os.environ["ARCHIVE_CONFIG_INI_PATH"])
-print(f"config.ini: file://{_config_ini_abspath}", flush=True)
+print(f'config.ini: "{_config_ini_abspath}"', flush=True)
 
 import generate_config
 import uvicorn
@@ -84,4 +85,22 @@ for _files_path in (
 
 if __name__ == "__main__":
     loop = "asyncio:SelectorEventLoop" if sys.platform == "win32" else "auto"
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, loop=loop)
+
+    parser = argparse.ArgumentParser()
+    # По умолчанию 127.0.0.1 - сервер доступен только через reverse proxy
+    # (nginx и т.п.). Для тестового запуска без nginx (доступ напрямую по
+    # IP:8000) передайте --host 0.0.0.0 (или задайте ARCHIVE_SERVER_HOST).
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("ARCHIVE_SERVER_HOST", "127.0.0.1"),
+        help="Адрес для прослушивания (по умолчанию 127.0.0.1, для теста без nginx - 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.environ.get("ARCHIVE_SERVER_PORT", "8000")),
+        help="Порт для прослушивания (по умолчанию 8000)",
+    )
+    args = parser.parse_args()
+
+    uvicorn.run("app.main:app", host=args.host, port=args.port, loop=loop)
