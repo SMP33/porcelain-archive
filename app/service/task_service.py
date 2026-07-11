@@ -1,0 +1,71 @@
+import os
+from typing import Any, Dict, List, Optional, Sequence
+
+from app.database import db
+from config import config
+
+
+class TaskService:
+    """
+    Сервис для бизнес-логики, связанной с задачами task_manager.
+    Работает с таблицей task в БД.
+    """
+
+    @staticmethod
+    def _row_to_task(row: Sequence[Any]) -> Dict[str, Any]:
+        task_id, type_, status, data = row
+        return {
+            "id": task_id,
+            "type": type_,
+            "status": status,
+            "data": data or {},
+        }
+
+    async def get_task_count(self) -> int:
+        """
+        Возвращает общее количество задач.
+        """
+        rows = await db.execute_read("SELECT COUNT(*) FROM task")
+        return rows[0][0]
+
+    async def get_tasks_paginated(self, offset: int = 0, limit: int = 25) -> List[Dict[str, Any]]:
+        """
+        Возвращает срез списка задач для пагинации, отсортированный от новых к старым.
+
+        :param offset: Смещение (сколько задач пропустить).
+        :param limit: Количество задач для возврата.
+        """
+        rows = await db.execute_read(
+            "SELECT id, type, status, data FROM task ORDER BY id DESC LIMIT %s OFFSET %s",
+            (limit, offset),
+        )
+        return [self._row_to_task(row) for row in rows]
+
+    async def get_tasks_by_branch_id(self, branch_id: int) -> List[Dict[str, Any]]:
+        """
+        Возвращает задачи, относящиеся к указанной ветке (data->>'branch_id'), от новых к старым.
+        """
+        rows = await db.execute_read(
+            "SELECT id, type, status, data FROM task WHERE data->>'branch_id' = %s ORDER BY id DESC",
+            (str(branch_id),),
+        )
+        return [self._row_to_task(row) for row in rows]
+
+    async def is_task_list_available(self, user_id: Optional[int]) -> bool:
+        """
+        Проверяет, доступен ли список задач указанному пользователю.
+        Список задач виден только авторизованным пользователям.
+        """
+        return user_id is not None
+
+    async def get_task_log(self, task_id: int) -> str:
+        """
+        Возвращает содержимое лог-файла задачи.
+        """
+        log_file_path = os.path.join(config.files.log_path, f"{task_id}.txt")
+        print(f"LOG: {log_file_path}")
+        if not os.path.exists(log_file_path):
+            return ""
+
+        with open(log_file_path, "r", encoding="utf-8") as log_file:
+            return log_file.read()

@@ -6,7 +6,6 @@ from pydantic import BaseModel
 class TaskInfo(BaseModel):
     id: int
     type: str
-    repos_path: Optional[str] = None
     data: Optional[dict] = None
     
     @staticmethod

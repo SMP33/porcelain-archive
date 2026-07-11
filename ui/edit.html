@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Редактирование набора изменений</title>
+    <div id="styles-placeholder"></div>
+    <style>
+        [v-cloak] { display: none; }
+        .upload-dropzone {
+            border: 2px dashed rgba(128, 128, 128, 0.5);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color .15s, background-color .15s;
+        }
+        .upload-dropzone--active {
+            border-color: rgb(var(--v-theme-primary));
+            background-color: rgba(var(--v-theme-primary), 0.08);
+        }
+        .upload-preview-card {
+            position: relative;
+        }
+        .upload-preview-remove {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+        }
+        .gallery-thumb {
+            cursor: pointer;
+        }
+        .page-image-wrap {
+            position: relative;
+            display: inline-block;
+            max-width: 100%;
+            line-height: 0;
+        }
+        .page-image-wrap img {
+            max-width: 100%;
+            max-height: 75vh;
+            display: block;
+        }
+        .page-span-highlight {
+            position: absolute;
+            border: 1px solid transparent;
+            background: transparent;
+            pointer-events: none;
+            border-radius: 2px;
+            transition: background-color .1s, border-color .1s;
+        }
+        .page-span-highlight--active {
+            background: rgba(255, 213, 0, 0.35);
+            border-color: rgba(255, 152, 0, 0.9);
+        }
+        .page-text-panel {
+            max-height: 75vh;
+            overflow-y: auto;
+            line-height: 1.5;
+        }
+        .page-text-span {
+            display: block;
+            cursor: default;
+            padding: 3px 4px;
+            margin-bottom: 2px;
+            border-radius: 2px;
+            white-space: pre-line;
+        }
+        .page-text-span--active {
+            background: rgba(255, 213, 0, 0.35);
+        }
+        .page-thumb-strip {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding: 6px 2px;
+        }
+        .page-thumb-strip-item {
+            flex: 0 0 auto;
+            width: 64px;
+            cursor: pointer;
+            opacity: 0.55;
+            border-radius: 4px;
+            outline: 2px solid transparent;
+            outline-offset: -2px;
+            transition: opacity .15s, outline-color .15s;
+            text-align: center;
+        }
+        .page-thumb-strip-item--active {
+            opacity: 1;
+            outline-color: rgb(var(--v-theme-primary));
+        }
+        .page-thumb-strip-img {
+            width: 64px;
+            height: 64px;
+            object-fit: cover;
+            border-radius: 4px;
+            display: block;
+        }
+        .page-thumb-strip-label {
+            font-size: 11px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div id="app" v-cloak>
+        <v-app>
+            <v-layout>
+                <div id="toolbar-placeholder"></div>
+
+                <v-main>
+                    <v-container fluid>
+                        <v-card v-if="!loading && branch">
+                            <v-card-title>
+                                {{ branch.documentName }}
+                            </v-card-title>
+                            <v-card-subtitle>
+                                № {{ branch.id }}
+                            </v-card-subtitle>
+                            <v-card-text>
+                                <p>Это страница редактирования набора изменений с ID: <strong>{{ branch.id }}</strong>.</p>
+                                <p>Страниц в наборе изменений: <strong>{{ pageCount }}</strong></p>
+                            </v-card-text>
+                            <v-card-actions>
+                                <v-btn color="primary" href="/">Назад к списку</v-btn>
+                                <v-btn
+                                    v-if="user && user.can_review"
+                                    color="success"
+                                    @click="showMergeDialog = true"
+                                >Завершить правки</v-btn>
+                            </v-card-actions>
+                        </v-card>
+
+                        <v-dialog v-model="showMergeDialog" max-width="500">
+                            <v-card>
+                                <v-card-title>Завершение правок</v-card-title>
+                                <v-card-text>
+                                    Завершить правки в наборе изменений № {{ branch && branch.id }}? Изменения будут применены к основной версии документа.
+                                    <v-alert v-if="mergeError" type="error" density="compact" class="mt-2">{{ mergeError }}</v-alert>
+                                    <v-alert v-if="mergeSuccess" type="success" density="compact" class="mt-2">
+                                        Задача на завершение правок поставлена в очередь.
+                                    </v-alert>
+                                </v-card-text>
+                                <v-card-actions>
+                                    <v-spacer></v-spacer>
+                                    <v-btn @click="showMergeDialog = false">Закрыть</v-btn>
+                                    <v-btn color="success" :loading="mergingBranch" @click="handleMergeBranch">Завершить</v-btn>
+                                </v-card-actions>
+                            </v-card>
+                        </v-dialog>
+
+                        <v-row v-if="!loading && branch" class="mt-1">
+                            <v-col cols="12" md="2">
+                                <v-card>
+                                    <v-list density="compact" nav>
+                                        <v-list-item
+                                            title="Добавить страницы"
+                                            prepend-icon="mdi-file-plus"
+                                            :active="activeView === 'add'"
+                                            @click="activeView = 'add'"
+                                        ></v-list-item>
+                                        <v-list-item
+                                            title="Удалить страницы"
+                                            prepend-icon="mdi-file-remove"
+                                            :active="activeView === 'remove'"
+                                            @click="activeView = 'remove'"
+                                        ></v-list-item>
+                                        <v-list-item
+                                            title="Задать текст"
+                                            prepend-icon="mdi-file-pdf-box"
+                                            :active="activeView === 'set_text'"
+                                            @click="activeView = 'set_text'"
+                                        ></v-list-item>
+                                        <v-list-item
+                                            title="Убрать текст"
+                                            prepend-icon="mdi-text-box-remove"
+                                            :active="activeView === 'reset_text'"
+                                            @click="activeView = 'reset_text'"
+                                        ></v-list-item>
+                                    </v-list>
+                                </v-card>
+                            </v-col>
+
+                            <v-col cols="12" md="7">
+                                <v-card v-if="activeView === 'add'">
+                                    <v-card-title class="text-subtitle-1">Добавить страницы</v-card-title>
+                                    <v-card-text>
+                                        <div
+                                            class="upload-dropzone"
+                                            :class="{ 'upload-dropzone--active': isDragOver }"
+                                            @dragover.prevent="isDragOver = true"
+                                            @dragleave.prevent="isDragOver = false"
+                                            @drop.prevent="handleFileDrop"
+                                            @click="fileInputEl.click()"
+                                        >
+                                            <v-icon size="22">mdi-tray-arrow-up</v-icon>
+                                            <div class="text-caption">Перетащите файлы или нажмите, чтобы выбрать</div>
+                                            <input
+                                                ref="fileInputEl"
+                                                type="file"
+                                                multiple
+                                                :accept="allowedExtensions.join(',')"
+                                                style="display:none"
+                                                @change="handleFileInputChange"
+                                            >
+                                        </div>
+
+                                        <v-row v-if="sortedPageFiles.length" dense class="mt-2">
+                                            <v-col v-for="entry in sortedPageFiles" :key="entry.name" cols="4" sm="3" md="2">
+                                                <v-card variant="outlined" class="upload-preview-card">
+                                                    <v-img :src="entry.url" height="70" cover></v-img>
+                                                    <v-btn
+                                                        icon="mdi-close"
+                                                        size="x-small"
+                                                        density="compact"
+                                                        variant="flat"
+                                                        color="grey-darken-3"
+                                                        class="upload-preview-remove"
+                                                        @click.stop="removeFile(entry.file)"
+                                                    ></v-btn>
+                                                    <div class="text-caption text-truncate px-1">{{ entry.name }}</div>
+                                                </v-card>
+                                            </v-col>
+                                        </v-row>
+
+                                        <v-text-field
+                                            v-model.number="position"
+                                            label="Номер страницы, после которой вставить (0 - в начало)"
+                                            type="number"
+                                            density="compact"
+                                            class="mt-2"
+                                            :min="0"
+                                            :max="pageCount"
+                                        ></v-text-field>
+                                        <v-alert v-if="uploadError" type="error" density="compact">{{ uploadError }}</v-alert>
+                                        <v-alert v-if="rejectedFiles.length" type="warning" density="compact">
+                                            Не приняты (недопустимый формат): {{ rejectedFiles.join(', ') }}
+                                        </v-alert>
+                                        <v-alert v-if="acceptedFiles.length" type="success" density="compact">
+                                            Загружено: {{ acceptedFiles.join(', ') }}
+                                        </v-alert>
+                                    </v-card-text>
+                                    <v-card-actions>
+                                        <v-btn
+                                            color="primary"
+                                            :loading="uploadingPages"
+                                            :disabled="!canUploadPages"
+                                            @click="handleUploadPages"
+                                        >Загрузить страницы</v-btn>
+                                    </v-card-actions>
+                                </v-card>
+
+                                <v-card v-if="activeView === 'remove'">
+                                    <v-card-title class="text-subtitle-1">Удалить страницы</v-card-title>
+                                    <v-card-text>
+                                        <v-row dense>
+                                            <v-col cols="6">
+                                                <v-text-field
+                                                    v-model.number="removeStart"
+                                                    label="С страницы"
+                                                    type="number"
+                                                    density="compact"
+                                                    :min="1"
+                                                    :max="pageCount"
+                                                ></v-text-field>
+                                            </v-col>
+                                            <v-col cols="6">
+                                                <v-text-field
+                                                    v-model.number="removeEnd"
+                                                    label="По страницу"
+                                                    type="number"
+                                                    density="compact"
+                                                    :min="removeStart || 1"
+                                                    :max="pageCount"
+                                                ></v-text-field>
+                                            </v-col>
+                                        </v-row>
+                                        <v-alert v-if="removeError" type="error" density="compact">{{ removeError }}</v-alert>
+                                        <v-alert v-if="removeSuccess" type="success" density="compact">
+                                            Задача на удаление страниц поставлена в очередь.
+                                        </v-alert>
+                                    </v-card-text>
+                                    <v-card-actions>
+                                        <v-btn
+                                            color="error"
+                                            :loading="removingPages"
+                                            :disabled="!canRemovePages"
+                                            @click="handleRemovePages"
+                                        >Удалить страницы</v-btn>
+                                    </v-card-actions>
+                                </v-card>
+
+                                <v-card v-if="activeView === 'set_text'">
+                                    <v-card-title class="text-subtitle-1">Задать текст</v-card-title>
+                                    <v-card-text>
+                                        <v-file-input
+                                            v-model="textFile"
+                                            label="PDF-файл"
+                                            accept=".pdf"
+                                            density="compact"
+                                            prepend-icon="mdi-file-pdf-box"
+                                            show-size
+                                        ></v-file-input>
+
+                                        <v-text-field
+                                            v-model.number="textPosition"
+                                            label="Страница, с которой применяется текст"
+                                            type="number"
+                                            density="compact"
+                                            class="mt-2"
+                                            :min="1"
+                                            :max="pageCount"
+                                        ></v-text-field>
+                                        <v-alert v-if="setTextError" type="error" density="compact">{{ setTextError }}</v-alert>
+                                        <v-alert v-if="setTextSuccess" type="success" density="compact">
+                                            Задача на применение текста поставлена в очередь.
+                                        </v-alert>
+                                    </v-card-text>
+                                    <v-card-actions>
+                                        <v-btn
+                                            color="primary"
+                                            :loading="settingText"
+                                            :disabled="!canSetText"
+                                            @click="handleSetText"
+                                        >Задать текст</v-btn>
+                                    </v-card-actions>
+                                </v-card>
+
+                                <v-card v-if="activeView === 'reset_text'">
+                                    <v-card-title class="text-subtitle-1">Убрать текст</v-card-title>
+                                    <v-card-text>
+                                        <v-row dense>
+                                            <v-col cols="6">
+                                                <v-text-field
+                                                    v-model.number="resetTextStart"
+                                                    label="С страницы"
+                                                    type="number"
+                                                    density="compact"
+                                                    :min="1"
+                                                    :max="pageCount"
+                                                ></v-text-field>
+                                            </v-col>
+                                            <v-col cols="6">
+                                                <v-text-field
+                                                    v-model.number="resetTextEnd"
+                                                    label="По страницу"
+                                                    type="number"
+                                                    density="compact"
+                                                    :min="resetTextStart || 1"
+                                                    :max="pageCount"
+                                                ></v-text-field>
+                                            </v-col>
+                                        </v-row>
+                                        <v-alert v-if="resetTextError" type="error" density="compact">{{ resetTextError }}</v-alert>
+                                        <v-alert v-if="resetTextSuccess" type="success" density="compact">
+                                            Задача на удаление текста поставлена в очередь.
+                                        </v-alert>
+                                    </v-card-text>
+                                    <v-card-actions>
+                                        <v-btn
+                                            color="error"
+                                            :loading="resettingText"
+                                            :disabled="!canResetText"
+                                            @click="handleResetText"
+                                        >Убрать текст</v-btn>
+                                    </v-card-actions>
+                                </v-card>
+
+                                <v-card class="mt-4">
+                                    <v-card-title class="text-subtitle-1">Страницы</v-card-title>
+                                    <v-card-text>
+                                        <div v-if="!pageCount" class="text-medium-emphasis">Страниц пока нет</div>
+                                        <v-row v-else dense>
+                                            <v-col v-for="pos in pageCount" :key="pos" cols="6" sm="4" md="3" lg="2">
+                                                <v-card variant="outlined" class="gallery-thumb" @click="openGalleryImage(pos)">
+                                                    <v-img :src="previewImageUrl(pos)" height="120" cover></v-img>
+                                                    <div class="text-caption text-center pa-1">{{ pos }}</div>
+                                                </v-card>
+                                            </v-col>
+                                        </v-row>
+                                    </v-card-text>
+                                </v-card>
+                            </v-col>
+
+                            <v-col cols="12" md="3">
+                                <v-card>
+                                    <v-card-title class="text-subtitle-1">Задачи по этому набору изменений</v-card-title>
+                                    <v-card-text>
+                                        <v-alert v-if="tasksError" type="error" density="compact" class="mb-2">{{ tasksError }}</v-alert>
+                                        <v-data-table
+                                            :headers="taskHeaders"
+                                            :items="branchTasks"
+                                            :loading="tasksLoading"
+                                            density="compact"
+                                            no-data-text="Задач пока нет"
+                                            items-per-page="-1"
+                                            hide-default-footer
+                                        >
+                                            <template v-slot:item.type="{ item }">{{ taskTypeLabel(item.type) }}</template>
+                                            <template v-slot:item.status="{ item }">
+                                                <v-chip :color="statusColor(item.status)" size="small" label>{{ statusLabel(item.status) }}</v-chip>
+                                            </template>
+                                        </v-data-table>
+                                    </v-card-text>
+                                </v-card>
+                            </v-col>
+                        </v-row>
+
+                        <v-dialog v-model="galleryDialog" max-width="1400">
+                            <v-card>
+                                <v-card-text class="pa-2">
+                                    <v-row dense>
+                                        <v-col cols="12" :md="showGalleryTextColumn ? 7 : 12">
+                                            <div class="page-image-wrap">
+                                                <img :src="galleryDialogUrl">
+                                                <div
+                                                    v-for="(span, idx) in gallerySpans"
+                                                    :key="idx"
+                                                    class="page-span-highlight"
+                                                    :class="{ 'page-span-highlight--active': hoveredSpanIndex === idx }"
+                                                    :style="spanHighlightStyle(span)"
+                                                ></div>
+                                            </div>
+                                        </v-col>
+                                        <v-col v-if="showGalleryTextColumn" cols="12" md="5">
+                                            <v-progress-circular v-if="galleryTextLoading" indeterminate size="20"></v-progress-circular>
+                                            <div v-else class="page-text-panel">
+                                                <div
+                                                    v-for="(span, idx) in gallerySpans"
+                                                    :key="idx"
+                                                    class="page-text-span"
+                                                    :class="{ 'page-text-span--active': hoveredSpanIndex === idx }"
+                                                    @mouseenter="hoveredSpanIndex = idx"
+                                                    @mouseleave="hoveredSpanIndex = null"
+                                                >{{ span.text }}</div>
+                                            </div>
+                                        </v-col>
+                                    </v-row>
+
+                                    <div class="page-thumb-strip">
+                                        <div
+                                            v-for="pos in pageCount"
+                                            :key="pos"
+                                            :id="'gallery-thumb-' + pos"
+                                            class="page-thumb-strip-item"
+                                            :class="{ 'page-thumb-strip-item--active': pos === galleryCurrentPos }"
+                                            @click="showGalleryPage(pos)"
+                                        >
+                                            <img :src="previewImageUrl(pos)" class="page-thumb-strip-img">
+                                            <div class="page-thumb-strip-label">{{ pos }}</div>
+                                        </div>
+                                    </div>
+                                </v-card-text>
+                                <v-card-actions>
+                                    <v-btn
+                                        icon="mdi-chevron-left"
+                                        variant="text"
+                                        :disabled="!galleryHasPrev"
+                                        @click="galleryPrevPage"
+                                    ></v-btn>
+                                    <span class="text-caption">Страница {{ galleryCurrentPos }} из {{ pageCount }}</span>
+                                    <v-btn
+                                        icon="mdi-chevron-right"
+                                        variant="text"
+                                        :disabled="!galleryHasNext"
+                                        @click="galleryNextPage"
+                                    ></v-btn>
+                                    <v-spacer></v-spacer>
+                                    <v-btn @click="galleryDialog = false">Закрыть</v-btn>
+                                </v-card-actions>
+                            </v-card>
+                        </v-dialog>
+
+                        <v-progress-circular v-if="loading" indeterminate color="primary"></v-progress-circular>
+                        <v-alert v-if="error" type="error">{{ error }}</v-alert>
+                    </v-container>
+                </v-main>
+            </v-layout>
+        </v-app>
+    </div>
+
+    <!-- Подключение скриптов Vue, Vuetify и Axios -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vuetify@3/dist/vuetify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <script>
+        // Функция для загрузки HTML-фрагментов
+        async function loadFragments() {
+            const fragments = {
+                '#styles-placeholder': '/static/_styles.html',
+                '#toolbar-placeholder': '/static/_toolbar.html'
+            };
+            for (const placeholder in fragments) {
+                const response = await fetch(fragments[placeholder], { cache: 'no-store' });
+                const html = await response.text();
+                document.querySelector(placeholder).outerHTML = html;
+            }
+        }
+
+        loadFragments().then(() => {
+            const { createApp, ref, computed, watch, nextTick, onMounted } = Vue;
+            const { createVuetify } = Vuetify;
+            const vuetify = createVuetify();
+
+            createApp({
+                setup() {
+                    const branch = ref(null);
+                    const loading = ref(true);
+                    const error = ref(null);
+                    const user = ref(null);
+
+                    const pageDocumentName = computed(() => branch.value ? branch.value.documentName : null);
+                    const pageBranchName = computed(() => branch.value ? `Набор изменений № ${branch.value.id}` : null);
+
+                    const showMergeDialog = ref(false);
+                    const mergingBranch = ref(false);
+                    const mergeError = ref('');
+                    const mergeSuccess = ref(false);
+
+                    const handleMergeBranch = async () => {
+                        mergingBranch.value = true;
+                        mergeError.value = '';
+                        mergeSuccess.value = false;
+                        try {
+                            await axios.post(
+                                `/api/documents/branches/${branch.value.id}/merge`,
+                                {},
+                                { withCredentials: true }
+                            );
+                            mergeSuccess.value = true;
+                            await loadBranchTasks();
+                        } catch (err) {
+                            mergeError.value = 'Не удалось поставить слияние в очередь.';
+                            console.error("Ошибка при слиянии версии документа:", err);
+                        } finally {
+                            mergingBranch.value = false;
+                        }
+                    };
+
+                    const loadBranch = async (id) => {
+                        try {
+                            const response = await axios.get(`/api/documents/branches/${id}`, { withCredentials: true });
+                            branch.value = { id: response.data.id, documentName: response.data.document_name };
+                        } catch (err) {
+                            error.value = 'Не удалось загрузить набор изменений.';
+                            console.error("Ошибка при загрузке набора изменений:", err);
+                        } finally {
+                            loading.value = false;
+                        }
+                    };
+
+                    const pageFiles = ref([]);
+                    const position = ref(0);
+                    const uploadingPages = ref(false);
+                    const uploadError = ref('');
+                    const acceptedFiles = ref([]);
+                    const rejectedFiles = ref([]);
+                    const pageCount = ref(0);
+                    const allowedExtensions = ref([]);
+
+                    const activeView = ref('add');
+
+                    const removeStart = ref(1);
+                    const removeEnd = ref(1);
+                    const removingPages = ref(false);
+                    const removeError = ref('');
+                    const removeSuccess = ref(false);
+
+                    const canRemovePages = computed(() => {
+                        if (!pageCount.value) return false;
+                        const start = removeStart.value;
+                        const end = removeEnd.value;
+                        if (!Number.isInteger(start) || !Number.isInteger(end)) return false;
+                        return start >= 1 && end >= start && end <= pageCount.value;
+                    });
+
+                    const handleRemovePages = async () => {
+                        removingPages.value = true;
+                        removeError.value = '';
+                        removeSuccess.value = false;
+                        try {
+                            await axios.post(
+                                `/api/documents/branches/${branch.value.id}/pages/remove`,
+                                { start: removeStart.value, end: removeEnd.value },
+                                { withCredentials: true }
+                            );
+                            removeSuccess.value = true;
+                            await loadBranchTasks();
+                        } catch (err) {
+                            removeError.value = 'Не удалось удалить страницы.';
+                            console.error("Ошибка при удалении страниц:", err);
+                        } finally {
+                            removingPages.value = false;
+                        }
+                    };
+
+                    const textFile = ref(null);
+                    const textPosition = ref(1);
+                    const settingText = ref(false);
+                    const setTextError = ref('');
+                    const setTextSuccess = ref(false);
+
+                    const canSetText = computed(() => {
+                        if (!textFile.value) return false;
+                        if (!pageCount.value) return false;
+                        const pos = textPosition.value;
+                        return Number.isInteger(pos) && pos >= 1 && pos <= pageCount.value;
+                    });
+
+                    const handleSetText = async () => {
+                        settingText.value = true;
+                        setTextError.value = '';
+                        setTextSuccess.value = false;
+                        try {
+                            const file = Array.isArray(textFile.value) ? textFile.value[0] : textFile.value;
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            formData.append('position', String(textPosition.value));
+                            await axios.post(
+                                `/api/documents/branches/${branch.value.id}/text`,
+                                formData,
+                                { withCredentials: true, headers: { 'Content-Type': 'multipart/form-data' } }
+                            );
+                            setTextSuccess.value = true;
+                            textFile.value = null;
+                            await loadBranchTasks();
+                        } catch (err) {
+                            setTextError.value = 'Не удалось поставить задачу в очередь.';
+                            console.error("Ошибка при загрузке текста:", err);
+                        } finally {
+                            settingText.value = false;
+                        }
+                    };
+
+                    const resetTextStart = ref(1);
+                    const resetTextEnd = ref(1);
+                    const resettingText = ref(false);
+                    const resetTextError = ref('');
+                    const resetTextSuccess = ref(false);
+
+                    const canResetText = computed(() => {
+                        if (!pageCount.value) return false;
+                        const start = resetTextStart.value;
+                        const end = resetTextEnd.value;
+                        if (!Number.isInteger(start) || !Number.isInteger(end)) return false;
+                        return start >= 1 && end >= start && end <= pageCount.value;
+                    });
+
+                    const handleResetText = async () => {
+                        resettingText.value = true;
+                        resetTextError.value = '';
+                        resetTextSuccess.value = false;
+                        try {
+                            await axios.post(
+                                `/api/documents/branches/${branch.value.id}/text/reset`,
+                                { start: resetTextStart.value, end: resetTextEnd.value },
+                                { withCredentials: true }
+                            );
+                            resetTextSuccess.value = true;
+                            await loadBranchTasks();
+                        } catch (err) {
+                            resetTextError.value = 'Не удалось поставить задачу в очередь.';
+                            console.error("Ошибка при удалении текста:", err);
+                        } finally {
+                            resettingText.value = false;
+                        }
+                    };
+
+                    const isDragOver = ref(false);
+                    const fileInputEl = ref(null);
+
+                    const handleFileInputChange = (event) => {
+                        if (event.target.files && event.target.files.length) {
+                            pageFiles.value = [...pageFiles.value, ...Array.from(event.target.files)];
+                        }
+                        event.target.value = '';
+                    };
+
+                    const handleFileDrop = (event) => {
+                        isDragOver.value = false;
+                        if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length) {
+                            pageFiles.value = [...pageFiles.value, ...Array.from(event.dataTransfer.files)];
+                        }
+                    };
+
+                    const removeFile = (file) => {
+                        pageFiles.value = pageFiles.value.filter(f => f !== file);
+                    };
+
+                    const galleryDialog = ref(false);
+                    const galleryDialogUrl = ref('');
+                    const galleryCurrentPos = ref(1);
+                    const gallerySpans = ref([]);
+                    const galleryTextLoading = ref(false);
+                    const hoveredSpanIndex = ref(null);
+
+                    const galleryHasPrev = computed(() => galleryCurrentPos.value > 1);
+                    const galleryHasNext = computed(() => galleryCurrentPos.value < pageCount.value);
+                    const showGalleryTextColumn = computed(() => galleryTextLoading.value || gallerySpans.value.length > 0);
+
+                    const previewImageUrl = (pos) => `/api/documents/branches/${branch.value.id}/pages/${pos}/image/preview`;
+                    const fullImageUrl = (pos) => `/api/documents/branches/${branch.value.id}/pages/${pos}/image`;
+
+                    const spanHighlightStyle = (span) => ({
+                        left: span.rect.x + '%',
+                        top: span.rect.y + '%',
+                        width: span.rect.width + '%',
+                        height: span.rect.height + '%',
+                    });
+
+                    const loadGalleryText = async (pos) => {
+                        gallerySpans.value = [];
+                        hoveredSpanIndex.value = null;
+                        galleryTextLoading.value = true;
+                        try {
+                            const response = await axios.get(
+                                `/api/documents/branches/${branch.value.id}/pages/${pos}/text`,
+                                { withCredentials: true }
+                            );
+                            const page = response.data.text;
+                            if (page && page.blocks) {
+                                gallerySpans.value = page.blocks;
+                            }
+                        } catch (err) {
+                            console.error("Ошибка при получении текста страницы:", err);
+                        } finally {
+                            galleryTextLoading.value = false;
+                        }
+                    };
+
+                    const showGalleryPage = (pos) => {
+                        galleryCurrentPos.value = pos;
+                        galleryDialogUrl.value = fullImageUrl(pos);
+                        galleryDialog.value = true;
+                        loadGalleryText(pos);
+                        nextTick(() => {
+                            const el = document.getElementById(`gallery-thumb-${pos}`);
+                            if (el) el.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+                        });
+                    };
+
+                    const openGalleryImage = (pos) => {
+                        showGalleryPage(pos);
+                    };
+
+                    const galleryPrevPage = () => {
+                        if (galleryHasPrev.value) showGalleryPage(galleryCurrentPos.value - 1);
+                    };
+
+                    const galleryNextPage = () => {
+                        if (galleryHasNext.value) showGalleryPage(galleryCurrentPos.value + 1);
+                    };
+
+                    const loadPageCount = async () => {
+                        try {
+                            const response = await axios.get(
+                                `/api/documents/branches/${branch.value.id}/pages/count`,
+                                { withCredentials: true }
+                            );
+                            pageCount.value = response.data.count;
+                            position.value = pageCount.value;
+                            removeStart.value = pageCount.value ? 1 : 0;
+                            removeEnd.value = pageCount.value;
+                            textPosition.value = pageCount.value ? 1 : 0;
+                            resetTextStart.value = pageCount.value ? 1 : 0;
+                            resetTextEnd.value = pageCount.value;
+                        } catch (err) {
+                            console.error("Ошибка при получении количества страниц:", err);
+                        }
+                    };
+
+                    const branchTasks = ref([]);
+                    const tasksLoading = ref(true);
+                    const tasksError = ref('');
+                    const taskHeaders = ref([
+                        { title: 'ID', align: 'start', sortable: false, key: 'id' },
+                        { title: 'Тип', key: 'type', align: 'end' },
+                        { title: 'Статус', key: 'status', align: 'end' },
+                    ]);
+
+                    const statusColor = (status) => {
+                        switch (status) {
+                            case 'success': return 'green';
+                            case 'error': return 'red';
+                            case 'running': return 'blue';
+                            case 'queued':
+                            case 'new':
+                            default: return 'grey';
+                        }
+                    };
+
+                    const TASK_TYPE_LABELS = {
+                        create_repos: 'Создать документ',
+                        create_branch: 'Начать правки',
+                        insert_files: 'Добавить страницы',
+                        remove_files: 'Удалить страницы',
+                        set_text: 'Задать текст',
+                        reset_text: 'Убрать текст',
+                        merge_branch: 'Завершить правки',
+                    };
+                    const taskTypeLabel = (type) => TASK_TYPE_LABELS[type] || type;
+
+                    const STATUS_LABELS = {
+                        new: 'Создается',
+                        queued: 'Ожидает',
+                        running: 'В процессе',
+                        success: 'Готово',
+                        error: 'Ошибка',
+                    };
+                    const statusLabel = (status) => STATUS_LABELS[status] || status;
+
+                    const loadBranchTasks = async () => {
+                        tasksError.value = '';
+                        try {
+                            const response = await axios.get(
+                                `/api/tasks/branch/${branch.value.id}`,
+                                { withCredentials: true }
+                            );
+                            branchTasks.value = response.data.items;
+                        } catch (err) {
+                            const status = err.response ? err.response.status : null;
+                            tasksError.value = status
+                                ? `Не удалось получить задачи набора изменений (код ${status}).`
+                                : 'Не удалось получить задачи набора изменений.';
+                            console.error("Ошибка при получении задач ветки:", err);
+                        } finally {
+                            tasksLoading.value = false;
+                        }
+                    };
+
+                    const connectTaskUpdates = () => {
+                        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                        const ws = new WebSocket(`${protocol}//${window.location.host}/api/tasks/ws`);
+
+                        ws.onmessage = async () => {
+                            await loadBranchTasks();
+                            await loadPageCount();
+                        };
+
+                        ws.onclose = () => {
+                            setTimeout(connectTaskUpdates, 2000);
+                        };
+                    };
+
+                    const loadAllowedExtensions = async () => {
+                        try {
+                            const response = await axios.get('/api/documents/pages/allowed_extensions');
+                            allowedExtensions.value = response.data.extensions;
+                        } catch (err) {
+                            console.error("Ошибка при получении списка допустимых расширений:", err);
+                        }
+                    };
+
+                    const canUploadPages = computed(() => {
+                        if (!pageFiles.value.length) return false;
+                        if (position.value === '' || position.value === null) return false;
+                        return Number.isInteger(position.value) && position.value >= 0 && position.value <= pageCount.value;
+                    });
+
+                    // Сортировка по имени файла с учётом чисел (page2 раньше page10)
+                    const sortedPageFiles = computed(() => {
+                        return [...pageFiles.value]
+                            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
+                            .map(file => ({ file, name: file.name, url: URL.createObjectURL(file) }));
+                    });
+
+                    watch(sortedPageFiles, (_entries, previousEntries) => {
+                        previousEntries?.forEach(entry => URL.revokeObjectURL(entry.url));
+                    });
+
+                    const handleUploadPages = async () => {
+                        uploadingPages.value = true;
+                        uploadError.value = '';
+                        acceptedFiles.value = [];
+                        rejectedFiles.value = [];
+                        try {
+                            const formData = new FormData();
+                            for (const entry of sortedPageFiles.value) {
+                                formData.append('files', entry.file);
+                            }
+                            formData.append('position', String(position.value));
+                            const response = await axios.post(
+                                `/api/documents/branches/${branch.value.id}/pages`,
+                                formData,
+                                { withCredentials: true, headers: { 'Content-Type': 'multipart/form-data' } }
+                            );
+                            acceptedFiles.value = response.data.accepted;
+                            rejectedFiles.value = response.data.rejected;
+                            pageFiles.value = [];
+                            await loadPageCount();
+                            await loadBranchTasks();
+                        } catch (err) {
+                            uploadError.value = 'Не удалось загрузить страницы.';
+                            console.error("Ошибка при загрузке страниц:", err);
+                        } finally {
+                            uploadingPages.value = false;
+                        }
+                    };
+
+                    const goHome = () => {
+                        window.location.href = '/';
+                    };
+
+                    const checkAuth = async () => {
+                        try {
+                            const response = await axios.get('/api/users/me', { withCredentials: true });
+                            user.value = response.data;
+                        } catch (err) {
+                            user.value = null;
+                        }
+                    };
+
+                    const handleLogout = async () => {
+                        try {
+                            await axios.post('/api/users/logout', {}, { withCredentials: true });
+                            user.value = null;
+                            window.location.reload();
+                        } catch (err) {
+                            console.error("Ошибка при выходе:", err);
+                        }
+                    };
+
+                    const showResetPasswordDialog = ref(false);
+                    const oldPassword = ref('');
+                    const newPassword = ref('');
+                    const resetPasswordLoading = ref(false);
+                    const resetPasswordError = ref('');
+
+                    const handleResetPassword = async () => {
+                        resetPasswordLoading.value = true;
+                        resetPasswordError.value = '';
+                        try {
+                            await axios.post(
+                                '/api/users/reset_password',
+                                { old_password: oldPassword.value, new_password: newPassword.value },
+                                { withCredentials: true }
+                            );
+                            showResetPasswordDialog.value = false;
+                            oldPassword.value = '';
+                            newPassword.value = '';
+                        } catch (err) {
+                            resetPasswordError.value = 'Не удалось сменить пароль.';
+                            console.error("Ошибка при смене пароля:", err);
+                        } finally {
+                            resetPasswordLoading.value = false;
+                        }
+                    };
+
+                    const showSetDisplayNameDialog = ref(false);
+                    const displayNameInput = ref('');
+                    const setDisplayNameLoading = ref(false);
+                    const setDisplayNameError = ref('');
+
+                    const handleSetDisplayName = async () => {
+                        setDisplayNameLoading.value = true;
+                        setDisplayNameError.value = '';
+                        try {
+                            const response = await axios.post(
+                                '/api/users/set_display_name',
+                                { display_name: displayNameInput.value },
+                                { withCredentials: true }
+                            );
+                            if (user.value) {
+                                user.value.display_name = response.data.display_name;
+                            }
+                            showSetDisplayNameDialog.value = false;
+                        } catch (err) {
+                            setDisplayNameError.value = 'Не удалось изменить ФИО.';
+                            console.error("Ошибка при изменении ФИО:", err);
+                        } finally {
+                            setDisplayNameLoading.value = false;
+                        }
+                    };
+
+                    onMounted(async () => {
+                        // ID ветки берётся из пути /edit/<id>
+                        const parts = window.location.pathname.split('/').filter(Boolean);
+                        const id = parts[parts.length - 1];
+                        await loadBranch(id);
+                        checkAuth();
+                        loadPageCount();
+                        loadAllowedExtensions();
+                        loadBranchTasks();
+                        connectTaskUpdates();
+                    });
+
+                    return {
+                        branch, loading, error, goHome, user, handleLogout,
+                        showResetPasswordDialog, oldPassword, newPassword, resetPasswordLoading, resetPasswordError, handleResetPassword,
+                        showSetDisplayNameDialog, displayNameInput, setDisplayNameLoading, setDisplayNameError, handleSetDisplayName,
+                        pageDocumentName, pageBranchName,
+                        showMergeDialog, mergingBranch, mergeError, mergeSuccess, handleMergeBranch,
+                        pageFiles, sortedPageFiles, position, canUploadPages,
+                        uploadingPages, uploadError, acceptedFiles, rejectedFiles, handleUploadPages,
+                        pageCount, allowedExtensions,
+                        activeView,
+                        removeStart, removeEnd, removingPages, removeError, removeSuccess, canRemovePages, handleRemovePages,
+                        textFile, textPosition, settingText, setTextError, setTextSuccess, canSetText, handleSetText,
+                        resetTextStart, resetTextEnd, resettingText, resetTextError, resetTextSuccess, canResetText, handleResetText,
+                        isDragOver, fileInputEl, handleFileInputChange, handleFileDrop, removeFile,
+                        galleryDialog, galleryDialogUrl, previewImageUrl, openGalleryImage,
+                        galleryCurrentPos, galleryHasPrev, galleryHasNext, galleryPrevPage, galleryNextPage,
+                        gallerySpans, galleryTextLoading, hoveredSpanIndex, spanHighlightStyle, showGalleryTextColumn,
+                        branchTasks, tasksLoading, tasksError, taskHeaders, statusColor, taskTypeLabel, statusLabel,
+                    };
+                }
+            }).use(vuetify).mount('#app');
+        });
+    </script>
+</body>
+</html>

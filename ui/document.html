@@ -5,7 +5,83 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Просмотр документа</title>
     <div id="styles-placeholder"></div>
-    <style>[v-cloak] { display: none; }</style>
+    <style>
+        [v-cloak] { display: none; }
+        .gallery-thumb {
+            cursor: pointer;
+        }
+        .page-image-wrap {
+            position: relative;
+            display: inline-block;
+            max-width: 100%;
+            line-height: 0;
+        }
+        .page-image-wrap img {
+            max-width: 100%;
+            max-height: 75vh;
+            display: block;
+        }
+        .page-span-highlight {
+            position: absolute;
+            border: 1px solid transparent;
+            background: transparent;
+            pointer-events: none;
+            border-radius: 2px;
+            transition: background-color .1s, border-color .1s;
+        }
+        .page-span-highlight--active {
+            background: rgba(255, 213, 0, 0.35);
+            border-color: rgba(255, 152, 0, 0.9);
+        }
+        .page-text-panel {
+            max-height: 75vh;
+            overflow-y: auto;
+            line-height: 1.5;
+        }
+        .page-text-span {
+            display: block;
+            cursor: default;
+            padding: 3px 4px;
+            margin-bottom: 2px;
+            border-radius: 2px;
+            white-space: pre-line;
+        }
+        .page-text-span--active {
+            background: rgba(255, 213, 0, 0.35);
+        }
+        .page-thumb-strip {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding: 6px 2px;
+        }
+        .page-thumb-strip-item {
+            flex: 0 0 auto;
+            width: 64px;
+            cursor: pointer;
+            opacity: 0.55;
+            border-radius: 4px;
+            outline: 2px solid transparent;
+            outline-offset: -2px;
+            transition: opacity .15s, outline-color .15s;
+            text-align: center;
+        }
+        .page-thumb-strip-item--active {
+            opacity: 1;
+            outline-color: rgb(var(--v-theme-primary));
+        }
+        .page-thumb-strip-img {
+            width: 64px;
+            height: 64px;
+            object-fit: cover;
+            border-radius: 4px;
+            display: block;
+        }
+        .page-thumb-strip-label {
+            font-size: 11px;
+            line-height: 1.6;
+        }
+    </style>
 </head>
 <body>
     <div id="app" v-cloak>
@@ -28,8 +104,92 @@
                             </v-card-text>
                             <v-card-actions>
                                 <v-btn color="primary" href="/">Назад к списку</v-btn>
+                                <v-btn v-if="user" color="secondary" :loading="creatingBranch" @click="handleEditDocument">Редактировать документ</v-btn>
                             </v-card-actions>
+                            <v-alert v-if="editError" type="error" density="compact">{{ editError }}</v-alert>
                         </v-card>
+
+                        <v-card v-if="!loading && document && masterBranchId" class="mt-4">
+                            <v-card-title class="text-subtitle-1">Страницы</v-card-title>
+                            <v-card-text>
+                                <v-progress-circular v-if="galleryLoading" indeterminate size="20"></v-progress-circular>
+                                <div v-else-if="!galleryPageCount" class="text-medium-emphasis">Страниц пока нет</div>
+                                <v-row v-else dense>
+                                    <v-col v-for="pos in galleryPageCount" :key="pos" cols="6" sm="4" md="3" lg="2">
+                                        <v-card variant="outlined" class="gallery-thumb" @click="openGalleryImage(pos)">
+                                            <v-img :src="previewImageUrl(pos)" height="120" cover></v-img>
+                                            <div class="text-caption text-center pa-1">{{ pos }}</div>
+                                        </v-card>
+                                    </v-col>
+                                </v-row>
+                            </v-card-text>
+                        </v-card>
+
+                        <v-dialog v-model="galleryDialog" max-width="1400">
+                            <v-card>
+                                <v-card-text class="pa-2">
+                                    <v-row dense>
+                                        <v-col cols="12" :md="showGalleryTextColumn ? 7 : 12">
+                                            <div class="page-image-wrap">
+                                                <img :src="galleryDialogUrl">
+                                                <div
+                                                    v-for="(span, idx) in gallerySpans"
+                                                    :key="idx"
+                                                    class="page-span-highlight"
+                                                    :class="{ 'page-span-highlight--active': hoveredSpanIndex === idx }"
+                                                    :style="spanHighlightStyle(span)"
+                                                ></div>
+                                            </div>
+                                        </v-col>
+                                        <v-col v-if="showGalleryTextColumn" cols="12" md="5">
+                                            <v-progress-circular v-if="galleryTextLoading" indeterminate size="20"></v-progress-circular>
+                                            <div v-else class="page-text-panel">
+                                                <div
+                                                    v-for="(span, idx) in gallerySpans"
+                                                    :key="idx"
+                                                    class="page-text-span"
+                                                    :class="{ 'page-text-span--active': hoveredSpanIndex === idx }"
+                                                    @mouseenter="hoveredSpanIndex = idx"
+                                                    @mouseleave="hoveredSpanIndex = null"
+                                                >{{ span.text }}</div>
+                                            </div>
+                                        </v-col>
+                                    </v-row>
+
+                                    <div class="page-thumb-strip">
+                                        <div
+                                            v-for="pos in galleryPageCount"
+                                            :key="pos"
+                                            :id="'gallery-thumb-' + pos"
+                                            class="page-thumb-strip-item"
+                                            :class="{ 'page-thumb-strip-item--active': pos === galleryCurrentPos }"
+                                            @click="showGalleryPage(pos)"
+                                        >
+                                            <img :src="previewImageUrl(pos)" class="page-thumb-strip-img">
+                                            <div class="page-thumb-strip-label">{{ pos }}</div>
+                                        </div>
+                                    </div>
+                                </v-card-text>
+                                <v-card-actions>
+                                    <v-btn
+                                        icon="mdi-chevron-left"
+                                        variant="text"
+                                        :disabled="!galleryHasPrev"
+                                        @click="galleryPrevPage"
+                                    ></v-btn>
+                                    <span class="text-caption">Страница {{ galleryCurrentPos }} из {{ galleryPageCount }}</span>
+                                    <v-btn
+                                        icon="mdi-chevron-right"
+                                        variant="text"
+                                        :disabled="!galleryHasNext"
+                                        @click="galleryNextPage"
+                                    ></v-btn>
+                                    <v-spacer></v-spacer>
+                                    <v-btn @click="galleryDialog = false">Закрыть</v-btn>
+                                </v-card-actions>
+                            </v-card>
+                        </v-dialog>
+
                         <v-progress-circular v-if="loading" indeterminate color="primary"></v-progress-circular>
                         <v-alert v-if="error" type="error">{{ error }}</v-alert>
                     </v-container>
@@ -59,7 +219,7 @@
         }
 
         loadFragments().then(() => {
-            const { createApp, ref, onMounted } = Vue;
+            const { createApp, ref, computed, nextTick, onMounted } = Vue;
             const { createVuetify } = Vuetify;
             const vuetify = createVuetify();
 
@@ -70,8 +230,132 @@
                     const error = ref(null);
                     const user = ref(null);
 
+                    const pageDocumentName = computed(() => document.value ? document.value.name : null);
+                    const pageBranchName = ref(null);
+
                     const goHome = () => {
                         window.location.href = '/';
+                    };
+
+                    const creatingBranch = ref(false);
+                    const editError = ref('');
+
+                    const loadDocument = async (id) => {
+                        try {
+                            const response = await axios.get(`/api/documents/${id}`, { withCredentials: true });
+                            document.value = response.data;
+                        } catch (err) {
+                            error.value = 'Не удалось загрузить документ.';
+                            console.error("Ошибка при загрузке документа:", err);
+                        } finally {
+                            loading.value = false;
+                        }
+                    };
+
+                    const masterBranchId = ref(null);
+                    const galleryPageCount = ref(0);
+                    const galleryLoading = ref(true);
+                    const galleryDialog = ref(false);
+                    const galleryDialogUrl = ref('');
+                    const galleryCurrentPos = ref(1);
+                    const gallerySpans = ref([]);
+                    const galleryTextLoading = ref(false);
+                    const hoveredSpanIndex = ref(null);
+
+                    const galleryHasPrev = computed(() => galleryCurrentPos.value > 1);
+                    const galleryHasNext = computed(() => galleryCurrentPos.value < galleryPageCount.value);
+                    const showGalleryTextColumn = computed(() => galleryTextLoading.value || gallerySpans.value.length > 0);
+
+                    const previewImageUrl = (pos) => `/api/documents/branches/${masterBranchId.value}/pages/${pos}/image/preview`;
+                    const fullImageUrl = (pos) => `/api/documents/branches/${masterBranchId.value}/pages/${pos}/image`;
+
+                    const spanHighlightStyle = (span) => ({
+                        left: span.rect.x + '%',
+                        top: span.rect.y + '%',
+                        width: span.rect.width + '%',
+                        height: span.rect.height + '%',
+                    });
+
+                    const loadGalleryText = async (pos) => {
+                        gallerySpans.value = [];
+                        hoveredSpanIndex.value = null;
+                        galleryTextLoading.value = true;
+                        try {
+                            const response = await axios.get(
+                                `/api/documents/branches/${masterBranchId.value}/pages/${pos}/text`,
+                                { withCredentials: true }
+                            );
+                            const page = response.data.text;
+                            if (page && page.blocks) {
+                                gallerySpans.value = page.blocks;
+                            }
+                        } catch (err) {
+                            console.error("Ошибка при получении текста страницы:", err);
+                        } finally {
+                            galleryTextLoading.value = false;
+                        }
+                    };
+
+                    const showGalleryPage = (pos) => {
+                        galleryCurrentPos.value = pos;
+                        galleryDialogUrl.value = fullImageUrl(pos);
+                        galleryDialog.value = true;
+                        loadGalleryText(pos);
+                        nextTick(() => {
+                            const el = window.document.getElementById(`gallery-thumb-${pos}`);
+                            if (el) el.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+                        });
+                    };
+
+                    const openGalleryImage = (pos) => {
+                        showGalleryPage(pos);
+                    };
+
+                    const galleryPrevPage = () => {
+                        if (galleryHasPrev.value) showGalleryPage(galleryCurrentPos.value - 1);
+                    };
+
+                    const galleryNextPage = () => {
+                        if (galleryHasNext.value) showGalleryPage(galleryCurrentPos.value + 1);
+                    };
+
+                    const loadGallery = async () => {
+                        galleryLoading.value = true;
+                        try {
+                            const branchResponse = await axios.get(
+                                `/api/documents/${document.value.id}/master_branch_id`,
+                                { withCredentials: true }
+                            );
+                            masterBranchId.value = branchResponse.data.branch_id;
+
+                            const countResponse = await axios.get(
+                                `/api/documents/branches/${masterBranchId.value}/pages/count`,
+                                { withCredentials: true }
+                            );
+                            galleryPageCount.value = countResponse.data.count;
+                        } catch (err) {
+                            console.error("Ошибка при получении страниц документа:", err);
+                        } finally {
+                            galleryLoading.value = false;
+                        }
+                    };
+
+                    const handleEditDocument = async () => {
+                        creatingBranch.value = true;
+                        editError.value = '';
+                        try {
+                            const response = await axios.post(
+                                `/api/documents/${document.value.id}/create_branch`,
+                                {},
+                                { withCredentials: true }
+                            );
+                            window.location.href = `/edit/${response.data.branch_id}`;
+                        } catch (err) {
+                            editError.value = 'Не удалось создать набор изменений для редактирования.';
+                            console.error("Ошибка при создании ветки:", err);
+                        } finally {
+                            creatingBranch.value = false;
+                        }
                     };
 
                     const checkAuth = async () => {
@@ -145,20 +429,25 @@
                         }
                     };
 
-                    onMounted(() => {
+                    onMounted(async () => {
                         // ID документа берётся из пути /document/<id>
                         const parts = window.location.pathname.split('/').filter(Boolean);
                         const id = parts[parts.length - 1];
-                        // TODO: загрузка реальных данных документа по id с backend
-                        document.value = { id, name: `Документ №${id}`, author: '', created_at: '' };
-                        loading.value = false;
+                        await loadDocument(id);
                         checkAuth();
+                        loadGallery();
                     });
 
                     return {
                         document, loading, error, goHome, user, handleLogout,
                         showResetPasswordDialog, oldPassword, newPassword, resetPasswordLoading, resetPasswordError, handleResetPassword,
                         showSetDisplayNameDialog, displayNameInput, setDisplayNameLoading, setDisplayNameError, handleSetDisplayName,
+                        creatingBranch, editError, handleEditDocument,
+                        pageDocumentName, pageBranchName,
+                        masterBranchId, galleryPageCount, galleryLoading,
+                        galleryDialog, galleryDialogUrl, previewImageUrl, openGalleryImage,
+                        galleryCurrentPos, galleryHasPrev, galleryHasNext, galleryPrevPage, galleryNextPage,
+                        gallerySpans, galleryTextLoading, hoveredSpanIndex, spanHighlightStyle, showGalleryTextColumn,
                     };
                 }
             }).use(vuetify).mount('#app');

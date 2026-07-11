@@ -1,10 +1,11 @@
 import os
-import configparser
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Dict, List, Optional, Sequence
 
 from psycopg import AsyncConnection
 from psycopg_pool import AsyncConnectionPool
+
+from config import config
 
 
 class Database:
@@ -36,20 +37,12 @@ class Database:
             return
         self.__class__._initialized = True
 
-        config = configparser.ConfigParser()
-        config_path = f"{os.path.dirname(__file__)}/../../.secret/config.ini"
-
-        if not os.path.exists(config_path):
-            raise FileNotFoundError(f"Файл конфигурации не найден: {os.path.abspath(config_path)}")
-
-        config.read(config_path)
-
         self.conninfo = (
-            f"dbname={config.get('Database', 'dbname')} "
-            f"user={config.get('Database', 'user')} "
-            f"password={config.get('Database', 'password')} "
-            f"host={config.get('Database', 'host')} "
-            f"port={config.getint('Database', 'port')}"
+            f"dbname={config.database.dbname} "
+            f"user={config.database.user} "
+            f"password={config.database.password} "
+            f"host={config.database.host} "
+            f"port={config.database.port}"
         )
 
         # open=False: открытие пула требует сетевого I/O и должно происходить

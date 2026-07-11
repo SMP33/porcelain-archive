@@ -46,6 +46,24 @@ async def logout(response: Response, token: Annotated[str, Depends(oauth2_scheme
     response.delete_cookie(key="session_token")
     return {"message": "Logout successful"}
 
+@router.get("/")
+async def read_users(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    offset: int = 0,
+    limit: int = 25,
+) -> Dict[str, Any]:
+    """
+    Возвращает список пользователей с пагинацией. Требует авторизации.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+
+    users = await user_service.get_users_paginated(offset=offset, limit=limit)
+    total = await user_service.get_user_count()
+    return {"items": users, "total": total}
+
+
 @router.get("/me", response_model=Dict[str, Any])
 async def read_users_me(token: Annotated[str, Depends(oauth2_scheme)]):
     """Получение информации о текущем пользователе."""

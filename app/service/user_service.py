@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 import bcrypt
 from fastapi import Request
@@ -102,3 +102,38 @@ class UserService:
             (display_name, user_id)
         )
         return rows_affected > 0
+
+    async def is_user_list_available(self, user_id: Optional[int]) -> bool:
+        """
+        Проверяет, доступен ли список пользователей указанному пользователю.
+        Список виден только авторизованным пользователям.
+        """
+        return user_id is not None
+
+    async def get_user_count(self) -> int:
+        """Возвращает общее количество пользователей."""
+        rows = await db.execute_read("SELECT COUNT(*) FROM member")
+        return rows[0][0]
+
+    async def get_users_paginated(self, offset: int = 0, limit: int = 25) -> List[Dict[str, Any]]:
+        """
+        Возвращает срез списка пользователей для пагинации.
+
+        :param offset: Смещение (сколько пользователей пропустить).
+        :param limit: Количество пользователей для возврата.
+        """
+        rows = await db.execute_read(
+            "SELECT id, name, display_name, email, can_create, can_review FROM member ORDER BY id LIMIT %s OFFSET %s",
+            (limit, offset),
+        )
+        return [
+            {
+                "id": row[0],
+                "username": row[1],
+                "display_name": row[2],
+                "email": row[3],
+                "can_create": bool(row[4]),
+                "can_review": bool(row[5]),
+            }
+            for row in rows
+        ]

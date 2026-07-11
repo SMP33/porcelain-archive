@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Страница недоступна</title>
+    <div id="styles-placeholder"></div>
+    <style>[v-cloak] { display: none; }</style>
+</head>
+<body>
+    <div id="app" v-cloak>
+        <v-app>
+            <v-layout>
+                <div id="toolbar-placeholder"></div>
+
+                <v-main>
+                    <v-container>
+                        <v-card>
+                            <v-card-title>Страница недоступна</v-card-title>
+                            <v-card-text>
+                                <v-alert type="warning" density="compact">
+                                    У вас недостаточно прав для просмотра этой страницы, либо она не существует.
+                                </v-alert>
+                            </v-card-text>
+                            <v-card-actions>
+                                <v-btn color="primary" href="/">На главную</v-btn>
+                                <v-btn v-if="!user" color="secondary" href="/login">Войти</v-btn>
+                            </v-card-actions>
+                        </v-card>
+                    </v-container>
+                </v-main>
+            </v-layout>
+        </v-app>
+    </div>
+
+    <!-- Подключение скриптов Vue, Vuetify и Axios -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vuetify@3/dist/vuetify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <script>
+        // Функция для загрузки HTML-фрагментов
+        async function loadFragments() {
+            const fragments = {
+                '#styles-placeholder': '/static/_styles.html',
+                '#toolbar-placeholder': '/static/_toolbar.html'
+            };
+            for (const placeholder in fragments) {
+                const response = await fetch(fragments[placeholder], { cache: 'no-store' });
+                const html = await response.text();
+                document.querySelector(placeholder).outerHTML = html;
+            }
+        }
+
+        loadFragments().then(() => {
+            const { createApp, ref, onMounted } = Vue;
+            const { createVuetify } = Vuetify;
+            const vuetify = createVuetify();
+
+            createApp({
+                setup() {
+                    const user = ref(null);
+                    const pageDocumentName = ref(null);
+                    const pageBranchName = ref(null);
+
+                    const showResetPasswordDialog = ref(false);
+                    const oldPassword = ref('');
+                    const newPassword = ref('');
+                    const resetPasswordLoading = ref(false);
+                    const resetPasswordError = ref('');
+
+                    const showSetDisplayNameDialog = ref(false);
+                    const displayNameInput = ref('');
+                    const setDisplayNameLoading = ref(false);
+                    const setDisplayNameError = ref('');
+
+                    const goHome = () => {
+                        window.location.href = '/';
+                    };
+
+                    const checkAuth = async () => {
+                        try {
+                            const response = await axios.get('/api/users/me', { withCredentials: true });
+                            user.value = response.data;
+                        } catch (err) {
+                            user.value = null;
+                        }
+                    };
+
+                    const handleLogout = async () => {
+                        try {
+                            await axios.post('/api/users/logout', {}, { withCredentials: true });
+                            user.value = null;
+                            window.location.reload();
+                        } catch (err) {
+                            console.error("Ошибка при выходе:", err);
+                        }
+                    };
+
+                    const handleResetPassword = async () => {
+                        resetPasswordLoading.value = true;
+                        resetPasswordError.value = '';
+                        try {
+                            await axios.post(
+                                '/api/users/reset_password',
+                                { old_password: oldPassword.value, new_password: newPassword.value },
+                                { withCredentials: true }
+                            );
+                            showResetPasswordDialog.value = false;
+                            oldPassword.value = '';
+                            newPassword.value = '';
+                        } catch (err) {
+                            resetPasswordError.value = 'Не удалось сменить пароль.';
+                            console.error("Ошибка при смене пароля:", err);
+                        } finally {
+                            resetPasswordLoading.value = false;
+                        }
+                    };
+
+                    const handleSetDisplayName = async () => {
+                        setDisplayNameLoading.value = true;
+                        setDisplayNameError.value = '';
+                        try {
+                            const response = await axios.post(
+                                '/api/users/set_display_name',
+                                { display_name: displayNameInput.value },
+                                { withCredentials: true }
+                            );
+                            if (user.value) {
+                                user.value.display_name = response.data.display_name;
+                            }
+                            showSetDisplayNameDialog.value = false;
+                        } catch (err) {
+                            setDisplayNameError.value = 'Не удалось изменить ФИО.';
+                            console.error("Ошибка при изменении ФИО:", err);
+                        } finally {
+                            setDisplayNameLoading.value = false;
+                        }
+                    };
+
+                    onMounted(checkAuth);
+
+                    return {
+                        user, goHome, handleLogout,
+                        showResetPasswordDialog, oldPassword, newPassword, resetPasswordLoading, resetPasswordError, handleResetPassword,
+                        showSetDisplayNameDialog, displayNameInput, setDisplayNameLoading, setDisplayNameError, handleSetDisplayName,
+                        pageDocumentName, pageBranchName,
+                    };
+                }
+            }).use(vuetify).mount('#app');
+        });
+    </script>
+</body>
+</html>

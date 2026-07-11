@@ -1,5 +1,4 @@
 import asyncio
-import configparser
 import os
 import subprocess
 import sys
@@ -8,23 +7,27 @@ from pathlib import Path
 import json
 import psycopg
 from typing import TypedDict
-from task_info import TaskInfo
+from task.info import TaskInfo
+
+from config import config
 
 if sys.platform == "win32":
     # psycopg в async-режиме не работает с ProactorEventLoop (дефолтный на Windows).
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-TASK_MANAGER_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(TASK_MANAGER_DIR)
-TASKS_FOLDER = f"{TASK_MANAGER_DIR}/tasks"
+TASKS_FOLDER = f"{config.common.root}/task"
 
 NOTIFY_CHANNEL = "new_task"
 
+TASK_PREFIX = "run_"
+
+OUT_FILE_FLUSH_THRESHOLD = 256
+
 SUPPORTED_TASK_TYPES = set()
 
-for file in list(Path(TASKS_FOLDER).glob("*.py")):
+for file in list(Path(TASKS_FOLDER).glob(f"{TASK_PREFIX}*.py")):
     SUPPORTED_TASK_TYPES.add(Path(file).stem)
-print(f"Доступные задачи: {SUPPORTED_TASK_TYPES}")
+
 
 class TaskManager:
     """
@@ -38,24 +41,15 @@ class TaskManager:
 
     def __init__(self):
 
-        config = configparser.ConfigParser()
-        config_path = f"{os.path.dirname(__file__)}/../.secret/config.ini"
-
-        if not config.read(config_path):
-            raise FileNotFoundError(os.path.abspath(config_path))
-
         self._conninfo = (
-            f"dbname={config.get('Database', 'dbname')} "
-            f"user={config.get('Database', 'user')} "
-            f"password={config.get('Database', 'password')} "
-            f"host={config.get('Database', 'host')} "
-            f"port={config.getint('Database', 'port')}"
+            f"dbname={config.database.dbname} "
+            f"user={config.database.user} "
+            f"password={config.database.password} "
+            f"host={config.database.host} "
+            f"port={config.database.port}"
         )
 
-        self._repos_path = config.get("Files", "repos_path")
-        self._log_path = config.get("Files", "log_path")
-
-        Path(self._log_path).mkdir(parents=True, exist_ok=True)
+        Path(config.files.log_path).mkdir(parents=True, exist_ok=True)
 
         self._task_queue: "asyncio.Queue[TaskInfo]" = asyncio.Queue()
         self._conn: psycopg.AsyncConnection | None = None
@@ -76,11 +70,12 @@ class TaskManager:
         )
         try:
             await self._conn.execute(f"LISTEN {NOTIFY_CHANNEL}")
-            
+
             async for notify in self._conn.notifies():
                 task_info = TaskInfo(**json.loads(notify.payload))
 
-                if not task_info.type in SUPPORTED_TASK_TYPES:
+                if not TASK_PREFIX + task_info.type in SUPPORTED_TASK_TYPES:
+                    print(f"{TASK_PREFIX}{task_info.type}.p not found!")
                     continue
 
                 async with self._work_conn.cursor() as cur:
@@ -88,10 +83,10 @@ class TaskManager:
                         "UPDATE task SET status = 'queued' WHERE id = %s AND status = 'new'",
                         (task_info.id,),
                     )
-                                        
+
                     if cur.rowcount != 1:
                         continue
-                    
+
                     await cur.execute(
                         "SELECT data FROM task WHERE id = %s", (task_info.id,)
                     )
@@ -116,6 +111,19 @@ class TaskManager:
                 traceback.print_exc()
             self._task_queue.task_done()
 
+    @staticmethod
+    def _pump_output_and_wait(process: subprocess.Popen, out_file) -> int:
+        """Читает stdout процесса и пишет в out_file, сбрасывая буфер каждые OUT_FILE_FLUSH_THRESHOLD байт."""
+        buffered = 0
+        for chunk in iter(lambda: process.stdout.read(4096), b""):
+            out_file.write(chunk.decode("utf-8", errors="replace"))
+            buffered += len(chunk)
+            if buffered >= OUT_FILE_FLUSH_THRESHOLD:
+                out_file.flush()
+                buffered = 0
+        out_file.flush()
+        return process.wait()
+
     async def _run_worker(self, task_info: TaskInfo) -> None:
         """
         Запускает воркер в отдельном процессе.
@@ -130,21 +138,28 @@ class TaskManager:
             )
         print(f"RUNNING: id={task_info.id} type= {task_info.type}")
 
-        task_info.repos_path = self._repos_path
+        worker_env = os.environ.copy()
+        worker_env["PYTHONIOENCODING"] = "utf-8"
+        worker_env["PYTHONUTF8"] = "1"
+        worker_env["GIT_PYTHON_TRACE"] = "full"
 
         try:
-            with open(f"{self._log_path}/{task_info.id}.txt", "w") as out_file:
+            with open(
+                f"{config.files.log_path}/{task_info.id}.txt", "w", encoding="utf-8"
+            ) as out_file:
                 process = subprocess.Popen(
-                    [sys.executable, "-m", f"task_manager.tasks.{task_info.type}"],
-                    cwd=PROJECT_ROOT,
+                    [sys.executable, "-m", f"task.{TASK_PREFIX}{task_info.type}"],
+                    cwd=config.common.root,
+                    env=worker_env,
                     stdin=subprocess.PIPE,
-                    stdout=out_file,
+                    stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
-                    text=True,
                 )
-                process.stdin.write(task_info.model_dump_json())
+                process.stdin.write(task_info.model_dump_json().encode("utf-8"))
                 process.stdin.close()
-                returncode = await asyncio.to_thread(process.wait)
+                returncode = await asyncio.to_thread(
+                    self._pump_output_and_wait, process, out_file
+                )
             status = "success" if returncode == 0 else "error"
         except Exception:
             traceback.print_exc()

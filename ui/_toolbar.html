@@ -1,6 +1,22 @@
 <v-app-bar color="primary" density="compact">
-  <v-app-bar-title style="cursor: pointer;" @click="goHome">Архив</v-app-bar-title>
-  <v-spacer></v-spacer>
+  <v-menu>
+    <template v-slot:activator="{ props }">
+      <v-btn variant="text" class="text-none" style="flex: 0 0 auto;" v-bind="props">
+        <v-icon start>mdi-menu</v-icon>
+        <span class="text-h6">Архив</span>
+      </v-btn>
+    </template>
+    <v-list>
+      <v-list-item title="Документы" href="/"></v-list-item>
+      <v-list-item title="Наборы изменений" href="/branches"></v-list-item>
+      <v-list-item title="Задачи" href="/tasks"></v-list-item>
+      <v-list-item title="Пользователи" href="/users"></v-list-item>
+    </v-list>
+  </v-menu>
+
+  <div class="text-center flex-grow-1 text-truncate">{{ pageDocumentName }}</div>
+
+  <span v-if="pageBranchName" class="mr-4 text-truncate">{{ pageBranchName }}</span>
 
   <v-menu>
     <template v-slot:activator="{ props }">
@@ -11,6 +27,7 @@
     <v-list>
       <template v-if="user">
         <v-list-subheader>{{ user.display_name || user.username }}</v-list-subheader>
+        <v-list-item title="Список задач" href="/tasks"></v-list-item>
         <v-list-item title="Сменить пароль" @click="showResetPasswordDialog = true"></v-list-item>
         <v-list-item title="Изменить ФИО" @click="showSetDisplayNameDialog = true"></v-list-item>
         <v-list-item title="Выйти" @click="handleLogout"></v-list-item>
