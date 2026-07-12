@@ -15,6 +15,12 @@ try:
     repo_path = config.files.repos_root + f"/{document_id}"
     branch_path = config.files.repos_branch_root + f"/{branch_name}"
 
+    try:
+        run_git(branch_path, "merge", "--no-ff", "master", "-m", f"merge_master_into_{branch_name}")
+    except Exception:
+        run_git(branch_path, "merge", "--abort")
+        raise
+
     run_git(repo_path, "merge", "--no-ff", branch_name, "-m", f"merge_{branch_name}")
     run_git(repo_path, "worktree", "remove", "--force", branch_path)
 
