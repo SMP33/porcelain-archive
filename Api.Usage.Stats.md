@@ -29,8 +29,9 @@
 | Задачи по ветке | GET /api/tasks/branch/{branch_id} | frontend/src/components/edit/BranchTasksPanel.vue |
 | Лог задачи | GET /api/tasks/{task_id}/log | frontend/src/views/TaskListView.vue, вывод лога для выбранной задачи |
 | Автообновление списка задач | WS /api/tasks/ws | frontend/src/views/TaskListView.vue, обновление таблицы и лога при изменении задач в БД; frontend/src/views/EditView.vue, обновление задач ветки и количества страниц |
-| Id основной (master) ветки документа | GET /api/documents/{document_id}/master_branch_id | frontend/src/views/DocumentView.vue, определение ветки для галереи страниц |
+| Id основной (master) ветки документа | GET /api/documents/{document_id}/master_branch_id | frontend/src/views/DocumentView.vue, определение ветки для галереи страниц; frontend/src/components/edit/ViewChangesPanel.vue, определение master-ветки для сравнения |
 | Изображение страницы ветки | GET /api/documents/branches/{branch_id}/pages/{page_index}/image | frontend/src/components/PageGalleryViewer.vue, полноразмерный просмотр страницы в диалоге |
 | Превью изображения страницы ветки | GET /api/documents/branches/{branch_id}/pages/{page_index}/image/preview | frontend/src/components/PageGalleryViewer.vue, миниатюры в галерее страниц |
 | Текст страницы ветки | GET /api/documents/branches/{branch_id}/pages/{page_index}/text | frontend/src/components/PageGalleryViewer.vue, спаны текста и подсветка в диалоге просмотра страницы |
 | Создание пользователя | POST /api/users/create | frontend/src/views/UserListView.vue, диалог "Новый пользователь" (кнопка видна при роли admin) |
+| Хеши страниц ветки | GET /api/documents/branches/{branch_id}/pages_hash | frontend/src/components/edit/ViewChangesPanel.vue, вкладка "Просмотр изменений" (таблицы текущей и master ветки) |

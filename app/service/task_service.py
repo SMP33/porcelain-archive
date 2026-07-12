@@ -13,12 +13,14 @@ class TaskService:
 
     @staticmethod
     def _row_to_task(row: Sequence[Any]) -> Dict[str, Any]:
-        task_id, type_, status, data = row
+        task_id, type_, status, data, author_id, author_display_name = row
         return {
             "id": task_id,
             "type": type_,
             "status": status,
             "data": data or {},
+            "author_id": author_id,
+            "author_display_name": author_display_name,
         }
 
     async def get_task_count(self) -> int:
@@ -36,7 +38,12 @@ class TaskService:
         :param limit: Количество задач для возврата.
         """
         rows = await db.execute_read(
-            "SELECT id, type, status, data FROM task ORDER BY id DESC LIMIT %s OFFSET %s",
+            """
+            SELECT t.id, t.type, t.status, t.data, t.author_id, a.display_name
+            FROM task t
+            LEFT JOIN member a ON a.id = t.author_id
+            ORDER BY t.id DESC LIMIT %s OFFSET %s
+            """,
             (limit, offset),
         )
         return [self._row_to_task(row) for row in rows]
@@ -46,7 +53,12 @@ class TaskService:
         Возвращает задачи, относящиеся к указанной ветке (data->>'branch_id'), от новых к старым.
         """
         rows = await db.execute_read(
-            "SELECT id, type, status, data FROM task WHERE data->>'branch_id' = %s ORDER BY id DESC",
+            """
+            SELECT t.id, t.type, t.status, t.data, t.author_id, a.display_name
+            FROM task t
+            LEFT JOIN member a ON a.id = t.author_id
+            WHERE t.data->>'branch_id' = %s ORDER BY t.id DESC
+            """,
             (str(branch_id),),
         )
         return [self._row_to_task(row) for row in rows]

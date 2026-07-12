@@ -72,7 +72,7 @@ async def create_document(
     if not role_at_least(user.get("role"), "user"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для создания документа")
 
-    document_id = await document_service.create_document(name=payload.name, author=user["username"])
+    document_id = await document_service.create_document(name=payload.name, author=user["username"], user_id=user["id"])
     return {"id": document_id}
 
 
@@ -177,7 +177,7 @@ async def merge_branch(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для применения изменений")
 
     try:
-        return await document_service.merge_branch(branch_id=branch_id)
+        return await document_service.merge_branch(branch_id=branch_id, user_id=user["id"])
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -269,7 +269,7 @@ async def add_pages(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для редактирования ветки")
 
     try:
-        return await document_service.add_pages(branch_id=branch_id, files=files, position=position)
+        return await document_service.add_pages(branch_id=branch_id, files=files, position=position, user_id=user["id"])
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -293,7 +293,7 @@ async def remove_pages(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для редактирования ветки")
 
     try:
-        return await document_service.remove_pages(branch_id=branch_id, start=payload.start, end=payload.end)
+        return await document_service.remove_pages(branch_id=branch_id, start=payload.start, end=payload.end, user_id=user["id"])
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -318,7 +318,7 @@ async def set_text(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для редактирования ветки")
 
     try:
-        return await document_service.set_text(branch_id=branch_id, file=file, position=position)
+        return await document_service.set_text(branch_id=branch_id, file=file, position=position, user_id=user["id"])
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -343,7 +343,7 @@ async def reset_text(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для редактирования ветки")
 
     try:
-        return await document_service.reset_text(branch_id=branch_id, start=payload.start, end=payload.end)
+        return await document_service.reset_text(branch_id=branch_id, start=payload.start, end=payload.end, user_id=user["id"])
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -363,6 +363,22 @@ async def get_page_count(
 
     count = await document_service.get_branch_page_count(branch_id)
     return {"count": count}
+
+
+@router.get("/branches/{branch_id}/pages_hash")
+async def get_branch_pages_hash(
+    branch_id: int,
+    request: Request,
+) -> List[Dict[str, Any]]:
+    """
+    Возвращает image_hash и text_hash всех страниц ветки. Master-ветка доступна
+    всем, кому доступен документ, остальные ветки - только автору/ревьюеру.
+    """
+    user_id = await _get_current_user_id(request)
+    if not await document_service.is_branch_viewable(user_id, branch_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра ветки")
+
+    return await document_service.get_branch_pages_hash(branch_id)
 
 
 @router.get("/pages/allowed_extensions")

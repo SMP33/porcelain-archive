@@ -95,11 +95,17 @@
                   :active="activeView === 'reset_text'"
                   @click="activeView = 'reset_text'"
                 ></v-list-item>
+                <v-list-item
+                  title="Просмотр изменений"
+                  prepend-icon="mdi-compare"
+                  :active="activeView === 'view_changes'"
+                  @click="activeView = 'view_changes'"
+                ></v-list-item>
               </v-list>
             </v-card>
           </v-col>
 
-          <v-col cols="12" md="7">
+          <v-col cols="12" :md="mainPanelCols">
             <AddPagesPanel
               v-if="activeView === 'add'"
               :branch-id="branch.id"
@@ -129,6 +135,12 @@
               @submitted="branchTasksRef.reload()"
             />
 
+            <ViewChangesPanel
+              v-if="activeView === 'view_changes'"
+              :branch-id="branch.id"
+              :master-branch-id="masterBranchId"
+            />
+
             <v-card class="mt-4">
               <v-card-title class="text-subtitle-1">Страницы</v-card-title>
               <v-card-text>
@@ -145,8 +157,13 @@
             </v-card>
           </v-col>
 
-          <v-col cols="12" md="3">
-            <BranchTasksPanel ref="branchTasksRef" :branch-id="branch.id" />
+          <v-col cols="12" :md="tasksPanelCols">
+            <BranchTasksPanel
+              ref="branchTasksRef"
+              :branch-id="branch.id"
+              :collapsed="tasksCollapsed"
+              @update:collapsed="tasksCollapsed = $event"
+            />
           </v-col>
         </v-row>
 
@@ -165,7 +182,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import http from '../api/http'
 import { useAuth } from '../composables/useAuth'
@@ -176,6 +193,7 @@ import AddPagesPanel from '../components/edit/AddPagesPanel.vue'
 import RemovePagesPanel from '../components/edit/RemovePagesPanel.vue'
 import SetTextPanel from '../components/edit/SetTextPanel.vue'
 import ResetTextPanel from '../components/edit/ResetTextPanel.vue'
+import ViewChangesPanel from '../components/edit/ViewChangesPanel.vue'
 import BranchTasksPanel from '../components/edit/BranchTasksPanel.vue'
 
 const route = useRoute()
@@ -202,7 +220,25 @@ const error = ref(null)
 
 const pageCount = ref(0)
 const allowedExtensions = ref([])
-const activeView = ref('add')
+const masterBranchId = ref(null)
+
+const ACTIVE_VIEW_STORAGE_KEY = 'editView.activeView'
+const VALID_VIEWS = ['add', 'remove', 'set_text', 'reset_text', 'view_changes']
+const storedActiveView = localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY)
+const activeView = ref(VALID_VIEWS.includes(storedActiveView) ? storedActiveView : 'add')
+
+watch(activeView, (value) => {
+  localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, value)
+})
+
+const TASKS_COLLAPSED_STORAGE_KEY = 'branchTasksPanel.collapsed'
+const tasksCollapsed = ref(localStorage.getItem(TASKS_COLLAPSED_STORAGE_KEY) === 'true')
+const mainPanelCols = computed(() => (tasksCollapsed.value ? 8 : 7))
+const tasksPanelCols = computed(() => (tasksCollapsed.value ? 2 : 3))
+
+watch(tasksCollapsed, (value) => {
+  localStorage.setItem(TASKS_COLLAPSED_STORAGE_KEY, value ? 'true' : 'false')
+})
 
 const statusLoading = ref(false)
 const statusActionLoading = ref(false)
@@ -221,6 +257,7 @@ const loadBranch = async (id) => {
     const response = await http.get(`/api/documents/branches/${id}`)
     branch.value = {
       id: response.data.id,
+      documentId: response.data.document_id,
       documentName: response.data.document_name,
       authorId: response.data.author_id,
       status: response.data.status,
@@ -248,6 +285,15 @@ const loadPageCount = async () => {
     pageCount.value = response.data.count
   } catch (err) {
     console.error('Ошибка при получении количества страниц:', err)
+  }
+}
+
+const loadMasterBranchId = async () => {
+  try {
+    const response = await http.get(`/api/documents/${branch.value.documentId}/master_branch_id`)
+    masterBranchId.value = response.data.branch_id
+  } catch (err) {
+    console.error('Ошибка при получении id основной ветки:', err)
   }
 }
 
@@ -322,6 +368,7 @@ onMounted(async () => {
   if (branch.value) {
     loadPageCount()
     loadAllowedExtensions()
+    loadMasterBranchId()
     connectTaskUpdates()
   }
 })

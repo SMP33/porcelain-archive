@@ -118,12 +118,13 @@ class DocumentService:
         )
         return rows_affected > 0
 
-    async def create_document(self, name: str, author: str) -> int:
+    async def create_document(self, name: str, author: str, user_id: int) -> int:
         """
         Создаёт новый документ и возвращает его id.
 
         :param name: Название документа.
         :param author: Автор документа (имя пользователя).
+        :param user_id: Id пользователя, создающего документ (автор задачи).
         """
         async with db.transaction() as conn:
             cursor = await conn.execute(
@@ -136,11 +137,11 @@ class DocumentService:
                     "INSERT INTO branch (document_id, name, created_time) VALUES (%s, 'master', NOW()) RETURNING id",
                     (row[0],),
                 )
-                
+
                 task_data = {"document_id": row[0]}
                 await conn.execute(
-                    "INSERT INTO task (type, data) VALUES ('create_repos', %s) RETURNING id",
-                    (Jsonb(task_data),),
+                    "INSERT INTO task (type, author_id, data) VALUES ('create_repos', %s, %s) RETURNING id",
+                    (user_id, Jsonb(task_data)),
                 )
 
             return row[0]
@@ -179,8 +180,8 @@ class DocumentService:
                     "branch_name": branch_name,
                 }
                 await conn.execute(
-                    "INSERT INTO task (type, data) VALUES ('create_branch', %s) RETURNING id",
-                    (Jsonb(data),),
+                    "INSERT INTO task (type, author_id, data) VALUES ('create_branch', %s, %s) RETURNING id",
+                    (user_id, Jsonb(data)),
                 )
 
             return branch_id
@@ -354,7 +355,7 @@ class DocumentService:
         if rows_affected == 0:
             raise ValueError("Ветка не найдена")
 
-    async def merge_branch(self, branch_id: int) -> Dict[str, Any]:
+    async def merge_branch(self, branch_id: int, user_id: int) -> Dict[str, Any]:
         """
         Ставит в очередь слияние ветки изменений в master. Возможно только
         для набора изменений в статусе 'accepted'.
@@ -378,8 +379,8 @@ class DocumentService:
                 "document_id": document_id,
             }
             await conn.execute(
-                "INSERT INTO task (type, data) VALUES ('merge_branch', %s) RETURNING id",
-                (Jsonb(data),),
+                "INSERT INTO task (type, author_id, data) VALUES ('merge_branch', %s, %s) RETURNING id",
+                (user_id, Jsonb(data)),
             )
 
         return {}
@@ -405,7 +406,7 @@ class DocumentService:
         return await self.is_document_available(user_id, document_id)
 
     async def add_pages(
-        self, branch_id: int, files: List[UploadFile], position: int
+        self, branch_id: int, files: List[UploadFile], position: int, user_id: int
     ) -> Dict[str, Any]:
         """
         Добавляет страницы (файлы изображений) в ветку изменений.
@@ -413,6 +414,7 @@ class DocumentService:
         :param branch_id: Ветка, в которую добавляются страницы.
         :param files: Загруженные файлы изображений.
         :param position: Номер страницы, после которой вставлять (0 - в начало).
+        :param user_id: Пользователь, запустивший задачу.
         """
         
         page_count = await self.get_branch_page_count(branch_id)
@@ -444,19 +446,20 @@ class DocumentService:
                 "tmpdir": tmpdir,
             }
             await conn.execute(
-                "INSERT INTO task (type, data) VALUES ('insert_files', %s) RETURNING id",
-                (Jsonb(data),),
+                "INSERT INTO task (type, author_id, data) VALUES ('insert_files', %s, %s) RETURNING id",
+                (user_id, Jsonb(data)),
             )
 
         return {}
 
-    async def remove_pages(self, branch_id: int, start: int, end: int) -> Dict[str, Any]:
+    async def remove_pages(self, branch_id: int, start: int, end: int, user_id: int) -> Dict[str, Any]:
         """
         Удаляет диапазон страниц [start, end] (включительно) из ветки изменений.
 
         :param branch_id: Ветка, из которой удаляются страницы.
         :param start: Первая удаляемая страница.
         :param end: Последняя удаляемая страница.
+        :param user_id: Пользователь, запустивший задачу.
         """
         page_count = await self.get_branch_page_count(branch_id)
         if not (1 <= int(start) <= int(end) <= page_count):
@@ -470,13 +473,13 @@ class DocumentService:
                 "file_remove_count": end - start + 1,
             }
             await conn.execute(
-                "INSERT INTO task (type, data) VALUES ('remove_files', %s) RETURNING id",
-                (Jsonb(data),),
+                "INSERT INTO task (type, author_id, data) VALUES ('remove_files', %s, %s) RETURNING id",
+                (user_id, Jsonb(data)),
             )
 
         return {}
 
-    async def set_text(self, branch_id: int, file: UploadFile, position: int) -> Dict[str, Any]:
+    async def set_text(self, branch_id: int, file: UploadFile, position: int, user_id: int) -> Dict[str, Any]:
         """
         Загружает PDF и ставит в очередь применение его текста к страницам
         ветки, начиная с position.
@@ -484,6 +487,7 @@ class DocumentService:
         :param branch_id: Ветка, к которой применяется текст.
         :param file: Загруженный PDF-файл.
         :param position: Номер страницы, с которой начинается применение текста.
+        :param user_id: Пользователь, запустивший задачу.
         """
         page_count = await self.get_branch_page_count(branch_id)
         if not (1 <= int(position) <= page_count):
@@ -509,19 +513,20 @@ class DocumentService:
                 "pdf_path": pdf_path,
             }
             await conn.execute(
-                "INSERT INTO task (type, data) VALUES ('set_text', %s) RETURNING id",
-                (Jsonb(data),),
+                "INSERT INTO task (type, author_id, data) VALUES ('set_text', %s, %s) RETURNING id",
+                (user_id, Jsonb(data)),
             )
 
         return {}
 
-    async def reset_text(self, branch_id: int, start: int, end: int) -> Dict[str, Any]:
+    async def reset_text(self, branch_id: int, start: int, end: int, user_id: int) -> Dict[str, Any]:
         """
         Ставит в очередь удаление текста со страниц [start, end] (включительно).
 
         :param branch_id: Ветка, из которой удаляется текст.
         :param start: Первая страница диапазона.
         :param end: Последняя страница диапазона.
+        :param user_id: Пользователь, запустивший задачу.
         """
         page_count = await self.get_branch_page_count(branch_id)
         if not (1 <= int(start) <= int(end) <= page_count):
@@ -535,8 +540,8 @@ class DocumentService:
                 "end": end,
             }
             await conn.execute(
-                "INSERT INTO task (type, data) VALUES ('reset_text', %s) RETURNING id",
-                (Jsonb(data),),
+                "INSERT INTO task (type, author_id, data) VALUES ('reset_text', %s, %s) RETURNING id",
+                (user_id, Jsonb(data)),
             )
 
         return {}
@@ -565,6 +570,16 @@ class DocumentService:
             return 0
 
         return int(rows[0][0])
+
+    async def get_branch_pages_hash(self, branch_id: int) -> List[Dict[str, Optional[str]]]:
+        """
+        Возвращает image_hash и text_hash всех страниц ветки, упорядоченных по номеру страницы.
+        """
+        rows = await db.execute_read(
+            "SELECT image_hash, text_hash FROM page WHERE branch_id = %s ORDER BY pos",
+            (branch_id,),
+        )
+        return [{"image_hash": row[0], "text_hash": row[1]} for row in rows]
 
     def get_allowed_page_extensions(self) -> List[str]:
         """

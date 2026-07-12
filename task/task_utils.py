@@ -436,8 +436,8 @@ def regenerate_branch_cache(repo_path: str, branch_id: int, branch: Optional[str
         branch_meta = {"page_count": page_count}
         queries.append(
             (
-                "UPDATE branch SET meta = %s, last_change_time = NOW() WHERE name = %s",
-                (Jsonb(branch_meta), repo_branch),
+                "UPDATE branch SET meta = %s, last_change_time = NOW() WHERE id = %s",
+                (Jsonb(branch_meta), branch_id),
             )
         )
     if len(queries) == 0:

@@ -27,6 +27,7 @@
                   @click:row="selectTask"
                 >
                   <template v-slot:item.type="{ item }">{{ taskTypeLabel(item.type) }}</template>
+                  <template v-slot:item.author_display_name="{ item }">{{ item.author_display_name || '—' }}</template>
                   <template v-slot:item.status="{ item }">
                     <v-chip :color="statusColor(item.status)" size="small" label>{{ statusLabel(item.status) }}</v-chip>
                   </template>
@@ -72,6 +73,7 @@ const itemsPerPage = ref(25)
 const headers = ref([
   { title: 'ID', align: 'start', sortable: false, key: 'id' },
   { title: 'Тип', key: 'type', align: 'end' },
+  { title: 'Автор', key: 'author_display_name', align: 'end' },
   { title: 'Статус', key: 'status', align: 'end' },
 ])
 
