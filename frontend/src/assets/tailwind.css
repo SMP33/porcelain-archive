@@ -1,0 +1,26 @@
+/* Утилиты Tailwind без preflight (сброс стилей уже делает Vuetify) и с префиксом tw:,
+   чтобы имена классов не пересекались с утилитами Vuetify (d-flex, justify-center и т.п.) */
+@import "tailwindcss/theme" layer(theme) prefix(tw);
+@import "tailwindcss/utilities" layer(utilities) prefix(tw);
+
+@theme {
+  --color-clay-50: #fff5f5;
+  --color-clay-100: #ffe4e4;
+  --color-clay-200: #fecaca;
+  --color-clay-300: #fca5a5;
+  --color-clay-400: #f87171;
+  --color-clay-500: #dc2626;
+  --color-clay-600: #b91c1c;
+  --color-clay-700: #991b1b;
+
+  --color-ink-700: #1f1f1f;
+  --color-ink-800: #111111;
+  --color-ink-900: #080808;
+
+  --color-gold-500: #c8922a;
+  --color-gold-600: #b8820a;
+
+  --color-cream: #fdf6ed;
+
+  --font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
+}

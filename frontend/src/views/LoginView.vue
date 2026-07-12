@@ -1,5 +1,14 @@
 <template>
-  <v-layout class="d-flex align-center justify-center" style="min-height: 100vh;">
+  <v-layout class="d-flex flex-column align-center justify-center" style="min-height: 100vh;">
+    <div class="tw:flex tw:items-center tw:gap-3 tw:mb-6">
+      <span
+        class="tw:flex tw:items-center tw:justify-center tw:w-9 tw:h-9 tw:shrink-0 tw:rounded tw:bg-clay-500"
+        style="transform: skewX(-10deg);"
+      >
+        <v-icon size="20" color="white" style="transform: skewX(10deg);">mdi-book-open-page-variant</v-icon>
+      </span>
+      <span class="tw:font-serif tw:font-bold tw:text-xl" style="color: #111111;">Архив</span>
+    </div>
     <v-card width="400" class="pa-4">
       <v-card-title class="text-center">Авторизация</v-card-title>
       <v-card-text>
