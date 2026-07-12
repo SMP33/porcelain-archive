@@ -2,33 +2,52 @@
   <v-dialog v-model="dialog" max-width="1400">
     <v-card>
       <v-card-text class="pa-2">
-        <v-row dense>
-          <v-col cols="12" :md="showTextColumn ? 7 : 12">
-            <div class="page-image-wrap">
-              <img :src="dialogUrl">
-              <div
-                v-for="(span, idx) in spans"
-                :key="idx"
-                class="page-span-highlight"
-                :class="{ 'page-span-highlight--active': hoveredSpanIndex === idx }"
-                :style="spanHighlightStyle(span)"
-              ></div>
-            </div>
-          </v-col>
-          <v-col v-if="showTextColumn" cols="12" md="5">
-            <v-progress-circular v-if="textLoading" indeterminate size="20"></v-progress-circular>
-            <div v-else class="page-text-panel">
-              <div
-                v-for="(span, idx) in spans"
-                :key="idx"
-                class="page-text-span"
-                :class="{ 'page-text-span--active': hoveredSpanIndex === idx }"
-                @mouseenter="hoveredSpanIndex = idx"
-                @mouseleave="hoveredSpanIndex = null"
-              >{{ span.text }}</div>
-            </div>
-          </v-col>
-        </v-row>
+        <div class="gallery-viewer-body">
+          <v-btn
+            icon="mdi-chevron-left"
+            variant="tonal"
+            class="gallery-viewer-arrow gallery-viewer-arrow--left"
+            :disabled="!hasPrev"
+            @click="prevPage"
+          ></v-btn>
+          <v-btn
+            icon="mdi-chevron-right"
+            variant="tonal"
+            class="gallery-viewer-arrow gallery-viewer-arrow--right"
+            :disabled="!hasNext"
+            @click="nextPage"
+          ></v-btn>
+
+          <v-row dense>
+            <v-col cols="12" :md="showTextColumn ? 7 : 12">
+              <div class="page-image-wrap">
+                <img :src="dialogUrl">
+                <div
+                  v-for="(span, idx) in spans"
+                  :key="idx"
+                  class="page-span-highlight"
+                  :class="{ 'page-span-highlight--active': hoveredSpanIndex === idx }"
+                  :style="spanHighlightStyle(span)"
+                  @mouseenter="hoveredSpanIndex = idx"
+                  @mouseleave="hoveredSpanIndex = null"
+                ></div>
+              </div>
+            </v-col>
+            <v-col v-if="showTextColumn" cols="12" md="5">
+              <v-progress-circular v-if="textLoading" indeterminate size="20"></v-progress-circular>
+              <div v-else class="page-text-panel">
+                <div
+                  v-for="(span, idx) in spans"
+                  :key="idx"
+                  class="page-text-span"
+                  :class="{ 'page-text-span--active': hoveredSpanIndex === idx }"
+                  @mouseenter="hoveredSpanIndex = idx"
+                  @mouseleave="hoveredSpanIndex = null"
+                >{{ span.text }}</div>
+              </div>
+            </v-col>
+          </v-row>
+        </div>
 
         <div class="page-thumb-strip">
           <div
@@ -66,7 +85,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch, onUnmounted } from 'vue'
 import http from '../api/http'
 
 const props = defineProps({
@@ -131,10 +150,45 @@ const nextPage = () => {
   if (hasNext.value) show(currentPos.value + 1)
 }
 
+const isTypingTarget = (target) => ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable
+
+const handleKeydown = (event) => {
+  if (isTypingTarget(event.target)) return
+  if (event.key === 'ArrowLeft') prevPage()
+  else if (event.key === 'ArrowRight') nextPage()
+}
+
+watch(dialog, (isOpen) => {
+  if (isOpen) {
+    window.addEventListener('keydown', handleKeydown)
+  } else {
+    window.removeEventListener('keydown', handleKeydown)
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
+
 defineExpose({ show, previewImageUrl })
 </script>
 
 <style scoped>
+.gallery-viewer-body {
+  position: relative;
+}
+.gallery-viewer-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+.gallery-viewer-arrow--left {
+  left: 4px;
+}
+.gallery-viewer-arrow--right {
+  right: 4px;
+}
 .page-image-wrap {
   position: relative;
   display: inline-block;
@@ -150,7 +204,7 @@ defineExpose({ show, previewImageUrl })
   position: absolute;
   border: 1px solid transparent;
   background: transparent;
-  pointer-events: none;
+  cursor: pointer;
   border-radius: 2px;
   transition: background-color .1s, border-color .1s;
 }
