@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 
-from app.service.user_service import OAuth2PasswordBearerWithCookie, UserService
+from app.service.user_service import OAuth2PasswordBearerWithCookie, UserService, role_at_least
 
 router = APIRouter(
     prefix="/api/users",
@@ -29,9 +29,7 @@ class CreateUserRequest(BaseModel):
     password: str
     display_name: str | None = None
     email: str | None = None
-    can_create: bool = False
-    can_review: bool = False
-    is_admin: bool = False
+    role: str = "user"
 
 @router.post("/login")
 async def login_for_access_token(
@@ -82,12 +80,12 @@ async def create_user(
     token: Annotated[str, Depends(oauth2_scheme)],
 ) -> Dict[str, Any]:
     """
-    Создаёт нового пользователя. Требует прав администратора (is_admin).
+    Создаёт нового пользователя. Требует роли admin.
     """
     user = await user_service.get_user_by_token(token)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
-    if not user.get("is_admin"):
+    if not role_at_least(user.get("role"), "admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для создания пользователей")
 
     try:
@@ -96,9 +94,7 @@ async def create_user(
             password=payload.password,
             display_name=payload.display_name,
             email=payload.email,
-            can_create=payload.can_create,
-            can_review=payload.can_review,
-            is_admin=payload.is_admin,
+            role=payload.role,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))

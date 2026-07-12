@@ -1,4 +1,5 @@
-# Запуск backend (run_porcelain_archive_server, порт 8000) и frontend
+# Сборка frontend (frontend/dist - для доступа напрямую через backend), затем
+# запуск backend (run_porcelain_archive_server, порт 8000) и frontend
 # dev-сервера (npm run dev, порт 5173) в фоне, вывод - в лог-файлы.
 # Если что-то из них уже запущено (порт занят) - перезапускает.
 
@@ -7,6 +8,15 @@ Set-Location $PSScriptRoot
 
 $RunDir = Join-Path $PSScriptRoot ".run"
 New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
+
+function Build-Frontend {
+    # Нужна для варианта доступа напрямую через backend (порт 8000, frontend/dist),
+    # dev-сервер (порт 5173) собранный dist не использует и работает поверх исходников.
+    Write-Host "Сборка frontend..."
+    $frontendDir = Join-Path $PSScriptRoot "frontend"
+    & npm.cmd --prefix $frontendDir install
+    & npm.cmd --prefix $frontendDir run build
+}
 
 function Get-PortOwnerPids([int]$Port) {
     Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
@@ -77,5 +87,6 @@ function Start-Frontend {
     }
 }
 
+Build-Frontend
 Start-Backend
 Start-Frontend

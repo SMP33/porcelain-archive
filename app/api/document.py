@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Resp
 from pydantic import BaseModel
 
 from app.service.document_service import DocumentService
-from app.service.user_service import OAuth2PasswordBearerWithCookie, UserService
+from app.service.user_service import OAuth2PasswordBearerWithCookie, UserService, role_at_least
 
 router = APIRouter(
     prefix="/api/documents",
@@ -26,6 +26,14 @@ async def _get_current_user_id(request: Request) -> Optional[int]:
 
 class DocumentCreateRequest(BaseModel):
     name: str
+
+
+class SetVisibilityRequest(BaseModel):
+    is_visible: bool
+
+
+class SetBranchStatusRequest(BaseModel):
+    status: str
 
 
 class RemovePagesRequest(BaseModel):
@@ -61,7 +69,7 @@ async def create_document(
     user = await user_service.get_user_by_token(token)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
-    if not user.get("can_create"):
+    if not role_at_least(user.get("role"), "user"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для создания документа")
 
     document_id = await document_service.create_document(name=payload.name, author=user["username"])
@@ -88,6 +96,28 @@ async def create_branch(
     return {"branch_id": branch_id}
 
 
+@router.post("/{document_id}/visibility")
+async def set_document_visibility(
+    document_id: int,
+    payload: SetVisibilityRequest,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """
+    Изменяет видимость документа для обычных пользователей. Требует роли moderator+.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not role_at_least(user.get("role"), "moderator"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для изменения видимости документа")
+
+    success = await document_service.set_document_visibility(document_id, payload.is_visible)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Документ не найден")
+
+    return {"is_visible": payload.is_visible}
+
+
 @router.get("/branches/")
 async def read_branches(
     token: Annotated[str, Depends(oauth2_scheme)],
@@ -104,11 +134,11 @@ async def read_branches(
     if not await document_service.is_branch_list_available(user["id"]):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Список наборов изменений недоступен")
 
-    can_review = bool(user.get("can_review"))
+    sees_all = role_at_least(user.get("role"), "moderator")
     branches = await document_service.get_branches_paginated(
-        user["id"], can_review, offset=offset, limit=limit
+        user["id"], sees_all, offset=offset, limit=limit
     )
-    total = await document_service.get_branch_count(user["id"], can_review)
+    total = await document_service.get_branch_count(user["id"], sees_all)
     return {"items": branches, "total": total}
 
 
@@ -143,13 +173,80 @@ async def merge_branch(
     user = await user_service.get_user_by_token(token)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
-    if not user.get("can_review"):
+    if not role_at_least(user.get("role"), "moderator"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для применения изменений")
 
     try:
         return await document_service.merge_branch(branch_id=branch_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@router.post("/branches/{branch_id}/submit_for_review")
+async def submit_branch_for_review(
+    branch_id: int,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """
+    Автор отправляет набор изменений на проверку: in_work -> in_review.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not await document_service.is_branch_author(user["id"], branch_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Только автор может отправить набор изменений на проверку")
+
+    try:
+        await document_service.submit_branch_for_review(branch_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    return {"status": "in_review"}
+
+
+@router.post("/branches/{branch_id}/return_to_work")
+async def return_branch_to_work(
+    branch_id: int,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """
+    Автор возвращает набор изменений в работу: in_review -> in_work.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not await document_service.is_branch_author(user["id"], branch_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Только автор может вернуть набор изменений в работу")
+
+    try:
+        await document_service.return_branch_to_work(branch_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    return {"status": "in_work"}
+
+
+@router.post("/branches/{branch_id}/status")
+async def set_branch_status(
+    branch_id: int,
+    payload: SetBranchStatusRequest,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """
+    Устанавливает статус набора изменений напрямую. Требует роли moderator+.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not role_at_least(user.get("role"), "moderator"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для изменения статуса")
+
+    try:
+        await document_service.set_branch_status(branch_id, payload.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    return {"status": payload.status}
 
 
 @router.post("/branches/{branch_id}/pages")

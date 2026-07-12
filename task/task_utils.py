@@ -1,5 +1,6 @@
 import re
 import subprocess
+from datetime import datetime
 from typing import Optional
 from pathlib import Path
 from PIL import Image
@@ -14,11 +15,16 @@ from psycopg.types.json import Jsonb
 from config import config
 
 
+def log(*args, **kwargs) -> None:
+    """Печатает текущее время (чч:мм:сс) и переданные аргументы."""
+    print(datetime.now().strftime("%H:%M:%S"), *args, **kwargs)
+
+
 class _LoggingCursor(psycopg.Cursor):
     """Курсор, печатающий каждый выполняемый SQL-запрос."""
 
     def execute(self, query, params=None, **kwargs):
-        print(f"SQL: {query} {params or ''}")
+        log(f"SQL: {query} {params or ''}")
         return super().execute(query, params, **kwargs)
 
 
@@ -142,7 +148,7 @@ def run_git(repo_path: str, *args: str) -> subprocess.CompletedProcess:
     """Выполняет git-команду в указанном репозитории/worktree."""
     command = ["git", "-C", repo_path, *args]
 
-    print(" ".join(str(x) for x in command))
+    log(" ".join(str(x) for x in command))
     result = subprocess.run(
         command,
         capture_output=True,
@@ -188,7 +194,7 @@ def git_mv_no_checkout(repo_path: str, old_path: str, new_path: str) -> None:
     # 3. Убираем старый путь из индекса (файл на диске не трогаем)
     run_git(repo_path, "rm", "--cached", "--sparse", old_path)
 
-    print(f"Переименовано в индексе: {old_path} -> {new_path}")
+    log(f"Переименовано в индексе: {old_path} -> {new_path}")
 
 
 def git_sparse_checkout_files(repo_path: str, files: list[str] = None) -> None:
@@ -202,7 +208,7 @@ def git_sparse_checkout_files(repo_path: str, files: list[str] = None) -> None:
 
     run_git(repo_path, "sparse-checkout", "set", "--no-cone", "**.gitkeep", *normalized)
 
-    print(f"Sparse-checkout настроен на {len(files)} файл(ов)")
+    log(f"Sparse-checkout настроен на {len(files)} файл(ов)")
 
 
 import hashlib
@@ -344,9 +350,9 @@ def regenerate_branch_cache(repo_path: str, branch_id: int, branch: Optional[str
     queries: list[tuple[str, tuple]] = []
 
     out = run_git(repo_path, "rev-parse", "--path-format=absolute", "--git-common-dir")
-    print(f"Стартовый репозиторий {repo_path}")
+    log(f"Стартовый репозиторий {repo_path}")
     repo_path = Path(str(out.stdout) + "/../").resolve()
-    print(f"Репозиторий {repo_path}")
+    log(f"Репозиторий {repo_path}")
 
     repo_branch = branch
     if repo_branch is None:
@@ -406,13 +412,13 @@ def regenerate_branch_cache(repo_path: str, branch_id: int, branch: Optional[str
                 try:
                     with tempfile.TemporaryDirectory() as tmp_dir:
                         src_path = tmp_dir + "/" + Path(image_file).name
-                        print(src_path)
+                        log(src_path)
 
                         materialize_lfs_file(repo_path, repo_branch, image_file, src_path)
                         compress_image(src_path, web_image_path, 2000, 400)
                         compress_image(src_path, preview_image_path, 200, 40)
                 except BrokenImageError as exc:
-                    print(f"ПРОПУЩЕНО (страница {pos}, {image_file}): {exc}")
+                    log(f"ПРОПУЩЕНО (страница {pos}, {image_file}): {exc}")
                     Path(web_image_path).unlink(missing_ok=True)
                     Path(preview_image_path).unlink(missing_ok=True)
                     continue
@@ -424,13 +430,13 @@ def regenerate_branch_cache(repo_path: str, branch_id: int, branch: Optional[str
                 )
             )
 
-        print(image_files)
-        print(doc_files)
+        log(image_files)
+        log(doc_files)
 
         branch_meta = {"page_count": page_count}
         queries.append(
             (
-                "UPDATE branch SET meta = %s WHERE name = %s",
+                "UPDATE branch SET meta = %s, last_change_time = NOW() WHERE name = %s",
                 (Jsonb(branch_meta), repo_branch),
             )
         )

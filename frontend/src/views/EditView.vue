@@ -4,8 +4,32 @@
     <v-main>
       <v-container fluid>
         <v-card v-if="!loading && branch">
-          <v-card-title>
-            {{ branch.documentName }}
+          <v-card-title class="d-flex justify-space-between align-center">
+            <span>{{ branch.documentName }}</span>
+            <v-select
+              v-if="hasRole('moderator')"
+              :model-value="branch.status"
+              @update:model-value="handleSetStatus"
+              :items="statusOptions"
+              item-title="title"
+              item-value="value"
+              density="compact"
+              hide-details
+              style="max-width: 220px"
+              :loading="statusLoading"
+            >
+              <template v-slot:selection="{ item }">
+                <span :style="{ color: statusColors[item.value] || 'grey' }">{{ item.title }}</span>
+              </template>
+              <template v-slot:item="{ item, props }">
+                <v-list-item v-bind="props" title="">
+                  <span :style="{ color: statusColors[item.value] || 'grey' }">{{ item.title }}</span>
+                </v-list-item>
+              </template>
+            </v-select>
+            <v-chip v-else :color="statusColors[branch.status] || 'grey'">
+              {{ statusLabels[branch.status] || branch.status }}
+            </v-chip>
           </v-card-title>
           <v-card-subtitle>
             № {{ branch.id }}
@@ -17,7 +41,19 @@
           <v-card-actions>
             <v-btn color="primary" to="/">Назад к списку</v-btn>
             <v-btn
-              v-if="user && user.can_review"
+              v-if="isAuthor && branch.status === 'in_work'"
+              color="primary"
+              :loading="statusActionLoading"
+              @click="handleSubmitForReview"
+            >Отправить на проверку</v-btn>
+            <v-btn
+              v-if="isAuthor && branch.status === 'in_review'"
+              color="secondary"
+              :loading="statusActionLoading"
+              @click="handleReturnToWork"
+            >Вернуть в работу</v-btn>
+            <v-btn
+              v-if="hasRole('moderator') && branch.status === 'accepted'"
               color="success"
               @click="mergeDialogRef.open()"
             >Завершить правки</v-btn>
@@ -129,7 +165,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import http from '../api/http'
 import { useAuth } from '../composables/useAuth'
@@ -144,7 +180,21 @@ import BranchTasksPanel from '../components/edit/BranchTasksPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { user } = useAuth()
+const { user, hasRole } = useAuth()
+
+const statusLabels = {
+  in_work: 'В работе',
+  in_review: 'Проверяется',
+  accepted: 'Принято',
+  rejected: 'Отклонено',
+}
+const statusColors = {
+  in_work: 'blue',
+  in_review: '#b39ddb',
+  accepted: 'green',
+  rejected: 'red',
+}
+const statusOptions = Object.entries(statusLabels).map(([value, title]) => ({ value, title }))
 
 const branch = ref(null)
 const loading = ref(true)
@@ -154,9 +204,14 @@ const pageCount = ref(0)
 const allowedExtensions = ref([])
 const activeView = ref('add')
 
+const statusLoading = ref(false)
+const statusActionLoading = ref(false)
+
 const mergeDialogRef = ref(null)
 const branchTasksRef = ref(null)
 const galleryRef = ref(null)
+
+const isAuthor = computed(() => !!(user.value && branch.value && user.value.id === branch.value.authorId))
 
 let ws = null
 let wsShouldReconnect = true
@@ -164,7 +219,12 @@ let wsShouldReconnect = true
 const loadBranch = async (id) => {
   try {
     const response = await http.get(`/api/documents/branches/${id}`)
-    branch.value = { id: response.data.id, documentName: response.data.document_name }
+    branch.value = {
+      id: response.data.id,
+      documentName: response.data.document_name,
+      authorId: response.data.author_id,
+      status: response.data.status,
+    }
   } catch (err) {
     const status = err.response ? err.response.status : null
     if (status === 401) {
@@ -197,6 +257,42 @@ const loadAllowedExtensions = async () => {
     allowedExtensions.value = response.data.extensions
   } catch (err) {
     console.error('Ошибка при получении списка допустимых расширений:', err)
+  }
+}
+
+const handleSubmitForReview = async () => {
+  statusActionLoading.value = true
+  try {
+    await http.post(`/api/documents/branches/${branch.value.id}/submit_for_review`, {})
+    branch.value.status = 'in_review'
+  } catch (err) {
+    console.error('Ошибка при отправке на проверку:', err)
+  } finally {
+    statusActionLoading.value = false
+  }
+}
+
+const handleReturnToWork = async () => {
+  statusActionLoading.value = true
+  try {
+    await http.post(`/api/documents/branches/${branch.value.id}/return_to_work`, {})
+    branch.value.status = 'in_work'
+  } catch (err) {
+    console.error('Ошибка при возврате в работу:', err)
+  } finally {
+    statusActionLoading.value = false
+  }
+}
+
+const handleSetStatus = async (newStatus) => {
+  statusLoading.value = true
+  try {
+    await http.post(`/api/documents/branches/${branch.value.id}/status`, { status: newStatus })
+    branch.value.status = newStatus
+  } catch (err) {
+    console.error('Ошибка при изменении статуса:', err)
+  } finally {
+    statusLoading.value = false
   }
 }
 

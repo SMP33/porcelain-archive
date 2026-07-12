@@ -5,9 +5,8 @@ CREATE    TABLE IF NOT EXISTS member (
           display_name TEXT, -- ФИО
           email TEXT UNIQUE, -- Почтовый адрес
           hash TEXT, -- Хеш сумма пароля
-          can_create INTEGER DEFAULT 0, -- Может ли создавать документы
-          can_review INTEGER DEFAULT 0, -- Может ли одобрять правки
-          is_admin INTEGER DEFAULT 0 -- Админ
+          role TEXT NOT NULL DEFAULT 'user' -- Роль
+          CHECK (role IN ('user', 'moderator', 'admin'))
           );
 
 -- Сессии пользователей
@@ -23,8 +22,7 @@ CREATE    TABLE IF NOT EXISTS document (
           id BIGSERIAL PRIMARY KEY, -- Уникальный id
           name TEXT NOT NULL, -- Имя
           meta JSONB, -- Мета информация о документе: теги, авторы, дата выхода...
-          is_visible INTEGER DEFAULT 0, -- Виден ли обычным пользователям
-          is_created INTEGER DEFAULT 0 -- Существует ли репозиторий
+          is_visible INTEGER DEFAULT 0 -- Виден ли обычным пользователям
           );
 
 -- Версия документа
@@ -36,7 +34,9 @@ CREATE    TABLE IF NOT EXISTS branch (
           name TEXT DEFAULT NULL, -- Название ветки
           meta JSONB, -- Мета информация о версии документа
           created_time TIMESTAMP, -- Время создания
-          last_change_time TIMESTAMP -- Время последнего изменения
+          last_change_time TIMESTAMP, -- Время последнего изменения
+          status TEXT NOT NULL DEFAULT 'in_work' -- Статус набора изменений
+          CHECK (status IN ('in_work','in_review', 'accepted', 'rejected'))
           );
 
 -- Страницы документа
@@ -60,4 +60,12 @@ CREATE    TABLE IF NOT EXISTS task (
           finished_time TIMESTAMP, -- Время завершения
           status TEXT NOT NULL DEFAULT 'new' -- Статус задачи
           CHECK (status IN ('new', 'queued', 'running', 'success', 'error'))
+          );
+
+-- Сообщения
+CREATE    TABLE IF NOT EXISTS message (
+          author_id BIGINT REFERENCES member (id) ON DELETE SET NULL, -- Автор
+          receiver_type TEXT, -- Тип получателя
+          receiver_id BIGSERIAL, -- ID получателя
+          text TEXT -- Текст сообщения
           );

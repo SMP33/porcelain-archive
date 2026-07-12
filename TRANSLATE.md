@@ -20,3 +20,14 @@ queued - Ожидает
 running - В процессе
 success - Готово
 error - Ошибка
+
+# Статусы набора изменений
+in_work - В работе
+in_review - Проверяется
+accepted - Принято
+rejected - Отклонено
+
+# Роли
+user - Пользователь
+moderator - Модератор
+admin - Администратор

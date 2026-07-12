@@ -11,6 +11,7 @@ import json
 import tempfile
 
 from app.database import db
+from app.service.user_service import role_at_least
 from config import config
 
 # Мок страницы документа: прозрачный PNG 1x1
@@ -31,6 +32,8 @@ ALLOWED_PAGE_EXTENSIONS = {
     ".heif",
 }
 
+BRANCH_STATUSES = {"in_work", "in_review", "accepted", "rejected"}
+
 repos_root = str()
 repos_branch_root = str()
 
@@ -43,21 +46,22 @@ class DocumentService:
 
     @staticmethod
     def _row_to_document(row: Sequence[Any]) -> Dict[str, Any]:
-        doc_id, name, meta = row
+        doc_id, name, meta, is_visible = row
         meta = meta or {}
         return {
             "id": doc_id,
             "name": name,
             "author": meta.get("author"),
             "created_at": meta.get("created_at"),
+            "is_visible": bool(is_visible),
         }
 
     async def _can_see_hidden_documents(self, user_id: Optional[int]) -> bool:
-        """Проверяет, видит ли пользователь скрытые (is_visible=0) документы."""
+        """Проверяет, видит ли пользователь скрытые (is_visible=0) документы (роль moderator+)."""
         if user_id is None:
             return False
-        permissions = await db.get_user_permissions(user_id)
-        return permissions["can_create"] or permissions["can_review"]
+        role = await db.get_user_role(user_id)
+        return role_at_least(role, "moderator")
 
     async def get_document_count(self, user_id: Optional[int] = None) -> int:
         """
@@ -82,12 +86,12 @@ class DocumentService:
         """
         if await self._can_see_hidden_documents(user_id):
             rows = await db.execute_read(
-                "SELECT id, name, meta FROM document ORDER BY id LIMIT %s OFFSET %s",
+                "SELECT id, name, meta, is_visible FROM document ORDER BY id LIMIT %s OFFSET %s",
                 (limit, offset),
             )
         else:
             rows = await db.execute_read(
-                "SELECT id, name, meta FROM document WHERE is_visible = 1 ORDER BY id LIMIT %s OFFSET %s",
+                "SELECT id, name, meta, is_visible FROM document WHERE is_visible = 1 ORDER BY id LIMIT %s OFFSET %s",
                 (limit, offset),
             )
         return [self._row_to_document(row) for row in rows]
@@ -97,12 +101,22 @@ class DocumentService:
         Возвращает информацию о документе по id.
         """
         rows = await db.execute_read(
-            "SELECT id, name, meta FROM document WHERE id = %s", (document_id,)
+            "SELECT id, name, meta, is_visible FROM document WHERE id = %s", (document_id,)
         )
         if not rows:
             return None
 
         return self._row_to_document(rows[0])
+
+    async def set_document_visibility(self, document_id: int, is_visible: bool) -> bool:
+        """
+        Устанавливает видимость документа для обычных пользователей.
+        """
+        rows_affected = await db.execute_write(
+            "UPDATE document SET is_visible = %s WHERE id = %s",
+            (int(is_visible), document_id),
+        )
+        return rows_affected > 0
 
     async def create_document(self, name: str, author: str) -> int:
         """
@@ -119,7 +133,7 @@ class DocumentService:
 
             if row:
                 await conn.execute(
-                    "INSERT INTO branch (document_id, name) VALUES (%s, 'master') RETURNING id",
+                    "INSERT INTO branch (document_id, name, created_time) VALUES (%s, 'master', NOW()) RETURNING id",
                     (row[0],),
                 )
                 
@@ -146,7 +160,7 @@ class DocumentService:
                 raise ValueError("Документ не найден")
 
             cursor = await conn.execute(
-                "INSERT INTO branch (document_id, author_id, name) VALUES (%s, %s, %s) RETURNING id",
+                "INSERT INTO branch (document_id, author_id, name, created_time) VALUES (%s, %s, %s, NOW()) RETURNING id",
                 (document_id, user_id, f"branch"),
             )
             row = await cursor.fetchone()
@@ -189,8 +203,8 @@ class DocumentService:
         if user_id is None:
             return False
 
-        permissions = await db.get_user_permissions(user_id)
-        return permissions["can_create"] or permissions["can_review"]
+        role = await db.get_user_role(user_id)
+        return role_at_least(role, "moderator")
 
     async def is_edit_available(self, user_id: Optional[int], branch_id: int) -> bool:
         """
@@ -209,8 +223,8 @@ class DocumentService:
         if rows[0][0] == user_id:
             return True
 
-        permissions = await db.get_user_permissions(user_id)
-        return permissions["can_review"]
+        role = await db.get_user_role(user_id)
+        return role_at_least(role, "moderator")
 
     async def is_branch_list_available(self, user_id: Optional[int]) -> bool:
         """
@@ -219,12 +233,12 @@ class DocumentService:
         """
         return user_id is not None
 
-    async def get_branch_count(self, user_id: Optional[int], can_review: bool) -> int:
+    async def get_branch_count(self, user_id: Optional[int], sees_all: bool) -> int:
         """
         Возвращает количество наборов изменений, видимых пользователю.
-        can_review видит все, иначе - только свои.
+        sees_all (роль moderator+) видит все, иначе - только свои.
         """
-        if can_review:
+        if sees_all:
             rows = await db.execute_read(
                 "SELECT COUNT(*) FROM branch WHERE name != 'master'"
             )
@@ -236,21 +250,21 @@ class DocumentService:
         return rows[0][0]
 
     async def get_branches_paginated(
-        self, user_id: Optional[int], can_review: bool, offset: int = 0, limit: int = 25
+        self, user_id: Optional[int], sees_all: bool, offset: int = 0, limit: int = 25
     ) -> List[Dict[str, Any]]:
         """
         Возвращает срез списка наборов изменений, видимых пользователю.
-        can_review видит все, иначе - только свои.
+        sees_all (роль moderator+) видит все, иначе - только свои.
         """
         query = """
-            SELECT b.id, b.document_id, d.name, b.author_id, a.display_name, b.created_time
+            SELECT b.id, b.document_id, d.name, b.author_id, a.display_name, b.created_time, b.last_change_time, b.status
             FROM branch b
             JOIN document d ON d.id = b.document_id
             LEFT JOIN member a ON a.id = b.author_id
             WHERE b.name != 'master'
         """
         params: List[Any] = []
-        if not can_review:
+        if not sees_all:
             query += " AND b.author_id = %s"
             params.append(user_id)
         query += " ORDER BY b.id DESC LIMIT %s OFFSET %s"
@@ -265,17 +279,19 @@ class DocumentService:
                 "author_id": row[3],
                 "author_name": row[4],
                 "created_at": row[5],
+                "last_change_at": row[6],
+                "status": row[7],
             }
             for row in rows
         ]
 
     async def get_branch_info(self, branch_id: int) -> Optional[Dict[str, Any]]:
         """
-        Возвращает информацию о ветке: id, документ, название документа, имя ветки.
+        Возвращает информацию о ветке: id, документ, название документа, имя ветки, автор, статус.
         """
         rows = await db.execute_read(
             """
-            SELECT b.id, b.document_id, d.name, b.name
+            SELECT b.id, b.document_id, d.name, b.name, b.author_id, b.status
             FROM branch b
             JOIN document d ON d.id = b.document_id
             WHERE b.id = %s
@@ -285,27 +301,75 @@ class DocumentService:
         if not rows:
             return None
 
-        branch_id_, document_id, document_name, branch_name = rows[0]
+        branch_id_, document_id, document_name, branch_name, author_id, branch_status = rows[0]
         return {
             "id": branch_id_,
             "document_id": document_id,
             "document_name": document_name,
             "name": branch_name,
+            "author_id": author_id,
+            "status": branch_status,
         }
+
+    async def is_branch_author(self, user_id: Optional[int], branch_id: int) -> bool:
+        """Проверяет, является ли пользователь автором (создателем) ветки."""
+        if user_id is None:
+            return False
+
+        rows = await db.execute_read(
+            "SELECT author_id FROM branch WHERE id = %s", (branch_id,)
+        )
+        if not rows:
+            return False
+
+        return rows[0][0] == user_id
+
+    async def submit_branch_for_review(self, branch_id: int) -> None:
+        """Переводит набор изменений из 'в работе' в 'на проверке'."""
+        rows_affected = await db.execute_write(
+            "UPDATE branch SET status = 'in_review' WHERE id = %s AND status = 'in_work'",
+            (branch_id,),
+        )
+        if rows_affected == 0:
+            raise ValueError("Набор изменений не в статусе 'в работе'")
+
+    async def return_branch_to_work(self, branch_id: int) -> None:
+        """Переводит набор изменений из 'на проверке' обратно в 'в работе'."""
+        rows_affected = await db.execute_write(
+            "UPDATE branch SET status = 'in_work' WHERE id = %s AND status = 'in_review'",
+            (branch_id,),
+        )
+        if rows_affected == 0:
+            raise ValueError("Набор изменений не в статусе 'на проверке'")
+
+    async def set_branch_status(self, branch_id: int, new_status: str) -> None:
+        """Устанавливает статус набора изменений напрямую (для moderator+)."""
+        if new_status not in BRANCH_STATUSES:
+            raise ValueError(f"Неизвестный статус: '{new_status}'")
+
+        rows_affected = await db.execute_write(
+            "UPDATE branch SET status = %s WHERE id = %s",
+            (new_status, branch_id),
+        )
+        if rows_affected == 0:
+            raise ValueError("Ветка не найдена")
 
     async def merge_branch(self, branch_id: int) -> Dict[str, Any]:
         """
-        Ставит в очередь слияние ветки изменений в master.
+        Ставит в очередь слияние ветки изменений в master. Возможно только
+        для набора изменений в статусе 'accepted'.
         """
         rows = await db.execute_read(
-            "SELECT document_id, name FROM branch WHERE id = %s", (branch_id,)
+            "SELECT document_id, name, status FROM branch WHERE id = %s", (branch_id,)
         )
         if not rows:
             raise ValueError("Ветка не найдена")
 
-        document_id, branch_name = rows[0]
+        document_id, branch_name, branch_status = rows[0]
         if branch_name == "master":
             raise ValueError("master нельзя слить саму в себя")
+        if branch_status != "accepted":
+            raise ValueError("Завершить правки можно только для набора изменений в статусе 'Принято'")
 
         async with db.transaction() as conn:
             data = {

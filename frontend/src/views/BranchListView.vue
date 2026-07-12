@@ -22,7 +22,13 @@
               item-value="id"
               @update:options="loadItems"
               @click:row="openBranch"
-            ></v-data-table-server>
+            >
+              <template v-slot:item.status="{ item }">
+                <v-chip :color="statusColors[item.status] || 'grey'" size="small">
+                  {{ statusLabels[item.status] || item.status }}
+                </v-chip>
+              </template>
+            </v-data-table-server>
           </v-card-text>
         </v-card>
       </v-container>
@@ -38,12 +44,27 @@ import AppToolbar from '../components/AppToolbar.vue'
 
 const router = useRouter()
 
+const statusLabels = {
+  in_work: 'В работе',
+  in_review: 'Проверяется',
+  accepted: 'Принято',
+  rejected: 'Отклонено',
+}
+const statusColors = {
+  in_work: 'blue',
+  in_review: '#b39ddb',
+  accepted: 'green',
+  rejected: 'red',
+}
+
 const itemsPerPage = ref(25)
 const headers = ref([
   { title: 'ID', align: 'start', sortable: false, key: 'id' },
-  { title: 'Документ', key: 'document_name', align: 'end' },
+  { title: 'Название', key: 'document_name', align: 'end' },
   { title: 'Автор', key: 'author_name', align: 'end' },
   { title: 'Дата создания', key: 'created_at', align: 'end' },
+  { title: 'Дата последнего изменения', key: 'last_change_at', align: 'end' },
+  { title: 'Статус', key: 'status', align: 'end', sortable: false },
 ])
 
 const serverItems = ref([])

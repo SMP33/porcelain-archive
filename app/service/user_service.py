@@ -8,6 +8,16 @@ from fastapi.security import OAuth2
 
 from app.database import db
 
+# Порядок ролей (см. ROLES.md) - каждая следующая роль имеет все возможности предыдущей
+ROLE_LEVELS = {"user": 1, "moderator": 2, "admin": 3}
+
+
+def role_at_least(role: Optional[str], minimum: str) -> bool:
+    """Проверяет, что роль пользователя не ниже minimum по иерархии ROLES.md."""
+    if role is None:
+        return False
+    return ROLE_LEVELS.get(role, 0) >= ROLE_LEVELS[minimum]
+
 
 class OAuth2PasswordBearerWithCookie(OAuth2):
     """
@@ -59,7 +69,7 @@ class UserService:
         """Получение информации о пользователе по токену активной сессии."""
         rows = await db.execute_read(
             """
-            SELECT m.id, m.name, m.display_name, m.email, m.can_create, m.can_review, m.is_admin
+            SELECT m.id, m.name, m.display_name, m.email, m.role
             FROM session s
             JOIN member m ON m.id = s.user_id
             WHERE s.token = %s AND s.is_active = 1
@@ -69,15 +79,13 @@ class UserService:
         if not rows:
             return None
 
-        user_id, name, display_name, email, can_create, can_review, is_admin = rows[0]
+        user_id, name, display_name, email, role = rows[0]
         return {
             "id": user_id,
             "username": name,
             "display_name": display_name,
             "email": email,
-            "can_create": bool(can_create),
-            "can_review": bool(can_review),
-            "is_admin": bool(is_admin),
+            "role": role,
         }
 
     async def reset_password(self, user_id: int, old_password: str, new_password: str) -> bool:
@@ -125,7 +133,7 @@ class UserService:
         :param limit: Количество пользователей для возврата.
         """
         rows = await db.execute_read(
-            "SELECT id, name, display_name, email, can_create, can_review, is_admin FROM member ORDER BY id LIMIT %s OFFSET %s",
+            "SELECT id, name, display_name, email, role FROM member ORDER BY id LIMIT %s OFFSET %s",
             (limit, offset),
         )
         return [
@@ -134,9 +142,7 @@ class UserService:
                 "username": row[1],
                 "display_name": row[2],
                 "email": row[3],
-                "can_create": bool(row[4]),
-                "can_review": bool(row[5]),
-                "is_admin": bool(row[6]),
+                "role": row[4],
             }
             for row in rows
         ]
@@ -147,18 +153,20 @@ class UserService:
         password: str,
         display_name: Optional[str] = None,
         email: Optional[str] = None,
-        can_create: bool = False,
-        can_review: bool = False,
-        is_admin: bool = False,
+        role: str = "user",
     ) -> int:
         """
         Создаёт нового пользователя и возвращает его id.
 
         :param username: Логин (уникальный).
         :param password: Пароль (хешируется перед сохранением).
+        :param role: Роль пользователя (см. ROLES.md): user, moderator или admin.
         """
         if not username or not password:
             raise ValueError("Логин и пароль обязательны")
+
+        if role not in ROLE_LEVELS:
+            raise ValueError(f"Неизвестная роль: '{role}'")
 
         rows = await db.execute_read("SELECT id FROM member WHERE name = %s", (username,))
         if rows:
@@ -170,11 +178,11 @@ class UserService:
             async with db.transaction() as conn:
                 cursor = await conn.execute(
                     """
-                    INSERT INTO member (name, display_name, email, hash, can_create, can_review, is_admin)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO member (name, display_name, email, hash, role)
+                    VALUES (%s, %s, %s, %s, %s)
                     RETURNING id
                     """,
-                    (username, display_name, email, password_hash, can_create, can_review, is_admin),
+                    (username, display_name, email, password_hash, role),
                 )
                 row = await cursor.fetchone()
         except psycopg.errors.UniqueViolation as exc:

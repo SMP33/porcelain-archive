@@ -38,7 +38,7 @@ try:
 
 finally:
     shutil.rmtree(tmpdir)
-    print(f"Удалена временная папка: {tmpdir}")
+    log(f"Удалена временная папка: {tmpdir}")
 
     remove_branch_trash(branch_path)
     regenerate_branch_cache(branch_path, branch_id, branch_name)

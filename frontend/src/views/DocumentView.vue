@@ -10,6 +10,16 @@
           <v-card-subtitle>
             Автор: {{ document.author }} | Создан: {{ document.created_at }}
           </v-card-subtitle>
+          <v-card-text v-if="hasRole('moderator')">
+            <v-switch
+              :model-value="document.is_visible"
+              @update:model-value="handleToggleVisibility"
+              :label="document.is_visible ? 'Виден всем пользователям' : 'Скрыт от обычных пользователей'"
+              color="primary"
+              hide-details
+              :loading="visibilityLoading"
+            ></v-switch>
+          </v-card-text>
           <v-card-text>
             <p>Это страница для просмотра документа с ID: <strong>{{ document.id }}</strong>.</p>
             <p>Здесь будет содержимое документа.</p>
@@ -61,7 +71,7 @@ import PageGalleryViewer from '../components/PageGalleryViewer.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { user } = useAuth()
+const { user, hasRole } = useAuth()
 
 const document = ref(null)
 const loading = ref(true)
@@ -69,6 +79,8 @@ const error = ref(null)
 
 const creatingBranch = ref(false)
 const editError = ref('')
+
+const visibilityLoading = ref(false)
 
 const masterBranchId = ref(null)
 const galleryPageCount = ref(0)
@@ -108,6 +120,18 @@ const loadGallery = async () => {
     console.error('Ошибка при получении страниц документа:', err)
   } finally {
     galleryLoading.value = false
+  }
+}
+
+const handleToggleVisibility = async (isVisible) => {
+  visibilityLoading.value = true
+  try {
+    await http.post(`/api/documents/${document.value.id}/visibility`, { is_visible: isVisible })
+    document.value.is_visible = isVisible
+  } catch (err) {
+    console.error('Ошибка при изменении видимости документа:', err)
+  } finally {
+    visibilityLoading.value = false
   }
 }
 

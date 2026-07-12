@@ -6,7 +6,7 @@
         <v-card>
           <v-card-title class="d-flex justify-space-between align-center">
             <span>Пользователи</span>
-            <v-btn v-if="user && user.is_admin" color="primary" @click="showCreateUserDialog = true">Создать пользователя</v-btn>
+            <v-btn v-if="hasRole('admin')" color="primary" @click="showCreateUserDialog = true">Создать пользователя</v-btn>
           </v-card-title>
           <v-card-text>
             <v-data-table-server
@@ -25,20 +25,8 @@
               item-value="id"
               @update:options="loadItems"
             >
-              <template v-slot:item.can_create="{ item }">
-                <v-icon :color="item.can_create ? 'green' : 'grey'">
-                  {{ item.can_create ? 'mdi-check' : 'mdi-minus' }}
-                </v-icon>
-              </template>
-              <template v-slot:item.can_review="{ item }">
-                <v-icon :color="item.can_review ? 'green' : 'grey'">
-                  {{ item.can_review ? 'mdi-check' : 'mdi-minus' }}
-                </v-icon>
-              </template>
-              <template v-slot:item.is_admin="{ item }">
-                <v-icon :color="item.is_admin ? 'green' : 'grey'">
-                  {{ item.is_admin ? 'mdi-check' : 'mdi-minus' }}
-                </v-icon>
+              <template v-slot:item.role="{ item }">
+                {{ roleLabels[item.role] || item.role }}
               </template>
             </v-data-table-server>
           </v-card-text>
@@ -68,9 +56,13 @@
             v-model="newUser.email"
             label="Email"
           ></v-text-field>
-          <v-checkbox v-model="newUser.can_create" label="Может создавать документы" density="compact" hide-details></v-checkbox>
-          <v-checkbox v-model="newUser.can_review" label="Может одобрять правки (review)" density="compact" hide-details></v-checkbox>
-          <v-checkbox v-model="newUser.is_admin" label="Администратор (может создавать пользователей)" density="compact" hide-details></v-checkbox>
+          <v-select
+            v-model="newUser.role"
+            label="Роль"
+            :items="roleOptions"
+            item-title="title"
+            item-value="value"
+          ></v-select>
           <v-alert v-if="createUserError" type="error" density="compact" class="mt-2">{{ createUserError }}</v-alert>
         </v-card-text>
         <v-card-actions>
@@ -89,7 +81,18 @@ import http from '../api/http'
 import { useAuth } from '../composables/useAuth'
 import AppToolbar from '../components/AppToolbar.vue'
 
-const { user } = useAuth()
+const { hasRole } = useAuth()
+
+const roleLabels = {
+  user: 'Пользователь',
+  moderator: 'Модератор',
+  admin: 'Администратор',
+}
+const roleOptions = [
+  { title: 'Пользователь', value: 'user' },
+  { title: 'Модератор', value: 'moderator' },
+  { title: 'Администратор', value: 'admin' },
+]
 
 const itemsPerPage = ref(25)
 const headers = ref([
@@ -97,9 +100,7 @@ const headers = ref([
   { title: 'Логин', key: 'username', align: 'end' },
   { title: 'ФИО', key: 'display_name', align: 'end' },
   { title: 'Email', key: 'email', align: 'end' },
-  { title: 'Создание документов', key: 'can_create', align: 'center', sortable: false },
-  { title: 'Review', key: 'can_review', align: 'center', sortable: false },
-  { title: 'Админ', key: 'is_admin', align: 'center', sortable: false },
+  { title: 'Роль', key: 'role', align: 'center', sortable: false },
 ])
 
 const serverItems = ref([])
@@ -112,9 +113,7 @@ const newUser = ref({
   password: '',
   display_name: '',
   email: '',
-  can_create: false,
-  can_review: false,
-  is_admin: false,
+  role: 'user',
 })
 const creatingUser = ref(false)
 const createUserError = ref('')
@@ -153,9 +152,7 @@ const handleCreateUser = async () => {
       password: '',
       display_name: '',
       email: '',
-      can_create: false,
-      can_review: false,
-      is_admin: false,
+      role: 'user',
     }
     await loadItems(lastTableOptions)
   } catch (error) {

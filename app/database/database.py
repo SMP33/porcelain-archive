@@ -1,6 +1,6 @@
 import os
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Dict, List, Optional, Sequence
+from typing import Any, AsyncIterator, List, Optional, Sequence
 
 from psycopg import AsyncConnection
 from psycopg_pool import AsyncConnectionPool
@@ -110,18 +110,17 @@ class Database:
             cursor = await conn.execute(query, params)
             return cursor.rowcount
 
-    async def get_user_permissions(self, user_id: int) -> Dict[str, bool]:
+    async def get_user_role(self, user_id: int) -> Optional[str]:
         """
-        Проверяет права пользователя: can_create и can_review.
+        Возвращает роль пользователя (см. ROLES.md), либо None, если пользователь не найден.
         """
         rows = await self.execute_read(
-            "SELECT can_create, can_review FROM member WHERE id = %s",
+            "SELECT role FROM member WHERE id = %s",
             (user_id,)
         )
         if not rows:
-            return {"can_create": False, "can_review": False}
-        can_create, can_review = rows[0]
-        return {"can_create": bool(can_create), "can_review": bool(can_review)}
+            return None
+        return rows[0][0]
 
 
 db = Database()

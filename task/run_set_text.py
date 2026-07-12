@@ -45,7 +45,7 @@ try:
 finally:
     if tmpdir is not None:
         shutil.rmtree(tmpdir, ignore_errors=True)
-        print(f"Удалена временная папка: {tmpdir}")
+        log(f"Удалена временная папка: {tmpdir}")
 
     if branch_path is not None:
         remove_branch_trash(branch_path)

@@ -10,13 +10,17 @@
 | Смена пароля | POST /api/users/reset_password | frontend/src/components/AppToolbar.vue, меню пользователя |
 | Изменение ФИО | POST /api/users/set_display_name | frontend/src/components/AppToolbar.vue, меню пользователя |
 | Создание ветки редактирования | POST /api/documents/{document_id}/create_branch | frontend/src/views/DocumentView.vue, кнопка "Редактировать документ" |
+| Изменение видимости документа | POST /api/documents/{document_id}/visibility | frontend/src/views/DocumentView.vue, переключатель видимости (виден при роли moderator+) |
 | Загрузка страниц документа | POST /api/documents/branches/{branch_id}/pages | frontend/src/components/edit/AddPagesPanel.vue |
 | Удаление страниц | POST /api/documents/branches/{branch_id}/pages/remove | frontend/src/components/edit/RemovePagesPanel.vue |
 | Список наборов изменений | GET /api/documents/branches/ | frontend/src/views/BranchListView.vue, таблица |
 | Список пользователей | GET /api/users/ | frontend/src/views/UserListView.vue, таблица |
 | Информация о документе | GET /api/documents/{document_id} | frontend/src/views/DocumentView.vue, название документа |
 | Информация о ветке | GET /api/documents/branches/{branch_id} | frontend/src/views/EditView.vue, название документа версии |
-| Слияние ветки в master | POST /api/documents/branches/{branch_id}/merge | frontend/src/components/edit/MergeBranchDialog.vue, кнопка "Завершить правки" (видна с правом review) |
+| Слияние ветки в master | POST /api/documents/branches/{branch_id}/merge | frontend/src/components/edit/MergeBranchDialog.vue, кнопка "Завершить правки" (видна при роли moderator+ и статусе accepted) |
+| Отправить набор изменений на проверку | POST /api/documents/branches/{branch_id}/submit_for_review | frontend/src/views/EditView.vue, кнопка "Отправить на проверку" (видна автору при статусе in_work) |
+| Вернуть набор изменений в работу | POST /api/documents/branches/{branch_id}/return_to_work | frontend/src/views/EditView.vue, кнопка "Вернуть в работу" (видна автору при статусе in_review) |
+| Изменение статуса набора изменений напрямую | POST /api/documents/branches/{branch_id}/status | frontend/src/views/EditView.vue, выпадающий список статуса (виден при роли moderator+) |
 | Задать текст (PDF) | POST /api/documents/branches/{branch_id}/text | frontend/src/components/edit/SetTextPanel.vue |
 | Убрать текст | POST /api/documents/branches/{branch_id}/text/reset | frontend/src/components/edit/ResetTextPanel.vue |
 | Количество страниц в наборе изменений | GET /api/documents/branches/{branch_id}/pages/count | frontend/src/views/EditView.vue, отображение количества страниц; frontend/src/views/DocumentView.vue, размер галереи страниц |
@@ -29,4 +33,4 @@
 | Изображение страницы ветки | GET /api/documents/branches/{branch_id}/pages/{page_index}/image | frontend/src/components/PageGalleryViewer.vue, полноразмерный просмотр страницы в диалоге |
 | Превью изображения страницы ветки | GET /api/documents/branches/{branch_id}/pages/{page_index}/image/preview | frontend/src/components/PageGalleryViewer.vue, миниатюры в галерее страниц |
 | Текст страницы ветки | GET /api/documents/branches/{branch_id}/pages/{page_index}/text | frontend/src/components/PageGalleryViewer.vue, спаны текста и подсветка в диалоге просмотра страницы |
-| Создание пользователя | POST /api/users/create | frontend/src/views/UserListView.vue, диалог "Новый пользователь" (кнопка видна при is_admin) |
+| Создание пользователя | POST /api/users/create | frontend/src/views/UserListView.vue, диалог "Новый пользователь" (кнопка видна при роли admin) |

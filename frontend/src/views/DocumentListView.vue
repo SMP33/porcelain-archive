@@ -67,8 +67,6 @@ const itemsPerPage = ref(25)
 const headers = ref([
   { title: 'ID', align: 'start', sortable: false, key: 'id' },
   { title: 'Название документа', key: 'name', align: 'end' },
-  { title: 'Автор', key: 'author', align: 'end' },
-  { title: 'Дата создания', key: 'created_at', align: 'end' },
 ])
 
 const serverItems = ref([])

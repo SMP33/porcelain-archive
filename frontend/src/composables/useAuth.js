@@ -1,6 +1,9 @@
 import { ref } from 'vue'
 import http from '../api/http'
 
+// Порядок ролей (см. ROLES.md) - каждая следующая роль имеет все возможности предыдущей
+const ROLE_LEVELS = { user: 1, moderator: 2, admin: 3 }
+
 const user = ref(null)
 const authChecked = ref(false)
 
@@ -14,6 +17,13 @@ const showSetDisplayNameDialog = ref(false)
 const displayNameInput = ref('')
 const setDisplayNameLoading = ref(false)
 const setDisplayNameError = ref('')
+
+function hasRole(minRole) {
+  if (!user.value) {
+    return false
+  }
+  return (ROLE_LEVELS[user.value.role] || 0) >= ROLE_LEVELS[minRole]
+}
 
 async function checkAuth() {
   try {
@@ -77,6 +87,7 @@ export function useAuth() {
   return {
     user,
     authChecked,
+    hasRole,
     checkAuth,
     handleLogout,
     showResetPasswordDialog,
