@@ -4,24 +4,20 @@
     <v-card-text>
       <v-row dense>
         <v-col cols="6">
-          <v-text-field
-            v-model.number="resetTextStart"
+          <PageNumberField
+            v-model="resetTextStart"
             label="С страницы"
-            type="number"
-            density="compact"
             :min="1"
             :max="pageCount"
-          ></v-text-field>
+          ></PageNumberField>
         </v-col>
         <v-col cols="6">
-          <v-text-field
-            v-model.number="resetTextEnd"
+          <PageNumberField
+            v-model="resetTextEnd"
             label="По страницу"
-            type="number"
-            density="compact"
             :min="resetTextStart || 1"
             :max="pageCount"
-          ></v-text-field>
+          ></PageNumberField>
         </v-col>
       </v-row>
       <v-alert v-if="resetTextError" type="error" density="compact">{{ resetTextError }}</v-alert>
@@ -43,6 +39,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import http from '../../api/http'
+import PageNumberField from '../PageNumberField.vue'
 
 const props = defineProps({
   branchId: { type: [Number, String], required: true },

@@ -11,15 +11,13 @@
         show-size
       ></v-file-input>
 
-      <v-text-field
-        v-model.number="textPosition"
+      <PageNumberField
+        v-model="textPosition"
         label="Страница, с которой применяется текст"
-        type="number"
-        density="compact"
         class="mt-2"
         :min="1"
         :max="pageCount"
-      ></v-text-field>
+      ></PageNumberField>
       <v-alert v-if="setTextError" type="error" density="compact">{{ setTextError }}</v-alert>
       <v-alert v-if="setTextSuccess" type="success" density="compact">
         Задача на применение текста поставлена в очередь.
@@ -39,6 +37,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import http from '../../api/http'
+import PageNumberField from '../PageNumberField.vue'
 
 const props = defineProps({
   branchId: { type: [Number, String], required: true },

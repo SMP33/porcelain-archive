@@ -40,15 +40,13 @@
         </v-col>
       </v-row>
 
-      <v-text-field
-        v-model.number="position"
+      <PageNumberField
+        v-model="position"
         label="Номер страницы, после которой вставить (0 - в начало)"
-        type="number"
-        density="compact"
         class="mt-2"
         :min="0"
         :max="pageCount"
-      ></v-text-field>
+      ></PageNumberField>
       <v-alert v-if="uploadError" type="error" density="compact">{{ uploadError }}</v-alert>
       <v-alert v-if="rejectedFiles.length" type="warning" density="compact">
         Не приняты (недопустимый формат): {{ rejectedFiles.join(', ') }}
@@ -71,6 +69,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import http from '../../api/http'
+import PageNumberField from '../PageNumberField.vue'
 
 const props = defineProps({
   branchId: { type: [Number, String], required: true },

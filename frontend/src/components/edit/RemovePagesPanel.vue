@@ -4,24 +4,20 @@
     <v-card-text>
       <v-row dense>
         <v-col cols="6">
-          <v-text-field
-            v-model.number="removeStart"
+          <PageNumberField
+            v-model="removeStart"
             label="С страницы"
-            type="number"
-            density="compact"
             :min="1"
             :max="pageCount"
-          ></v-text-field>
+          ></PageNumberField>
         </v-col>
         <v-col cols="6">
-          <v-text-field
-            v-model.number="removeEnd"
+          <PageNumberField
+            v-model="removeEnd"
             label="По страницу"
-            type="number"
-            density="compact"
             :min="removeStart || 1"
             :max="pageCount"
-          ></v-text-field>
+          ></PageNumberField>
         </v-col>
       </v-row>
       <v-alert v-if="removeError" type="error" density="compact">{{ removeError }}</v-alert>
@@ -43,6 +39,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import http from '../../api/http'
+import PageNumberField from '../PageNumberField.vue'
 
 const props = defineProps({
   branchId: { type: [Number, String], required: true },
