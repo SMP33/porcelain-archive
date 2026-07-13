@@ -7,6 +7,7 @@ const routes = [
   { path: '/branches', name: 'branch-list', component: () => import('../views/BranchListView.vue'), meta: { requiresAuth: true } },
   { path: '/tasks', name: 'task-list', component: () => import('../views/TaskListView.vue'), meta: { requiresAuth: true } },
   { path: '/users', name: 'user-list', component: () => import('../views/UserListView.vue'), meta: { requiresAuth: true } },
+  { path: '/server-log', name: 'server-log', component: () => import('../views/ServerLogView.vue'), meta: { requiresAuth: true } },
   { path: '/document/:documentId', name: 'document', component: () => import('../views/DocumentView.vue'), props: true },
   { path: '/edit/:branchId', name: 'edit', component: () => import('../views/EditView.vue'), props: true },
   { path: '/access-denied', name: 'access-denied', component: () => import('../views/AccessDeniedView.vue') },

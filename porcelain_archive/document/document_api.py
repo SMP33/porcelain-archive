@@ -24,6 +24,11 @@ async def _get_current_user_id(request: Request) -> Optional[int]:
     return user["id"] if user else None
 
 
+async def _resolve_commit(branch_id: int, commit: Optional[str]) -> Optional[str]:
+    """Возвращает переданный коммит, либо last_commit ветки, если он не указан явно."""
+    return commit or await document_service.get_branch_last_commit(branch_id)
+
+
 class DocumentCreateRequest(BaseModel):
     name: str
 
@@ -162,26 +167,6 @@ async def read_branch(
     return branch
 
 
-@router.post("/branches/{branch_id}/merge")
-async def merge_branch(
-    branch_id: int,
-    token: Annotated[str, Depends(oauth2_scheme)],
-) -> Dict[str, Any]:
-    """
-    Ставит в очередь слияние ветки изменений в master. Требует прав review.
-    """
-    user = await user_service.get_user_by_token(token)
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
-    if not role_at_least(user.get("role"), "moderator"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для применения изменений")
-
-    try:
-        return await document_service.merge_branch(branch_id=branch_id, user_id=user["id"])
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-
-
 @router.post("/branches/{branch_id}/submit_for_review")
 async def submit_branch_for_review(
     branch_id: int,
@@ -234,6 +219,8 @@ async def set_branch_status(
 ) -> Dict[str, Any]:
     """
     Устанавливает статус набора изменений напрямую. Требует роли moderator+.
+    'accepted' выставить нельзя - только автоматически по результату слияния.
+    'in_accept' запускает слияние ветки в master.
     """
     user = await user_service.get_user_by_token(token)
     if user is None:
@@ -242,7 +229,7 @@ async def set_branch_status(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для изменения статуса")
 
     try:
-        await document_service.set_branch_status(branch_id, payload.status)
+        await document_service.set_branch_status(branch_id, payload.status, user["id"])
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -369,16 +356,19 @@ async def get_page_count(
 async def get_branch_pages_hash(
     branch_id: int,
     request: Request,
+    commit: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Возвращает image_hash и text_hash всех страниц ветки. Master-ветка доступна
-    всем, кому доступен документ, остальные ветки - только автору/ревьюеру.
+    Возвращает image_hash и text_hash всех страниц указанного коммита ветки
+    (по умолчанию - последнего). Master-ветка доступна всем, кому доступен
+    документ, остальные ветки - только автору/ревьюеру.
     """
     user_id = await _get_current_user_id(request)
     if not await document_service.is_branch_viewable(user_id, branch_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра ветки")
 
-    return await document_service.get_branch_pages_hash(branch_id)
+    resolved_commit = await _resolve_commit(branch_id, commit)
+    return await document_service.get_pages_hash(resolved_commit)
 
 
 @router.get("/pages/allowed_extensions")
@@ -413,16 +403,19 @@ async def get_branch_page_image(
     branch_id: int,
     page_index: int,
     request: Request,
+    commit: Optional[str] = None,
 ) -> Response:
     """
-    Возвращает изображение страницы ветки. Master-ветка доступна всем, кому
-    доступен документ, остальные ветки - только автору/ревьюеру.
+    Возвращает изображение страницы указанного коммита ветки (по умолчанию -
+    последнего). Master-ветка доступна всем, кому доступен документ, остальные
+    ветки - только автору/ревьюеру.
     """
     user_id = await _get_current_user_id(request)
     if not await document_service.is_branch_viewable(user_id, branch_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра ветки")
 
-    image, media_type = await document_service.get_branch_page_image(branch_id, page_index)
+    resolved_commit = await _resolve_commit(branch_id, commit)
+    image, media_type = await document_service.get_page_image(resolved_commit, page_index)
     return Response(content=image, media_type=media_type)
 
 
@@ -431,16 +424,19 @@ async def get_branch_page_image_preview(
     branch_id: int,
     page_index: int,
     request: Request,
+    commit: Optional[str] = None,
 ) -> Response:
     """
-    Возвращает превью изображения страницы ветки. Master-ветка доступна всем, кому
-    доступен документ, остальные ветки - только автору/ревьюеру.
+    Возвращает превью изображения страницы указанного коммита ветки (по
+    умолчанию - последнего). Master-ветка доступна всем, кому доступен документ,
+    остальные ветки - только автору/ревьюеру.
     """
     user_id = await _get_current_user_id(request)
     if not await document_service.is_branch_viewable(user_id, branch_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра ветки")
 
-    image, media_type = await document_service.get_branch_page_image_preview(branch_id, page_index)
+    resolved_commit = await _resolve_commit(branch_id, commit)
+    image, media_type = await document_service.get_page_image_preview(resolved_commit, page_index)
     return Response(content=image, media_type=media_type)
 
 
@@ -449,17 +445,19 @@ async def get_branch_page_text(
     branch_id: int,
     page_index: int,
     request: Request,
+    commit: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Возвращает текст страницы ветки (блоки/спаны из PDF), если он задан.
-    Master-ветка доступна всем, кому доступен документ, остальные ветки -
-    только автору/ревьюеру.
+    Возвращает текст страницы указанного коммита ветки (по умолчанию -
+    последнего) - блоки/спаны из PDF, если он задан. Master-ветка доступна
+    всем, кому доступен документ, остальные ветки - только автору/ревьюеру.
     """
     user_id = await _get_current_user_id(request)
     if not await document_service.is_branch_viewable(user_id, branch_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра ветки")
 
-    text = await document_service.get_branch_page_text(branch_id, page_index)
+    resolved_commit = await _resolve_commit(branch_id, commit)
+    text = await document_service.get_page_text(resolved_commit, page_index)
     return {"text": text}
 
 

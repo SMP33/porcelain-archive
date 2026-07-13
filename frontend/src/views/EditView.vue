@@ -9,7 +9,7 @@
             <v-select
               v-if="hasRole('moderator')"
               :model-value="branch.status"
-              @update:model-value="handleSetStatus"
+              @update:model-value="requestSetStatus"
               :items="statusOptions"
               item-title="title"
               item-value="value"
@@ -22,7 +22,7 @@
                 <span :style="{ color: statusColors[item.value] || 'grey' }">{{ item.title }}</span>
               </template>
               <template v-slot:item="{ item, props }">
-                <v-list-item v-bind="props" title="">
+                <v-list-item v-bind="props" :disabled="item.value === 'accepted'" title="">
                   <span :style="{ color: statusColors[item.value] || 'grey' }">{{ item.title }}</span>
                 </v-list-item>
               </template>
@@ -52,20 +52,25 @@
               :loading="statusActionLoading"
               @click="handleReturnToWork"
             >Вернуть в работу</v-btn>
-            <v-btn
-              v-if="hasRole('moderator') && branch.status === 'accepted'"
-              color="success"
-              @click="mergeDialogRef.open()"
-            >Завершить правки</v-btn>
           </v-card-actions>
         </v-card>
 
-        <MergeBranchDialog
-          v-if="branch"
-          ref="mergeDialogRef"
-          :branch-id="branch.id"
-          @merged="branchTasksRef.reload()"
-        />
+        <v-dialog v-model="confirmStatusDialog" max-width="480">
+          <v-card>
+            <v-card-title>Подтверждение изменения статуса</v-card-title>
+            <v-card-text>
+              Изменить статус набора изменений № {{ branch && branch.id }} на «<span :style="{ color: statusColors[pendingStatus] || 'grey' }">{{ statusLabels[pendingStatus] }}</span>»?
+              <template v-if="pendingStatus === 'in_accept'">
+                <br>Изменения будут автоматически слиты в основную версию документа.
+              </template>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn @click="cancelSetStatus">Отмена</v-btn>
+              <v-btn color="primary" :loading="statusLoading" @click="confirmSetStatus">Подтвердить</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
 
         <v-row v-if="!loading && branch" class="mt-1">
           <v-col cols="12" md="2">
@@ -138,7 +143,8 @@
             <ViewChangesPanel
               v-if="activeView === 'view_changes'"
               :branch-id="branch.id"
-              :master-branch-id="masterBranchId"
+              :initial-commit="branch.initialCommit"
+              :last-commit="branch.lastCommit"
             />
 
             <v-card class="mt-4">
@@ -188,7 +194,6 @@ import http from '../api/http'
 import { useAuth } from '../composables/useAuth'
 import AppToolbar from '../components/AppToolbar.vue'
 import PageGalleryViewer from '../components/PageGalleryViewer.vue'
-import MergeBranchDialog from '../components/edit/MergeBranchDialog.vue'
 import AddPagesPanel from '../components/edit/AddPagesPanel.vue'
 import RemovePagesPanel from '../components/edit/RemovePagesPanel.vue'
 import SetTextPanel from '../components/edit/SetTextPanel.vue'
@@ -203,12 +208,14 @@ const { user, hasRole } = useAuth()
 const statusLabels = {
   in_work: 'В работе',
   in_review: 'Проверяется',
+  in_accept: 'Завершение правок',
   accepted: 'Принято',
   rejected: 'Отклонено',
 }
 const statusColors = {
   in_work: 'blue',
   in_review: '#b39ddb',
+  in_accept: 'teal',
   accepted: 'green',
   rejected: 'red',
 }
@@ -220,7 +227,6 @@ const error = ref(null)
 
 const pageCount = ref(0)
 const allowedExtensions = ref([])
-const masterBranchId = ref(null)
 
 const ACTIVE_VIEW_STORAGE_KEY = 'editView.activeView'
 const VALID_VIEWS = ['add', 'remove', 'set_text', 'reset_text', 'view_changes']
@@ -242,8 +248,9 @@ watch(tasksCollapsed, (value) => {
 
 const statusLoading = ref(false)
 const statusActionLoading = ref(false)
+const confirmStatusDialog = ref(false)
+const pendingStatus = ref(null)
 
-const mergeDialogRef = ref(null)
 const branchTasksRef = ref(null)
 const galleryRef = ref(null)
 
@@ -261,6 +268,8 @@ const loadBranch = async (id) => {
       documentName: response.data.document_name,
       authorId: response.data.author_id,
       status: response.data.status,
+      initialCommit: response.data.initial_commit,
+      lastCommit: response.data.last_commit,
     }
   } catch (err) {
     const status = err.response ? err.response.status : null
@@ -285,15 +294,6 @@ const loadPageCount = async () => {
     pageCount.value = response.data.count
   } catch (err) {
     console.error('Ошибка при получении количества страниц:', err)
-  }
-}
-
-const loadMasterBranchId = async () => {
-  try {
-    const response = await http.get(`/api/documents/${branch.value.documentId}/master_branch_id`)
-    masterBranchId.value = response.data.branch_id
-  } catch (err) {
-    console.error('Ошибка при получении id основной ветки:', err)
   }
 }
 
@@ -330,15 +330,30 @@ const handleReturnToWork = async () => {
   }
 }
 
-const handleSetStatus = async (newStatus) => {
+const requestSetStatus = (newStatus) => {
+  if (!newStatus || newStatus === branch.value.status) return
+  pendingStatus.value = newStatus
+  confirmStatusDialog.value = true
+}
+
+const cancelSetStatus = () => {
+  confirmStatusDialog.value = false
+  pendingStatus.value = null
+}
+
+const confirmSetStatus = async () => {
+  const newStatus = pendingStatus.value
   statusLoading.value = true
   try {
     await http.post(`/api/documents/branches/${branch.value.id}/status`, { status: newStatus })
     branch.value.status = newStatus
+    branchTasksRef.value.reload()
   } catch (err) {
     console.error('Ошибка при изменении статуса:', err)
   } finally {
     statusLoading.value = false
+    confirmStatusDialog.value = false
+    pendingStatus.value = null
   }
 }
 
@@ -354,6 +369,7 @@ const connectTaskUpdates = () => {
   ws.onmessage = async () => {
     branchTasksRef.value.reload()
     loadPageCount()
+    loadBranch(branch.value.id)
   }
 
   ws.onclose = () => {
@@ -368,7 +384,6 @@ onMounted(async () => {
   if (branch.value) {
     loadPageCount()
     loadAllowedExtensions()
-    loadMasterBranchId()
     connectTaskUpdates()
   }
 })

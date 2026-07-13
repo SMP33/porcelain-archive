@@ -89,7 +89,8 @@ import http from '../../api/http'
 
 const props = defineProps({
   branchId: { type: [Number, String], required: true },
-  masterBranchId: { type: [Number, String], default: null },
+  initialCommit: { type: String, default: null },
+  lastCommit: { type: String, default: null },
 })
 
 const STATUS_LABELS = {
@@ -107,8 +108,8 @@ const STATUS_COLORS = {
   image_changed: 'orange',
 }
 
-const branchPages = ref([])
-const masterPages = ref([])
+const currentPages = ref([])
+const initialPages = ref([])
 const loading = ref(false)
 const error = ref('')
 const selectedRow = ref(null)
@@ -123,23 +124,25 @@ const spanHighlightStyle = (span) => ({
   height: span.rect.height + '%',
 })
 
-const loadPagesHash = async (id) => {
-  const response = await http.get(`/api/documents/branches/${id}/pages_hash`)
+const loadPagesHash = async (commit) => {
+  const response = await http.get(`/api/documents/branches/${props.branchId}/pages_hash`, {
+    params: { commit },
+  })
   return response.data
 }
 
 const load = async () => {
-  if (!props.branchId || !props.masterBranchId) return
+  if (!props.branchId || !props.initialCommit || !props.lastCommit) return
 
   loading.value = true
   error.value = ''
   try {
-    const [branchResult, masterResult] = await Promise.all([
-      loadPagesHash(props.branchId),
-      loadPagesHash(props.masterBranchId),
+    const [currentResult, initialResult] = await Promise.all([
+      loadPagesHash(props.lastCommit),
+      loadPagesHash(props.initialCommit),
     ])
-    branchPages.value = branchResult
-    masterPages.value = masterResult
+    currentPages.value = currentResult
+    initialPages.value = initialResult
   } catch (err) {
     error.value = 'Не удалось загрузить хеши страниц.'
     console.error('Ошибка при получении хешей страниц:', err)
@@ -148,15 +151,15 @@ const load = async () => {
   }
 }
 
-watch(() => [props.branchId, props.masterBranchId], load, { immediate: true })
+watch(() => [props.branchId, props.initialCommit, props.lastCommit], load, { immediate: true })
 
 /*
- * Страница считается "той же" страницей на старой (master) и новой (текущая
- * ветка) стороне, если совпадает image_hash ИЛИ text_hash (непустой) -
- * этого требует случай "картинка заменена, текст сохранён" наравне со
- * случаем "текст заменён, картинка сохранена". Пустой/null text_hash не
- * считается совпадением сам по себе - иначе все безтекстовые страницы
- * ложно матчились бы друг с другом.
+ * Страница считается "той же" страницей на старой (initial_commit) и новой
+ * (last_commit) стороне ветки, если совпадает image_hash ИЛИ text_hash
+ * (непустой) - этого требует случай "картинка заменена, текст сохранён"
+ * наравне со случаем "текст заменён, картинка сохранена". Пустой/null
+ * text_hash не считается совпадением сам по себе - иначе все безтекстовые
+ * страницы ложно матчились бы друг с другом.
  *
  * diffArrays с этим компаратором сразу даёт выравнивание oldPos <-> newPos:
  * страницы вне пары - добавлены/удалены целиком (вместе с текстом, см.
@@ -174,8 +177,8 @@ const pagesMatch = (oldPage, newPage) => {
 }
 
 const diffRows = computed(() => {
-  const oldPages = masterPages.value
-  const newPages = branchPages.value
+  const oldPages = initialPages.value
+  const newPages = currentPages.value
 
   const parts = diffArrays(oldPages, newPages, { comparator: pagesMatch })
 
@@ -215,12 +218,12 @@ const diffRows = computed(() => {
 
 const changedRows = computed(() => diffRows.value.filter((row) => row.status !== 'unchanged'))
 
-// Удалённая страница есть только в master, во всех остальных случаях смотрим текущую ветку.
-const branchForRow = (row) => (row.status === 'removed' ? props.masterBranchId : props.branchId)
+// Удалённая страница есть только в initial_commit, во всех остальных случаях смотрим last_commit.
+const commitForRow = (row) => (row.status === 'removed' ? props.initialCommit : props.lastCommit)
 const posForRow = (row) => (row.status === 'removed' ? row.oldPos : row.newPos)
 
-const previewUrl = (row) => `/api/documents/branches/${branchForRow(row)}/pages/${posForRow(row)}/image/preview`
-const fullUrl = (row) => `/api/documents/branches/${branchForRow(row)}/pages/${posForRow(row)}/image`
+const previewUrl = (row) => `/api/documents/branches/${props.branchId}/pages/${posForRow(row)}/image/preview?commit=${commitForRow(row)}`
+const fullUrl = (row) => `/api/documents/branches/${props.branchId}/pages/${posForRow(row)}/image?commit=${commitForRow(row)}`
 
 const showTextColumn = computed(() => textLoading.value || spans.value.length > 0)
 
@@ -231,7 +234,9 @@ const loadText = async (row) => {
 
   textLoading.value = true
   try {
-    const response = await http.get(`/api/documents/branches/${branchForRow(row)}/pages/${posForRow(row)}/text`)
+    const response = await http.get(`/api/documents/branches/${props.branchId}/pages/${posForRow(row)}/text`, {
+      params: { commit: commitForRow(row) },
+    })
     const page = response.data.text
     if (page && page.blocks) {
       spans.value = page.blocks

@@ -4,6 +4,8 @@ from porcelain_archive.task.utils import *
 
 repo_path = None
 document_id = None
+branch_id = None
+success = False
 
 try:
     info = TaskInfo.from_stdin()
@@ -24,7 +26,12 @@ try:
     run_git(repo_path, "merge", "--no-ff", branch_name, "-m", f"merge_{branch_name}")
     run_git(repo_path, "worktree", "remove", "--force", branch_path)
 
+    success = True
+
 finally:
     if repo_path is not None:
         master_branch_id = get_master_branch_id(document_id)
         regenerate_branch_cache(repo_path, master_branch_id, None)
+
+    if branch_id is not None:
+        set_branch_merge_result(branch_id, success)

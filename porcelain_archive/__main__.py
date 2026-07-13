@@ -84,6 +84,11 @@ for _files_path in (
     os.makedirs(_files_path, exist_ok=True)
 
 if __name__ == "__main__":
+    from . import logging_setup
+
+    log_file = logging_setup.configure_logging()
+    print(f"log: \"{log_file}\"", flush=True)
+
     loop = "asyncio:SelectorEventLoop" if sys.platform == "win32" else "auto"
 
     parser = argparse.ArgumentParser()
@@ -103,4 +108,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    uvicorn.run("porcelain_archive.server:app", host=args.host, port=args.port, loop=loop)
+    # log_config=None - чтобы uvicorn не переопределял хендлеры логирования,
+    # настроенные выше logging_setup.configure_logging() (иначе его дефолтный
+    # dictConfig сбросит их и логи запросов не попадут в файл лога).
+    uvicorn.run("porcelain_archive.server:app", host=args.host, port=args.port, loop=loop, log_config=None)

@@ -1,8 +1,10 @@
+import asyncio
 import os
 from typing import Any, Dict, List, Optional, Sequence
 
 from porcelain_archive.database import db
 from porcelain_archive.config import config
+from porcelain_archive import logging_setup
 
 
 class TaskService:
@@ -81,3 +83,17 @@ class TaskService:
 
         with open(log_file_path, "r", encoding="utf-8") as log_file:
             return log_file.read()
+
+    async def get_server_log(self) -> str:
+        """
+        Возвращает содержимое файла лога текущего запуска сервера.
+        """
+        log_file_path = logging_setup.get_current_log_file()
+        if not log_file_path or not os.path.exists(log_file_path):
+            return ""
+
+        def _read() -> str:
+            with open(log_file_path, "r", encoding="utf-8") as log_file:
+                return log_file.read()
+
+        return await asyncio.to_thread(_read)

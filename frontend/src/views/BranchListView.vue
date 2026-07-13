@@ -47,12 +47,14 @@ const router = useRouter()
 const statusLabels = {
   in_work: 'В работе',
   in_review: 'Проверяется',
+  in_accept: 'Завершение правок',
   accepted: 'Принято',
   rejected: 'Отклонено',
 }
 const statusColors = {
   in_work: 'blue',
   in_review: '#b39ddb',
+  in_accept: 'teal',
   accepted: 'green',
   rejected: 'red',
 }

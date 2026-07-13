@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 
 from porcelain_archive.database import db
 from .task_service import TaskService
-from porcelain_archive.user import OAuth2PasswordBearerWithCookie, UserService
+from porcelain_archive.user import OAuth2PasswordBearerWithCookie, UserService, role_at_least
 
 router = APIRouter(
     prefix="/api/tasks",
@@ -65,6 +65,23 @@ async def read_task_log(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
 
     log = await task_service.get_task_log(task_id)
+    return {"log": log}
+
+
+@router.get("/server-log")
+async def read_server_log(
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """
+    Возвращает содержимое файла лога текущего запуска сервера. Требует роли admin.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not role_at_least(user.get("role"), "admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра лога сервера")
+
+    log = await task_service.get_server_log()
     return {"log": log}
 
 

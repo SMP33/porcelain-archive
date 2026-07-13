@@ -35,19 +35,20 @@ CREATE    TABLE IF NOT EXISTS branch (
           meta JSONB, -- Мета информация о версии документа
           created_time TIMESTAMP, -- Время создания
           last_change_time TIMESTAMP, -- Время последнего изменения
+          initial_commit TEXT, -- Коммит на момент создания ветки
+          last_commit TEXT, -- Коммит последнего обновления кеша страниц
           status TEXT NOT NULL DEFAULT 'in_work' -- Статус набора изменений
-          CHECK (status IN ('in_work','in_review', 'accepted', 'rejected'))
+          CHECK (status IN ('in_work','in_review', 'in_accept', 'accepted', 'rejected'))
           );
 
 -- Страницы документа
 CREATE    TABLE IF NOT EXISTS page (
-          branch_id BIGINT NOT NULL REFERENCES branch (id) ON DELETE CASCADE, -- Версия документа
+          commit TEXT NOT NULL, -- Коммит, к которому относится набор страниц
           pos INTEGER NOT NULL, -- Номер страницы
           image_hash TEXT, -- Хеш изображения
-          text_hash TEXT -- Хеш текстового файла
+          text_hash TEXT, -- Хеш текстового файла
+          PRIMARY KEY (commit, pos)
           );
-
-CREATE INDEX IF NOT EXISTS idx_page_branch_id_pos ON page (branch_id, pos);
 
 -- Задачи
 CREATE    TABLE IF NOT EXISTS task (

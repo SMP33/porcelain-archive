@@ -32,7 +32,7 @@ ALLOWED_PAGE_EXTENSIONS = {
     ".heif",
 }
 
-BRANCH_STATUSES = {"in_work", "in_review", "accepted", "rejected"}
+BRANCH_STATUSES = {"in_work", "in_review", "in_accept", "accepted", "rejected"}
 
 repos_root = str()
 repos_branch_root = str()
@@ -292,7 +292,7 @@ class DocumentService:
         """
         rows = await db.execute_read(
             """
-            SELECT b.id, b.document_id, d.name, b.name, b.author_id, b.status
+            SELECT b.id, b.document_id, d.name, b.name, b.author_id, b.status, b.initial_commit, b.last_commit
             FROM branch b
             JOIN document d ON d.id = b.document_id
             WHERE b.id = %s
@@ -302,7 +302,7 @@ class DocumentService:
         if not rows:
             return None
 
-        branch_id_, document_id, document_name, branch_name, author_id, branch_status = rows[0]
+        branch_id_, document_id, document_name, branch_name, author_id, branch_status, initial_commit, last_commit = rows[0]
         return {
             "id": branch_id_,
             "document_id": document_id,
@@ -310,6 +310,8 @@ class DocumentService:
             "name": branch_name,
             "author_id": author_id,
             "status": branch_status,
+            "initial_commit": initial_commit,
+            "last_commit": last_commit,
         }
 
     async def is_branch_author(self, user_id: Optional[int], branch_id: int) -> bool:
@@ -343,10 +345,21 @@ class DocumentService:
         if rows_affected == 0:
             raise ValueError("Набор изменений не в статусе 'на проверке'")
 
-    async def set_branch_status(self, branch_id: int, new_status: str) -> None:
-        """Устанавливает статус набора изменений напрямую (для moderator+)."""
+    async def set_branch_status(self, branch_id: int, new_status: str, user_id: int) -> None:
+        """
+        Устанавливает статус набора изменений напрямую (для moderator+).
+        'accepted' выставляется только автоматически по результату задачи
+        merge_branch. 'in_accept' запускает слияние ветки в master вместо
+        обычного изменения статуса.
+        """
         if new_status not in BRANCH_STATUSES:
             raise ValueError(f"Неизвестный статус: '{new_status}'")
+        if new_status == "accepted":
+            raise ValueError("Статус 'Принято' выставляется автоматически при успешном завершении правок")
+
+        if new_status == "in_accept":
+            await self._start_merge(branch_id, user_id)
+            return
 
         rows_affected = await db.execute_write(
             "UPDATE branch SET status = %s WHERE id = %s",
@@ -355,10 +368,11 @@ class DocumentService:
         if rows_affected == 0:
             raise ValueError("Ветка не найдена")
 
-    async def merge_branch(self, branch_id: int, user_id: int) -> Dict[str, Any]:
+    async def _start_merge(self, branch_id: int, user_id: int) -> None:
         """
-        Ставит в очередь слияние ветки изменений в master. Возможно только
-        для набора изменений в статусе 'accepted'.
+        Переводит набор изменений в 'Завершение правок' и ставит в очередь
+        его слияние в master. Возможно только для набора изменений в статусе
+        'Проверяется'.
         """
         rows = await db.execute_read(
             "SELECT document_id, name, status FROM branch WHERE id = %s", (branch_id,)
@@ -369,10 +383,14 @@ class DocumentService:
         document_id, branch_name, branch_status = rows[0]
         if branch_name == "master":
             raise ValueError("master нельзя слить саму в себя")
-        if branch_status != "accepted":
-            raise ValueError("Завершить правки можно только для набора изменений в статусе 'Принято'")
+        if branch_status != "in_review":
+            raise ValueError("Завершить правки можно только для набора изменений в статусе 'Проверяется'")
 
         async with db.transaction() as conn:
+            await conn.execute(
+                "UPDATE branch SET status = 'in_accept' WHERE id = %s", (branch_id,)
+            )
+
             data = {
                 "branch_id": branch_id,
                 "branch_name": branch_name,
@@ -382,8 +400,6 @@ class DocumentService:
                 "INSERT INTO task (type, author_id, data) VALUES ('merge_branch', %s, %s) RETURNING id",
                 (user_id, Jsonb(data)),
             )
-
-        return {}
 
     async def is_branch_viewable(self, user_id: Optional[int], branch_id: int) -> bool:
         """
@@ -571,13 +587,28 @@ class DocumentService:
 
         return int(rows[0][0])
 
-    async def get_branch_pages_hash(self, branch_id: int) -> List[Dict[str, Optional[str]]]:
+    async def get_branch_last_commit(self, branch_id: int) -> Optional[str]:
         """
-        Возвращает image_hash и text_hash всех страниц ветки, упорядоченных по номеру страницы.
+        Возвращает коммит последнего обновления кеша страниц ветки.
         """
         rows = await db.execute_read(
-            "SELECT image_hash, text_hash FROM page WHERE branch_id = %s ORDER BY pos",
-            (branch_id,),
+            "SELECT last_commit FROM branch WHERE id = %s", (branch_id,)
+        )
+        if not rows:
+            return None
+
+        return rows[0][0]
+
+    async def get_pages_hash(self, commit: Optional[str]) -> List[Dict[str, Optional[str]]]:
+        """
+        Возвращает image_hash и text_hash всех страниц указанного коммита, упорядоченных по номеру страницы.
+        """
+        if commit is None:
+            return []
+
+        rows = await db.execute_read(
+            "SELECT image_hash, text_hash FROM page WHERE commit = %s ORDER BY pos",
+            (commit,),
         )
         return [{"image_hash": row[0], "text_hash": row[1]} for row in rows]
 
@@ -587,24 +618,27 @@ class DocumentService:
         """
         return sorted(ALLOWED_PAGE_EXTENSIONS)
 
-    async def _get_page_image_hash(self, branch_id: int, page_index: int) -> Optional[str]:
+    async def _get_page_image_hash(self, commit: Optional[str], page_index: int) -> Optional[str]:
         """
-        Возвращает image_hash страницы ветки по её номеру.
+        Возвращает image_hash страницы коммита по её номеру.
         """
+        if commit is None:
+            return None
+
         rows = await db.execute_read(
-            "SELECT image_hash FROM page WHERE branch_id = %s AND pos = %s",
-            (branch_id, page_index),
+            "SELECT image_hash FROM page WHERE commit = %s AND pos = %s",
+            (commit, page_index),
         )
         if not rows or rows[0][0] is None:
             return None
 
         return rows[0][0]
 
-    async def get_branch_page_image(self, branch_id: int, page_index: int) -> Tuple[bytes, str]:
+    async def get_page_image(self, commit: Optional[str], page_index: int) -> Tuple[bytes, str]:
         """
-        Возвращает изображение страницы ветки.
+        Возвращает изображение страницы коммита.
         """
-        image_hash = await self._get_page_image_hash(branch_id, page_index)
+        image_hash = await self._get_page_image_hash(commit, page_index)
         if image_hash is None:
             return _PLACEHOLDER_PAGE_IMAGE, "image/png"
 
@@ -614,11 +648,11 @@ class DocumentService:
 
         return image_path.read_bytes(), "image/jpeg"
 
-    async def get_branch_page_image_preview(self, branch_id: int, page_index: int) -> Tuple[bytes, str]:
+    async def get_page_image_preview(self, commit: Optional[str], page_index: int) -> Tuple[bytes, str]:
         """
-        Возвращает превью изображения страницы ветки.
+        Возвращает превью изображения страницы коммита.
         """
-        image_hash = await self._get_page_image_hash(branch_id, page_index)
+        image_hash = await self._get_page_image_hash(commit, page_index)
         if image_hash is None:
             return _PLACEHOLDER_PAGE_IMAGE, "image/png"
 
@@ -628,24 +662,27 @@ class DocumentService:
 
         return image_path.read_bytes(), "image/jpeg"
 
-    async def _get_page_text_hash(self, branch_id: int, page_index: int) -> Optional[str]:
+    async def _get_page_text_hash(self, commit: Optional[str], page_index: int) -> Optional[str]:
         """
-        Возвращает text_hash страницы ветки по её номеру.
+        Возвращает text_hash страницы коммита по её номеру.
         """
+        if commit is None:
+            return None
+
         rows = await db.execute_read(
-            "SELECT text_hash FROM page WHERE branch_id = %s AND pos = %s",
-            (branch_id, page_index),
+            "SELECT text_hash FROM page WHERE commit = %s AND pos = %s",
+            (commit, page_index),
         )
         if not rows or rows[0][0] is None:
             return None
 
         return rows[0][0]
 
-    async def get_branch_page_text(self, branch_id: int, page_index: int) -> Optional[Dict[str, Any]]:
+    async def get_page_text(self, commit: Optional[str], page_index: int) -> Optional[Dict[str, Any]]:
         """
-        Возвращает текст страницы ветки (блоки/спаны, извлечённые из PDF), если он задан.
+        Возвращает текст страницы коммита (блоки/спаны, извлечённые из PDF), если он задан.
         """
-        text_hash = await self._get_page_text_hash(branch_id, page_index)
+        text_hash = await self._get_page_text_hash(commit, page_index)
         if text_hash is None:
             return None
 

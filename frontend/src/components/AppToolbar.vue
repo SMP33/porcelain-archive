@@ -1,5 +1,5 @@
 <template>
-  <v-navigation-drawer permanent width="232" theme="dark" class="app-sidebar">
+  <v-navigation-drawer v-if="mdAndUp" permanent width="232" theme="dark" class="app-sidebar">
     <router-link to="/" class="app-sidebar-brand tw:flex tw:items-center tw:gap-3 tw:px-5 tw:py-5 tw:text-white tw:no-underline">
       <span
         class="tw:flex tw:items-center tw:justify-center tw:w-8 tw:h-8 tw:shrink-0 tw:rounded tw:bg-clay-500"
@@ -57,6 +57,49 @@
     </template>
   </v-navigation-drawer>
 
+  <v-app-bar v-else theme="dark" class="app-sidebar app-topbar" flat>
+    <router-link to="/" class="app-sidebar-brand tw:flex tw:items-center tw:gap-2 tw:pl-4 tw:text-white tw:no-underline">
+      <span
+        class="tw:flex tw:items-center tw:justify-center tw:w-7 tw:h-7 tw:shrink-0 tw:rounded tw:bg-clay-500"
+        style="transform: skewX(-10deg);"
+      >
+        <v-icon size="16" color="white" style="transform: skewX(10deg);">mdi-book-open-page-variant</v-icon>
+      </span>
+      <span class="tw:text-sm tw:leading-tight">Архив</span>
+    </router-link>
+
+    <v-spacer></v-spacer>
+
+    <v-menu location="bottom end">
+      <template v-slot:activator="{ props }">
+        <v-btn v-bind="props" icon="mdi-menu" variant="text" color="white" class="tw:mr-1"></v-btn>
+      </template>
+      <v-list nav density="compact" min-width="220">
+        <v-list-item
+          v-if="user"
+          :title="user.display_name || user.username"
+          disabled
+          class="tw:text-xs tw:opacity-60"
+        ></v-list-item>
+
+        <v-list-item
+          v-for="item in navItems"
+          :key="item.to"
+          :to="item.to"
+          :prepend-icon="item.icon"
+          :title="item.title"
+        ></v-list-item>
+
+        <v-divider v-if="user" class="tw:my-1"></v-divider>
+
+        <v-list-item v-if="user" prepend-icon="mdi-lock-reset" title="Сменить пароль" @click="showResetPasswordDialog = true"></v-list-item>
+        <v-list-item v-if="user" prepend-icon="mdi-account-edit" title="Изменить ФИО" @click="showSetDisplayNameDialog = true"></v-list-item>
+        <v-list-item v-if="user" prepend-icon="mdi-logout" title="Выйти" @click="handleLogout"></v-list-item>
+        <v-list-item v-else prepend-icon="mdi-login" title="Войти" to="/login"></v-list-item>
+      </v-list>
+    </v-menu>
+  </v-app-bar>
+
   <v-dialog v-model="showResetPasswordDialog" max-width="400">
     <v-card>
       <v-card-title>Смена пароля</v-card-title>
@@ -105,18 +148,28 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useDisplay } from 'vuetify'
 import { useAuth } from '../composables/useAuth'
 
+const { mdAndUp } = useDisplay()
+
 const {
-  user, handleLogout,
+  user, hasRole, handleLogout,
   showResetPasswordDialog, oldPassword, newPassword, resetPasswordLoading, resetPasswordError, handleResetPassword,
   showSetDisplayNameDialog, displayNameInput, setDisplayNameLoading, setDisplayNameError, handleSetDisplayName,
 } = useAuth()
 
-const navItems = [
-  { to: '/', title: 'Документы', icon: 'mdi-file-document-multiple-outline' },
-  { to: '/branches', title: 'Наборы изменений', icon: 'mdi-source-branch' },
-  { to: '/tasks', title: 'Задачи', icon: 'mdi-format-list-checks' },
-  { to: '/users', title: 'Пользователи', icon: 'mdi-account-group-outline' },
-]
+const navItems = computed(() => {
+  const items = [
+    { to: '/', title: 'Документы', icon: 'mdi-file-document-multiple-outline' },
+    { to: '/branches', title: 'Наборы изменений', icon: 'mdi-source-branch' },
+    { to: '/tasks', title: 'Задачи', icon: 'mdi-format-list-checks' },
+    { to: '/users', title: 'Пользователи', icon: 'mdi-account-group-outline' },
+  ]
+  if (hasRole('admin')) {
+    items.push({ to: '/server-log', title: 'Лог сервера', icon: 'mdi-text-box-search-outline' })
+  }
+  return items
+})
 </script>

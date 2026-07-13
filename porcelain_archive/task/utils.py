@@ -343,6 +343,22 @@ def get_master_branch_id(document_id: int) -> Optional[int]:
     return row[0] if row else None
 
 
+def set_branch_merge_result(branch_id: int, success: bool) -> None:
+    """Завершает слияние ветки: accepted при успехе, in_review при ошибке."""
+    new_status = "accepted" if success else "in_review"
+
+    conninfo = (
+        f"dbname={config.database.dbname} "
+        f"user={config.database.user} "
+        f"password={config.database.password} "
+        f"host={config.database.host} "
+        f"port={config.database.port}"
+    )
+
+    with psycopg.connect(conninfo, cursor_factory=_LoggingCursor) as conn:
+        conn.execute("UPDATE branch SET status = %s WHERE id = %s", (new_status, branch_id))
+
+
 def regenerate_branch_cache(repo_path: str, branch_id: int, branch: Optional[str]):
     """
     Обновляет всю информацию о версии документа и кеш для нее
@@ -359,6 +375,9 @@ def regenerate_branch_cache(repo_path: str, branch_id: int, branch: Optional[str
         repo_branch = "master"
 
     if branch_id is not None:
+        commit_out = run_git(repo_path, "rev-parse", repo_branch)
+        commit = commit_out.stdout.strip()
+
         image_out = run_git(
             repo_path, "ls-tree", "-r", "--name-only", repo_branch, "./img"
         )
@@ -377,13 +396,6 @@ def regenerate_branch_cache(repo_path: str, branch_id: int, branch: Optional[str
             raise ValueError(f"len(doc) != len(img)")
 
         page_count = len(image_files)
-
-        queries.append(
-            (
-                "DELETE FROM page WHERE branch_id = %s",
-                (branch_id,),
-            )
-        )
 
         cache_path = config.files.cache_path
 
@@ -425,8 +437,9 @@ def regenerate_branch_cache(repo_path: str, branch_id: int, branch: Optional[str
 
             queries.append(
                 (
-                    "INSERT INTO page (branch_id, pos, image_hash, text_hash) VALUES (%s, %s, %s, %s)",
-                    (branch_id, pos, image_hash, doc_hash),
+                    "INSERT INTO page (commit, pos, image_hash, text_hash) VALUES (%s, %s, %s, %s) "
+                    "ON CONFLICT (commit, pos) DO NOTHING",
+                    (commit, pos, image_hash, doc_hash),
                 )
             )
 
@@ -436,8 +449,9 @@ def regenerate_branch_cache(repo_path: str, branch_id: int, branch: Optional[str
         branch_meta = {"page_count": page_count}
         queries.append(
             (
-                "UPDATE branch SET meta = %s, last_change_time = NOW() WHERE id = %s",
-                (Jsonb(branch_meta), branch_id),
+                "UPDATE branch SET meta = %s, last_change_time = NOW(), last_commit = %s, "
+                "initial_commit = COALESCE(initial_commit, %s) WHERE id = %s",
+                (Jsonb(branch_meta), commit, commit, branch_id),
             )
         )
     if len(queries) == 0:
