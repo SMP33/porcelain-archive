@@ -5,7 +5,7 @@ from typing import Any, AsyncIterator, List, Optional, Sequence
 from psycopg import AsyncConnection
 from psycopg_pool import AsyncConnectionPool
 
-from ..config.config import config
+from porcelain_archive.config import config
 
 
 class Database:

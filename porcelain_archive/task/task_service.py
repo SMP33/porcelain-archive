@@ -1,8 +1,8 @@
 import os
 from typing import Any, Dict, List, Optional, Sequence
 
-from ..database import db
-from ..config.config import config
+from porcelain_archive.database import db
+from porcelain_archive.config import config
 
 
 class TaskService:

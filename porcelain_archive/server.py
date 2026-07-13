@@ -14,7 +14,7 @@ from .document import document_api
 from .task import task_api
 from .user import user_api
 from .database import db
-from .config.config import config
+from .config import config
 
 if sys.platform == "win32":
     # psycopg в async-режиме не работает с ProactorEventLoop (дефолтный на Windows).

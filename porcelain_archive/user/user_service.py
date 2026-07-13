@@ -6,7 +6,7 @@ import psycopg
 from fastapi import Request
 from fastapi.security import OAuth2
 
-from ..database import db
+from porcelain_archive.database import db
 
 # Порядок ролей (см. ROLES.md) - каждая следующая роль имеет все возможности предыдущей
 ROLE_LEVELS = {"user": 1, "moderator": 2, "admin": 3}

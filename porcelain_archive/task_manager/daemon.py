@@ -7,9 +7,9 @@ from pathlib import Path
 import json
 import psycopg
 from typing import TypedDict
-from ..task.info import TaskInfo
+from porcelain_archive.task import TaskInfo
 
-from ..config.config import config
+from porcelain_archive.config import config
 
 if sys.platform == "win32":
     # psycopg в async-режиме не работает с ProactorEventLoop (дефолтный на Windows).

@@ -10,9 +10,9 @@ import base64
 import json
 import tempfile
 
-from ..database import db
-from ..user.user_service import role_at_least
-from ..config.config import config
+from porcelain_archive.database import db
+from porcelain_archive.user import role_at_least
+from porcelain_archive.config import config
 
 # Мок страницы документа: прозрачный PNG 1x1
 _PLACEHOLDER_PAGE_IMAGE = base64.b64decode(

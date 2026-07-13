@@ -73,7 +73,7 @@ import uvicorn
 
 generator.regenerate()
 
-from .config.config import config
+from .config import config
 
 for _files_path in (
     config.files.repos_root,

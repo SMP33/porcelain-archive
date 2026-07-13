@@ -1,6 +1,6 @@
-from ...config.config import config
-from ..info import TaskInfo
-from ..utils import *
+from porcelain_archive.config import config
+from porcelain_archive.task import TaskInfo
+from porcelain_archive.task.utils import *
 
 branch_path = None
 branch_id = None

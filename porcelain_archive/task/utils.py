@@ -12,7 +12,7 @@ import tempfile
 import psycopg
 from psycopg.types.json import Jsonb
 
-from ..config.config import config
+from porcelain_archive.config import config
 
 
 def log(*args, **kwargs) -> None:

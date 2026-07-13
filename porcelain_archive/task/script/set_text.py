@@ -2,11 +2,11 @@ import json
 import shutil
 from pathlib import Path
 
-from ...pdf import parser as extract_pdf_blocks
+from porcelain_archive.pdf import parser as extract_pdf_blocks
 
-from ...config.config import config
-from ..info import TaskInfo
-from ..utils import *
+from porcelain_archive.config import config
+from porcelain_archive.task import TaskInfo
+from porcelain_archive.task.utils import *
 
 branch_path = None
 branch_id = None

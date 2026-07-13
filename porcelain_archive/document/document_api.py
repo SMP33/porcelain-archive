@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Resp
 from pydantic import BaseModel
 
 from .document_service import DocumentService
-from ..user.user_service import OAuth2PasswordBearerWithCookie, UserService, role_at_least
+from porcelain_archive.user import OAuth2PasswordBearerWithCookie, UserService, role_at_least
 
 router = APIRouter(
     prefix="/api/documents",
