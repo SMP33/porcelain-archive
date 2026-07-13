@@ -1,22 +1,21 @@
 # Список python-пакетов собран по фактическим import'ам в каждом .py файле
-# проекта (модули стандартной библиотеки и локальные файлы проекта - app,
-# config, task, extract_pdf_blocks, generate_config - в список не входят,
-# их устанавливать не нужно).
+# проекта (модули стандартной библиотеки и локальный пакет проекта -
+# porcelain_archive - в список не входит, устанавливать его не нужно).
 #
 # Не включены зависимости abbyy_docx_extractor.py, специфичные для Windows
 # (pythoncom, win32com - пакет pywin32) - на Linux этот скрипт всё равно
 # не может работать, так как использует COM-автоматизацию MS Word.
 
-fastapi==0.138.2          # app/api/*.py, app/main.py
-uvicorn==0.49.0           # run_porcelain_archive_server.py
-websockets==16.0          # ASGI-сервер: WebSocket для /api/tasks/ws (app/api/task.py)
-python-multipart==0.0.32  # FastAPI File(...)/Form(...) (app/api/document.py)
-pydantic==2.13.4          # app/api/*.py, task/info.py
-psycopg[binary]==3.3.4    # app/database/database.py, app/api/task.py, app/service/*.py, task/task_utils.py, task_manager.py
-psycopg-pool==3.3.1       # app/database/database.py
-aiofiles==25.1.0          # app/service/document_service.py
-bcrypt==5.0.0             # app/service/user_service.py
-pillow==12.3.0            # extract_pdf_blocks.py, task/task_utils.py
-pdfminer.six==20260107    # extract_pdf_blocks.py
-colorama==0.4.6           # extract_pdf_blocks.py (CLI-вывод)
+fastapi==0.138.2          # porcelain_archive/{document,task,user}/*_api.py, porcelain_archive/server.py
+uvicorn==0.49.0           # porcelain_archive/__main__.py
+websockets==16.0          # ASGI-сервер: WebSocket для /api/tasks/ws (porcelain_archive/task/task_api.py)
+python-multipart==0.0.32  # FastAPI File(...)/Form(...) (porcelain_archive/document/document_api.py)
+pydantic==2.13.4          # porcelain_archive/{document,task,user}/*_api.py, porcelain_archive/task/info.py
+psycopg[binary]==3.3.4    # porcelain_archive/database/database.py, porcelain_archive/task/task_api.py, porcelain_archive/{document,task,user}/*_service.py, porcelain_archive/task/utils.py, porcelain_archive/task_manager/daemon.py
+psycopg-pool==3.3.1       # porcelain_archive/database/database.py
+aiofiles==25.1.0          # porcelain_archive/document/document_service.py
+bcrypt==5.0.0             # porcelain_archive/user/user_service.py
+pillow==12.3.0            # porcelain_archive/pdf/parser.py, porcelain_archive/task/utils.py
+pdfminer.six==20260107    # porcelain_archive/pdf/parser.py
+colorama==0.4.6           # porcelain_archive/pdf/parser.py (CLI-вывод)
 python-docx==1.2.0        # abbyy_docx_extractor.py (сам скрипт всё равно требует Windows COM)

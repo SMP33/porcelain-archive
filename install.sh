@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Установка python/npm-зависимостей проекта (venv из requirements.txt,
 # npm-пакеты для сборки frontend), плюс создание пустого шаблона config.ini
-# в ~/.config/porcelain-archive (тот же путь, что run_porcelain_archive_server.py
+# в ~/.config/porcelain-archive (тот же путь, что модуль porcelain_archive
 # использует как запасной по умолчанию) и установка ARCHIVE_CONFIG_INI_PATH
 # для текущего пользователя.
 #
@@ -11,9 +11,9 @@
 # и точные команды установки - в README.md.
 #
 # Список python-пакетов (requirements.txt) собран по фактическим import'ам
-# в каждом .py файле проекта (модули стандартной библиотеки и локальные
-# файлы проекта - app, config, task, extract_pdf_blocks, generate_config -
-# в список не входят, их устанавливать не нужно).
+# в каждом .py файле проекта (модули стандартной библиотеки и локальный
+# пакет проекта - porcelain_archive - в список не входит, устанавливать
+# его не нужно).
 #
 # Не включены зависимости abbyy_docx_extractor.py, специфичные для Windows
 # (pythoncom, win32com - пакет pywin32) - на Linux этот скрипт всё равно

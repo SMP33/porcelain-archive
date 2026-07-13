@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 running_pids() {
-    pgrep -f 'python3 run_porcelain_archive_server\.py' || true
+    pgrep -f 'python3 -m porcelain_archive' || true
 }
 
 PIDS="$(running_pids)"

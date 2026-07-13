@@ -21,7 +21,7 @@ mkdir -p "$RUN_DIR"
 running_pids() {
     # Паттерн включает "--port 80", чтобы не задеть процесс, запущенный
     # обычным start.sh на порту 8000 (и наоборот).
-    pgrep -f "run_porcelain_archive_server\.py --host $HOST --port $PORT" || true
+    pgrep -f "porcelain_archive --host $HOST --port $PORT" || true
 }
 
 EXISTING_PIDS="$(running_pids)"
@@ -40,7 +40,7 @@ npm --prefix frontend install
 npm --prefix frontend run build
 
 echo "Запуск сервера на $HOST:$PORT..."
-.venv/bin/python3 run_porcelain_archive_server.py --host "$HOST" --port "$PORT" > >(tee -a "$LOG_FILE") 2>&1 &
+.venv/bin/python3 -m porcelain_archive --host "$HOST" --port "$PORT" > >(tee -a "$LOG_FILE") 2>&1 &
 disown
 
 sleep 1

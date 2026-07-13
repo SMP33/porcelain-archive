@@ -1,5 +1,5 @@
 # Сборка frontend (frontend/dist - для доступа напрямую через backend), затем
-# запуск backend (run_porcelain_archive_server, порт 8000) и frontend
+# запуск backend (porcelain_archive, порт 8000) и frontend
 # dev-сервера (npm run dev, порт 5173) в фоне, вывод - в лог-файлы.
 # Если что-то из них уже запущено (порт занят) - перезапускает.
 
@@ -39,7 +39,7 @@ function Start-Backend {
 
     Write-Host "Запуск backend..."
     $pythonExe = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
-    Start-Process -FilePath $pythonExe -ArgumentList "-m", "run_porcelain_archive_server" `
+    Start-Process -FilePath $pythonExe -ArgumentList "-m", "porcelain_archive" `
         -WorkingDirectory $PSScriptRoot `
         -RedirectStandardOutput $logFile -RedirectStandardError $errFile `
         -WindowStyle Hidden | Out-Null
