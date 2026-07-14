@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Остановка сервера, запущенного через start.sh.
+# Для сервера, запущенного через start_shared_dev.sh, используйте его - паттерн
+# поиска процесса здесь намеренно не матчит порт 80.
 
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
 running_pids() {
-    pgrep -f 'python3 -m porcelain_archive' || true
+    pgrep -f -- '-m porcelain_archive$' || true
 }
 
 PIDS="$(running_pids)"

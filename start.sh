@@ -2,6 +2,10 @@
 # Пересобирает frontend (npm install + npm run build) и запускает сервер
 # (python -m porcelain_archive) в фоне, вывод дублируется в консоль и в лог-файл.
 # Если сервер уже запущен - перезапускает его.
+#
+# Слушает 127.0.0.1:8000 (значения по умолчанию из porcelain_archive/__main__.py) -
+# рассчитан на работу за reverse proxy (nginx и т.п.). Для временного публичного
+# теста без nginx (0.0.0.0:80) используйте start_shared_dev.sh.
 
 set -euo pipefail
 
@@ -13,10 +17,9 @@ LOG_FILE="$RUN_DIR/server.log"
 mkdir -p "$RUN_DIR"
 
 running_pids() {
-    # Паттерн ищет подстроку "python3 -m porcelain_archive" -
-    # матчит и системный python3, и ".venv/bin/python3 -m porcelain_archive"
-    # (запускаем именно так ниже), т.к. команда venv-интерпретатора её содержит.
-    pgrep -f 'python3 -m porcelain_archive' || true
+    # Паттерн ищет подстроку "-m porcelain_archive" без "--port" - чтобы не
+    # задеть процесс, запущенный start_shared_dev.sh на порту 80 (и наоборот).
+    pgrep -f -- '-m porcelain_archive$' || true
 }
 
 EXISTING_PIDS="$(running_pids)"
@@ -35,7 +38,7 @@ npm --prefix frontend install
 npm --prefix frontend run build
 
 echo "Запуск сервера..."
-.venv/bin/python3 run_porcelain_archive_server.py > >(tee -a "$LOG_FILE") 2>&1 &
+.venv/bin/python3 -m porcelain_archive > >(tee -a "$LOG_FILE") 2>&1 &
 disown
 
 sleep 1
