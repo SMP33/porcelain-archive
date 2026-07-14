@@ -21,7 +21,7 @@ NOTIFY_CHANNEL = "new_task"
 
 TASK_PREFIX = ""
 
-OUT_FILE_FLUSH_THRESHOLD = 256
+MAX_EMPTY_LOG_RETRIES = 10
 
 SUPPORTED_TASK_TYPES = set()
 
@@ -75,7 +75,7 @@ class TaskManager:
                 task_info = TaskInfo(**json.loads(notify.payload))
 
                 if not TASK_PREFIX + task_info.type in SUPPORTED_TASK_TYPES:
-                    print(f"{TASK_PREFIX}{task_info.type}.p not found!")
+                    print(f"{TASK_PREFIX}{task_info.type}.py не найден!")
                     continue
 
                 async with self._work_conn.cursor() as cur:
@@ -94,7 +94,7 @@ class TaskManager:
                     if row is not None:
                         task_info.data = row[0]
 
-                print(f"QUEUED: id={task_info.id} type= {task_info.type}")
+                print(f"В ОЧЕРЕДИ: id={task_info.id} type={task_info.type}")
                 await self._task_queue.put(task_info)
         finally:
             await self._conn.close()
@@ -107,21 +107,21 @@ class TaskManager:
             try:
                 await self._run_worker(task_info)
             except Exception:
-                print(f"ERROR: id={task_info.id} type={task_info.type}")
+                print(f"ОШИБКА: id={task_info.id} type={task_info.type}")
                 traceback.print_exc()
             self._task_queue.task_done()
 
     @staticmethod
     def _pump_output_and_wait(process: subprocess.Popen, out_file) -> int:
-        """Читает stdout процесса и пишет в out_file, сбрасывая буфер каждые OUT_FILE_FLUSH_THRESHOLD байт."""
-        buffered = 0
+        """
+        Читает stdout процесса и пишет в out_file. После каждого чанка - обязательный
+        flush + fsync, чтобы уже записанный результат гарантированно оказывался на
+        диске даже при аварийном завершении процесса, не дожидаясь EOF.
+        """
         for chunk in iter(lambda: process.stdout.read(4096), b""):
             out_file.write(chunk.decode("utf-8", errors="replace"))
-            buffered += len(chunk)
-            if buffered >= OUT_FILE_FLUSH_THRESHOLD:
-                out_file.flush()
-                buffered = 0
-        out_file.flush()
+            out_file.flush()
+            os.fsync(out_file.fileno())
         return process.wait()
 
     async def _run_worker(self, task_info: TaskInfo) -> None:
@@ -131,41 +131,77 @@ class TaskManager:
         Используется subprocess.Popen (а не asyncio.create_subprocess_exec), т.к. на Windows
         asyncio-подпроцессы требуют ProactorEventLoop, а psycopg в async-режиме - наоборот,
         SelectorEventLoop. Ожидание завершения вынесено в отдельный поток, чтобы не блокировать loop.
+
+        Если процесс падает до того, как успевает сбросить буфер stdout (что на Ubuntu
+        может произойти при обрыве процесса - OOM killer, segfault и т.п.), лог-файл
+        остаётся пустым, хотя скрипт мог что-то напечатать. В этом случае задача
+        перезапускается заново, не более MAX_EMPTY_LOG_RETRIES раз.
         """
         async with self._work_conn.cursor() as cur:
             await cur.execute(
                 "UPDATE task SET status = 'running' WHERE id = %s", (task_info.id,)
             )
-        print(f"RUNNING: id={task_info.id} type= {task_info.type}")
 
         worker_env = os.environ.copy()
         worker_env["PYTHONIOENCODING"] = "utf-8"
         worker_env["PYTHONUTF8"] = "1"
         worker_env["GIT_PYTHON_TRACE"] = "full"
+        # Отключает буферизацию stdout воркера, чтобы напечатанное не терялось при падении процесса.
+        worker_env["PYTHONUNBUFFERED"] = "1"
 
-        try:
-            with open(
-                f"{config.files.log_path}/{task_info.id}.txt", "w", encoding="utf-8"
-            ) as out_file:
-                process = subprocess.Popen(
-                    [sys.executable, "-m", f"porcelain_archive.task.script.{TASK_PREFIX}{task_info.type}"],
-                    cwd=config.common.root,
-                    env=worker_env,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                )
-                process.stdin.write(task_info.model_dump_json().encode("utf-8"))
-                process.stdin.close()
-                returncode = await asyncio.to_thread(
-                    self._pump_output_and_wait, process, out_file
-                )
-            status = "success" if returncode == 0 else "error"
-        except Exception:
-            traceback.print_exc()
-            status = "error"
+        log_path = f"{config.files.log_path}/{task_info.id}.txt"
 
-        print(f"{status.upper()}: id={task_info.id} type= {task_info.type}")
+        attempt = 1
+        status = "error"
+        log_is_empty = True
+        while True:
+            print(f"ЗАПУСК: id={task_info.id} type={task_info.type} попытка={attempt}/{MAX_EMPTY_LOG_RETRIES}")
+            returncode = None
+            try:
+                with open(log_path, "w", encoding="utf-8") as out_file:
+                    process = subprocess.Popen(
+                        [sys.executable, "-m", f"porcelain_archive.task.script.{TASK_PREFIX}{task_info.type}"],
+                        cwd=config.common.root,
+                        env=worker_env,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                    )
+                    process.stdin.write(task_info.model_dump_json().encode("utf-8"))
+                    process.stdin.close()
+                    returncode = await asyncio.to_thread(
+                        self._pump_output_and_wait, process, out_file
+                    )
+                status = "success" if returncode == 0 else "error"
+            except Exception:
+                print(f"ИСКЛЮЧЕНИЕ: id={task_info.id} type={task_info.type} попытка={attempt}")
+                traceback.print_exc()
+                status = "error"
+
+            log_is_empty = not os.path.exists(log_path) or os.path.getsize(log_path) == 0
+            print(
+                f"ЗАВЕРШЕНО: id={task_info.id} type={task_info.type} попытка={attempt} "
+                f"код_возврата={returncode} статус={status} лог_пуст={log_is_empty}"
+            )
+
+            if status == "success" or not log_is_empty:
+                break
+
+            if attempt >= MAX_EMPTY_LOG_RETRIES:
+                print(
+                    f"ОТКАЗ: id={task_info.id} type={task_info.type} "
+                    f"пустой лог после {attempt} попыток, дальнейшие перезапуски не выполняются"
+                )
+                break
+
+            print(
+                f"ПЕРЕЗАПУСК: id={task_info.id} type={task_info.type} пустой лог на попытке {attempt}, "
+                f"перезапускаю (попытка {attempt + 1}/{MAX_EMPTY_LOG_RETRIES})"
+            )
+            attempt += 1
+
+        status_text = {"success": "УСПЕХ", "error": "ОШИБКА"}[status]
+        print(f"{status_text}: id={task_info.id} type={task_info.type} попыток={attempt}")
 
         async with self._work_conn.cursor() as cur:
             await cur.execute(

@@ -17,6 +17,7 @@
               hide-details
               style="max-width: 220px"
               :loading="statusLoading"
+              :disabled="isLocked"
             >
               <template v-slot:selection="{ item }">
                 <span :style="{ color: statusColors[item.value] || 'grey' }">{{ item.title }}</span>
@@ -67,52 +68,51 @@
             <v-card-actions>
               <v-spacer></v-spacer>
               <v-btn @click="cancelSetStatus">Отмена</v-btn>
-              <v-btn color="primary" :loading="statusLoading" @click="confirmSetStatus">Подтвердить</v-btn>
+              <v-btn color="primary" :loading="statusLoading" :disabled="!confirmReady" @click="confirmSetStatus">Подтвердить</v-btn>
             </v-card-actions>
           </v-card>
         </v-dialog>
 
         <v-row v-if="!loading && branch" class="mt-1">
-          <v-col cols="12" md="2">
-            <v-card>
-              <v-list density="compact" nav>
+          <v-col cols="auto">
+            <v-card class="edit-view-menu-card">
+              <v-list density="compact" nav class="edit-view-menu">
                 <v-list-item
-                  title="Добавить страницы"
+                  v-if="!isLocked"
                   prepend-icon="mdi-file-plus"
                   :active="activeView === 'add'"
                   @click="activeView = 'add'"
-                ></v-list-item>
+                ><span class="edit-view-menu-label">Добавить страницы</span></v-list-item>
                 <v-list-item
-                  title="Удалить страницы"
+                  v-if="!isLocked"
                   prepend-icon="mdi-file-remove"
                   :active="activeView === 'remove'"
                   @click="activeView = 'remove'"
-                ></v-list-item>
+                ><span class="edit-view-menu-label">Удалить страницы</span></v-list-item>
                 <v-list-item
-                  title="Задать текст"
+                  v-if="!isLocked"
                   prepend-icon="mdi-file-pdf-box"
                   :active="activeView === 'set_text'"
                   @click="activeView = 'set_text'"
-                ></v-list-item>
+                ><span class="edit-view-menu-label">Задать текст</span></v-list-item>
                 <v-list-item
-                  title="Убрать текст"
+                  v-if="!isLocked"
                   prepend-icon="mdi-text-box-remove"
                   :active="activeView === 'reset_text'"
                   @click="activeView = 'reset_text'"
-                ></v-list-item>
+                ><span class="edit-view-menu-label">Убрать текст</span></v-list-item>
                 <v-list-item
-                  title="Просмотр изменений"
                   prepend-icon="mdi-compare"
                   :active="activeView === 'view_changes'"
                   @click="activeView = 'view_changes'"
-                ></v-list-item>
+                ><span class="edit-view-menu-label">Просмотр изменений</span></v-list-item>
               </v-list>
             </v-card>
           </v-col>
 
-          <v-col cols="12" :md="mainPanelCols">
+          <v-col>
             <AddPagesPanel
-              v-if="activeView === 'add'"
+              v-if="!isLocked && activeView === 'add'"
               :branch-id="branch.id"
               :page-count="pageCount"
               :allowed-extensions="allowedExtensions"
@@ -120,21 +120,21 @@
             />
 
             <RemovePagesPanel
-              v-if="activeView === 'remove'"
+              v-if="!isLocked && activeView === 'remove'"
               :branch-id="branch.id"
               :page-count="pageCount"
               @removed="onPagesChanged"
             />
 
             <SetTextPanel
-              v-if="activeView === 'set_text'"
+              v-if="!isLocked && activeView === 'set_text'"
               :branch-id="branch.id"
               :page-count="pageCount"
               @submitted="branchTasksRef.reload()"
             />
 
             <ResetTextPanel
-              v-if="activeView === 'reset_text'"
+              v-if="!isLocked && activeView === 'reset_text'"
               :branch-id="branch.id"
               :page-count="pageCount"
               @submitted="branchTasksRef.reload()"
@@ -163,12 +163,10 @@
             </v-card>
           </v-col>
 
-          <v-col cols="12" :md="tasksPanelCols">
+          <v-col cols="12" md="2">
             <BranchTasksPanel
               ref="branchTasksRef"
               :branch-id="branch.id"
-              :collapsed="tasksCollapsed"
-              @update:collapsed="tasksCollapsed = $event"
             />
           </v-col>
         </v-row>
@@ -237,24 +235,27 @@ watch(activeView, (value) => {
   localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, value)
 })
 
-const TASKS_COLLAPSED_STORAGE_KEY = 'branchTasksPanel.collapsed'
-const tasksCollapsed = ref(localStorage.getItem(TASKS_COLLAPSED_STORAGE_KEY) === 'true')
-const mainPanelCols = computed(() => (tasksCollapsed.value ? 8 : 7))
-const tasksPanelCols = computed(() => (tasksCollapsed.value ? 2 : 3))
-
-watch(tasksCollapsed, (value) => {
-  localStorage.setItem(TASKS_COLLAPSED_STORAGE_KEY, value ? 'true' : 'false')
-})
+const LOCKED_STATUSES = ['accepted', 'rejected', 'in_accept']
 
 const statusLoading = ref(false)
 const statusActionLoading = ref(false)
 const confirmStatusDialog = ref(false)
 const pendingStatus = ref(null)
+const confirmReady = ref(false)
+const CONFIRM_DELAY_MS = 2000
+let confirmReadyTimer = null
 
 const branchTasksRef = ref(null)
 const galleryRef = ref(null)
 
 const isAuthor = computed(() => !!(user.value && branch.value && user.value.id === branch.value.authorId))
+const isLocked = computed(() => !!(branch.value && LOCKED_STATUSES.includes(branch.value.status)))
+
+watch(isLocked, (locked) => {
+  if (locked && activeView.value !== 'view_changes') {
+    activeView.value = 'view_changes'
+  }
+})
 
 let ws = null
 let wsShouldReconnect = true
@@ -334,11 +335,18 @@ const requestSetStatus = (newStatus) => {
   if (!newStatus || newStatus === branch.value.status) return
   pendingStatus.value = newStatus
   confirmStatusDialog.value = true
+  confirmReady.value = false
+  clearTimeout(confirmReadyTimer)
+  confirmReadyTimer = setTimeout(() => {
+    confirmReady.value = true
+  }, CONFIRM_DELAY_MS)
 }
 
 const cancelSetStatus = () => {
+  clearTimeout(confirmReadyTimer)
   confirmStatusDialog.value = false
   pendingStatus.value = null
+  confirmReady.value = false
 }
 
 const confirmSetStatus = async () => {
@@ -354,6 +362,7 @@ const confirmSetStatus = async () => {
     statusLoading.value = false
     confirmStatusDialog.value = false
     pendingStatus.value = null
+    confirmReady.value = false
   }
 }
 
@@ -393,11 +402,41 @@ onUnmounted(() => {
   if (ws) {
     ws.close()
   }
+  clearTimeout(confirmReadyTimer)
 })
 </script>
 
 <style scoped>
 .gallery-thumb {
   cursor: pointer;
+}
+.edit-view-menu-card {
+  width: min-content;
+}
+.edit-view-menu :deep(.v-list-item) {
+  min-height: unset;
+  padding: 8px;
+  overflow: visible;
+}
+.edit-view-menu :deep(.v-list-item__content) {
+  overflow: visible;
+  min-width: min-content;
+}
+.edit-view-menu :deep(.v-list-item__prepend) {
+  margin-inline-end: 6px;
+}
+.edit-view-menu :deep(.v-list-item__prepend > .v-icon) {
+  margin-inline-end: 0;
+}
+.edit-view-menu :deep(.v-list-item__spacer) {
+  width: 6px;
+}
+.edit-view-menu-label {
+  display: block;
+  width: min-content;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  line-height: 1.25;
 }
 </style>

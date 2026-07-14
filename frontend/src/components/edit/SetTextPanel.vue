@@ -18,6 +18,11 @@
         :min="1"
         :max="pageCount"
       ></PageNumberField>
+      <v-alert v-if="hasExtraPdfPages" type="warning" density="compact" class="mt-2">
+        PDF содержит {{ pdfPageCount }} страниц(ы), а начиная с позиции {{ textPosition }}
+        в наборе изменений помещается только {{ availableSlots }}. Лишние страницы PDF
+        будут отброшены.
+      </v-alert>
       <v-alert v-if="setTextError" type="error" density="compact">{{ setTextError }}</v-alert>
       <v-alert v-if="setTextSuccess" type="success" density="compact">
         Задача на применение текста поставлена в очередь.
@@ -36,8 +41,12 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import http from '../../api/http'
 import PageNumberField from '../PageNumberField.vue'
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
 
 const props = defineProps({
   branchId: { type: [Number, String], required: true },
@@ -51,6 +60,7 @@ const textPosition = ref(props.pageCount ? 1 : 0)
 const settingText = ref(false)
 const setTextError = ref('')
 const setTextSuccess = ref(false)
+const pdfPageCount = ref(null)
 
 watch(() => props.pageCount, (count) => {
   textPosition.value = count ? 1 : 0
@@ -61,6 +71,32 @@ const canSetText = computed(() => {
   if (!props.pageCount) return false
   const pos = textPosition.value
   return Number.isInteger(pos) && pos >= 1 && pos <= props.pageCount
+})
+
+const availableSlots = computed(() => {
+  const pos = textPosition.value
+  if (!props.pageCount || !Number.isInteger(pos) || pos < 1) return 0
+  return props.pageCount - pos + 1
+})
+
+const hasExtraPdfPages = computed(() => (
+  pdfPageCount.value != null && pdfPageCount.value > availableSlots.value
+))
+
+const readPdfPageCount = async (file) => {
+  pdfPageCount.value = null
+  if (!file) return
+  try {
+    const buffer = await file.arrayBuffer()
+    const pdfDocument = await pdfjsLib.getDocument({ data: buffer }).promise
+    pdfPageCount.value = pdfDocument.numPages
+  } catch (err) {
+    console.error('Ошибка при проверке количества страниц PDF:', err)
+  }
+}
+
+watch(textFile, (value) => {
+  readPdfPageCount(Array.isArray(value) ? value[0] : value)
 })
 
 const handleSetText = async () => {

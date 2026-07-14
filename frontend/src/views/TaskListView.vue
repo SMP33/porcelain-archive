@@ -26,6 +26,9 @@
                   @update:options="loadItems"
                   @click:row="selectTask"
                 >
+                  <template v-slot:item.icon="{ item }">
+                    <v-icon :color="statusColor(item.status)" size="18">{{ taskTypeIcon(item.type) }}</v-icon>
+                  </template>
                   <template v-slot:item.type="{ item }">{{ taskTypeLabel(item.type) }}</template>
                   <template v-slot:item.author_display_name="{ item }">{{ item.author_display_name || '—' }}</template>
                   <template v-slot:item.status="{ item }">
@@ -71,6 +74,7 @@ import AppToolbar from '../components/AppToolbar.vue'
 const page = ref(1)
 const itemsPerPage = ref(25)
 const headers = ref([
+  { title: '', key: 'icon', align: 'center', sortable: false, width: '40px' },
   { title: 'ID', align: 'start', sortable: false, key: 'id' },
   { title: 'Тип', key: 'type', align: 'end' },
   { title: 'Автор', key: 'author_display_name', align: 'end' },
@@ -105,6 +109,17 @@ const TASK_TYPE_LABELS = {
   merge_branch: 'Завершить правки',
 }
 const taskTypeLabel = (type) => TASK_TYPE_LABELS[type] || type
+
+const TASK_TYPE_ICONS = {
+  create_repos: 'mdi-file-document-plus-outline',
+  create_branch: 'mdi-source-branch-plus',
+  insert_files: 'mdi-file-plus',
+  remove_files: 'mdi-file-remove',
+  set_text: 'mdi-file-pdf-box',
+  reset_text: 'mdi-text-box-remove',
+  merge_branch: 'mdi-source-merge',
+}
+const taskTypeIcon = (type) => TASK_TYPE_ICONS[type] || 'mdi-cog'
 
 const STATUS_LABELS = {
   new: 'Создается',

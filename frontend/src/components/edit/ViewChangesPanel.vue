@@ -13,7 +13,7 @@
             :key="row.oldPos + '-' + row.newPos + '-' + row.status"
             :id="'change-item-' + row.oldPos + '-' + row.newPos + '-' + row.status"
             class="changes-list-item"
-            :class="{ 'changes-list-item--active': row === selectedRow }"
+            :class="['bg-' + STATUS_COLORS[row.status] + '-lighten-4', { 'changes-list-item--active': row === selectedRow }]"
             @click="selectedRow = row"
           >
             <img :src="previewUrl(row)" class="changes-list-item-img">
@@ -99,6 +99,7 @@ const STATUS_LABELS = {
   unchanged: 'Без изменений',
   text_changed: 'Текст изменён',
   image_changed: 'Изображение изменено',
+  moved: 'Перемещено',
 }
 const STATUS_COLORS = {
   removed: 'red',
@@ -106,6 +107,7 @@ const STATUS_COLORS = {
   unchanged: 'grey',
   text_changed: 'amber',
   image_changed: 'orange',
+  moved: 'blue',
 }
 
 const currentPages = ref([])
@@ -153,36 +155,75 @@ const load = async () => {
 
 watch(() => [props.branchId, props.initialCommit, props.lastCommit], load, { immediate: true })
 
+// Сколько раз встречается каждое значение поля - используется, чтобы не
+// матчить страницы по хешу, который не уникален (см. buildMatcher).
+const buildCounts = (pages, field) => {
+  const counts = new Map()
+  for (const page of pages) {
+    const value = page[field]
+    if (value == null) continue
+    counts.set(value, (counts.get(value) || 0) + 1)
+  }
+  return counts
+}
+
 /*
  * Страница считается "той же" страницей на старой (initial_commit) и новой
  * (last_commit) стороне ветки, если совпадает image_hash ИЛИ text_hash
  * (непустой) - этого требует случай "картинка заменена, текст сохранён"
- * наравне со случаем "текст заменён, картинка сохранена". Пустой/null
- * text_hash не считается совпадением сам по себе - иначе все безтекстовые
- * страницы ложно матчились бы друг с другом.
+ * наравне со случаем "текст заменён, картинка сохранена".
+ *
+ * Хеш засчитывается как совпадение, только если он уникален и в старом, и в
+ * новом списке страниц. Иначе, например, все страницы с "убранным" текстом
+ * (text_hash - это хеш одного и того же пустого содержимого у всех, см.
+ * reset_text) ложно матчились бы друг с другом, из-за чего перемещение
+ * страницы могло определиться неверно (сматчить не ту пару, а настоящую
+ * пару страниц оставить как "Новое"/"Изображение изменено").
  *
  * diffArrays с этим компаратором сразу даёт выравнивание oldPos <-> newPos:
  * страницы вне пары - добавлены/удалены целиком (вместе с текстом, см.
  * regenerate_branch_cache), для пар остаётся сравнить image_hash и text_hash
  * между собой, чтобы понять, что именно изменилось.
  *
- * Если различаются оба хеша сразу, компаратор их не сматчит - такая пара
- * не отличима от удаления одной страницы и добавления другой, и корректно
- * попадёт в removed+new, а не в один "изменённый" ряд.
+ * Если различаются оба хеша сразу (или оба неуникальны), компаратор их не
+ * сматчит - такая пара не отличима от удаления одной страницы и добавления
+ * другой, и корректно попадёт в removed+new, а не в один "изменённый" ряд.
  */
-const pagesMatch = (oldPage, newPage) => {
-  if (oldPage.image_hash != null && oldPage.image_hash === newPage.image_hash) return true
-  if (oldPage.text_hash != null && oldPage.text_hash === newPage.text_hash) return true
-  return false
+const buildMatcher = (oldPages, newPages) => {
+  const oldImageCounts = buildCounts(oldPages, 'image_hash')
+  const newImageCounts = buildCounts(newPages, 'image_hash')
+  const oldTextCounts = buildCounts(oldPages, 'text_hash')
+  const newTextCounts = buildCounts(newPages, 'text_hash')
+
+  return (oldPage, newPage) => {
+    if (
+      oldPage.image_hash != null &&
+      oldPage.image_hash === newPage.image_hash &&
+      oldImageCounts.get(oldPage.image_hash) === 1 &&
+      newImageCounts.get(newPage.image_hash) === 1
+    ) return true
+
+    if (
+      oldPage.text_hash != null &&
+      oldPage.text_hash === newPage.text_hash &&
+      oldTextCounts.get(oldPage.text_hash) === 1 &&
+      newTextCounts.get(newPage.text_hash) === 1
+    ) return true
+
+    return false
+  }
 }
 
 const diffRows = computed(() => {
   const oldPages = initialPages.value
   const newPages = currentPages.value
+  const pagesMatch = buildMatcher(oldPages, newPages)
 
   const parts = diffArrays(oldPages, newPages, { comparator: pagesMatch })
 
-  const rows = []
+  const commonRows = []
+  const removedEntries = []
+  const addedEntries = []
   let oldPos = 0
   let newPos = 0
 
@@ -190,10 +231,10 @@ const diffRows = computed(() => {
     for (let i = 0; i < part.value.length; i += 1) {
       if (part.removed) {
         oldPos += 1
-        rows.push({ oldPos, newPos: null, status: 'removed' })
+        removedEntries.push({ oldPos, page: oldPages[oldPos - 1] })
       } else if (part.added) {
         newPos += 1
-        rows.push({ oldPos: null, newPos, status: 'new' })
+        addedEntries.push({ newPos, page: newPages[newPos - 1] })
       } else {
         const oldPage = oldPages[oldPos]
         const newPage = newPages[newPos]
@@ -208,10 +249,50 @@ const diffRows = computed(() => {
         else if (imageSame) status = 'text_changed'
         else status = 'image_changed'
 
-        rows.push({ oldPos, newPos, status })
+        commonRows.push({ oldPos, newPos, status })
       }
     }
   }
+
+  /*
+   * diffArrays (LCS) добавляет в общую последовательность только страницы,
+   * не нарушающие относительный порядок - настоящее перемещение (страница
+   * переставлена мимо своего "естественного" места) он поэтому не находит и
+   * отдаёт как отдельные removed+added. Ищем среди этих остатков пары с тем
+   * же image_hash/text_hash (тем же pagesMatch, что и выше) и превращаем их
+   * в одну строку "Перемещено" - в подавляющем большинстве случаев у
+   * страницы уникальный хеш, и пара находится однозначно. Если хеш совпадает
+   * у нескольких страниц (редкий случай), какие-то из них могут остаться
+   * непарными - это ломает только красивость отображения (лишние
+   * добавления/удаления вместо перемещения для части страниц), не сам расчёт.
+   */
+  const usedAdded = new Set()
+  const movedRows = []
+  const stillRemoved = []
+
+  for (const removedEntry of removedEntries) {
+    const matchIndex = addedEntries.findIndex(
+      (addedEntry, idx) => !usedAdded.has(idx) && pagesMatch(removedEntry.page, addedEntry.page)
+    )
+    if (matchIndex === -1) {
+      stillRemoved.push(removedEntry)
+    } else {
+      usedAdded.add(matchIndex)
+      movedRows.push({ oldPos: removedEntry.oldPos, newPos: addedEntries[matchIndex].newPos, status: 'moved' })
+    }
+  }
+
+  const stillAdded = addedEntries.filter((_, idx) => !usedAdded.has(idx))
+
+  const rows = [
+    ...commonRows,
+    ...movedRows,
+    ...stillRemoved.map((entry) => ({ oldPos: entry.oldPos, newPos: null, status: 'removed' })),
+    ...stillAdded.map((entry) => ({ oldPos: null, newPos: entry.newPos, status: 'new' })),
+  ]
+
+  // Единый порядок отображения: по новой позиции, для чистых удалений - по старой.
+  rows.sort((a, b) => (a.newPos ?? a.oldPos) - (b.newPos ?? b.oldPos))
 
   return rows
 })
@@ -291,13 +372,32 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 <style scoped>
 .changes-list {
   flex: 0 0 auto;
-  width: 56px;
+  box-sizing: content-box;
+  width: 64px;
+  padding: 8px 16px 8px 8px;
+  background-color: rgba(var(--v-theme-on-surface), 0.05);
+  border-radius: 6px;
   max-height: 600px;
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(128, 128, 128, 0.3) transparent;
+}
+.changes-list::-webkit-scrollbar {
+  width: 3px;
+}
+.changes-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.changes-list::-webkit-scrollbar-thumb {
+  background-color: rgba(128, 128, 128, 0.3);
+  border-radius: 2px;
 }
 .changes-list-item {
   cursor: pointer;
+  box-sizing: content-box;
   width: 56px;
+  padding: 4px;
   border-radius: 4px;
   outline: 2px solid transparent;
   outline-offset: -2px;

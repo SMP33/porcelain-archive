@@ -28,11 +28,13 @@ try:
     page_count = len(list_position_files(branch_path, branch_name, "img"))
 
     pages = extract_pdf_blocks.extract_sequence(pdf_path)
-    if position + len(pages) - 1 > page_count:
-        raise ValueError(
+    max_pages = page_count - position + 1
+    if len(pages) > max_pages:
+        log(
             f"PDF содержит {len(pages)} страниц(ы), начиная с позиции {position} "
-            f"это выходит за пределы версии документа ({page_count} страниц)"
+            f"в версии документа помещается только {max_pages} - лишние страницы PDF отброшены"
         )
+        pages = pages[:max_pages]
 
     for offset, page in enumerate(pages):
         target_pos = position + offset
