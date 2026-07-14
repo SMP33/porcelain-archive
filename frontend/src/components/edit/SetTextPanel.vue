@@ -83,6 +83,18 @@ const hasExtraPdfPages = computed(() => (
   pdfPageCount.value != null && pdfPageCount.value > availableSlots.value
 ))
 
+// Диапазон страниц, у которых изменится текст - используется EditView для подсветки плиток.
+// Пока не выбран PDF-файл (или не удалось определить число его страниц), верхняя
+// граница неизвестна - подсвечиваются все страницы от позиции и до конца документа.
+const highlightRange = computed(() => {
+  const pos = textPosition.value
+  if (!props.pageCount || !Number.isInteger(pos) || pos < 1 || pos > props.pageCount) return null
+  const end = pdfPageCount.value ? Math.min(pos + pdfPageCount.value - 1, props.pageCount) : props.pageCount
+  return { start: pos, end }
+})
+
+defineExpose({ highlightRange })
+
 const readPdfPageCount = async (file) => {
   pdfPageCount.value = null
   if (!file) return

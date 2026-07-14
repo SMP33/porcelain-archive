@@ -47,6 +47,8 @@ CREATE    TABLE IF NOT EXISTS page (
           pos INTEGER NOT NULL, -- Номер страницы
           image_hash TEXT, -- Хеш изображения
           text_hash TEXT, -- Хеш текстового файла
+          image_file TEXT, -- Файл изображения
+          text_file TEXT, -- Текстовый файл
           PRIMARY KEY (commit, pos)
           );
 

@@ -5,6 +5,8 @@ import bcrypt
 import psycopg
 from fastapi import Request
 from fastapi.security import OAuth2
+from fastapi.openapi.models import OAuthFlows, OAuthFlowPassword
+from fastapi.security.utils import get_authorization_scheme_param
 
 from porcelain_archive.database import db
 
@@ -21,12 +23,25 @@ def role_at_least(role: Optional[str], minimum: str) -> bool:
 
 class OAuth2PasswordBearerWithCookie(OAuth2):
     """
-    Схема аутентификации, которая ищет токен в cookie
+    Схема аутентификации: токен ищется в cookie session_token, а если её нет -
+    в заголовке Authorization: Bearer (нужно для кнопки Authorize в Swagger UI
+    и внешних API-клиентов без cookie jar).
     """
+
+    def __init__(self, token_url: str = "api/users/login"):
+        super().__init__(
+            flows=OAuthFlows(password=OAuthFlowPassword(tokenUrl=token_url)),
+            auto_error=False,
+        )
+
     async def __call__(self, request: Request) -> str | None:
         token = request.cookies.get("session_token")
         if token:
             return token
+
+        scheme, param = get_authorization_scheme_param(request.headers.get("Authorization"))
+        if scheme.lower() == "bearer":
+            return param
 
         return None
 

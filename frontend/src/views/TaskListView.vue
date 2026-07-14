@@ -29,10 +29,12 @@
                   <template v-slot:item.icon="{ item }">
                     <v-icon :color="statusColor(item.status)" size="18">{{ taskTypeIcon(item.type) }}</v-icon>
                   </template>
-                  <template v-slot:item.type="{ item }">{{ taskTypeLabel(item.type) }}</template>
-                  <template v-slot:item.author_display_name="{ item }">{{ item.author_display_name || '—' }}</template>
+                  <template v-slot:item.info="{ item }">
+                    <div>№{{ item.id }} {{ taskTypeLabel(item.type) }}</div>
+                    <div class="text-caption text-medium-emphasis">{{ item.author_display_name || '—' }}</div>
+                  </template>
                   <template v-slot:item.status="{ item }">
-                    <v-chip :color="statusColor(item.status)" size="small" label>{{ statusLabel(item.status) }}</v-chip>
+                    <v-icon :color="statusColor(item.status)">{{ statusIcon(item.status) }}</v-icon>
                   </template>
                 </v-data-table-server>
               </v-card-text>
@@ -75,10 +77,8 @@ const page = ref(1)
 const itemsPerPage = ref(25)
 const headers = ref([
   { title: '', key: 'icon', align: 'center', sortable: false, width: '40px' },
-  { title: 'ID', align: 'start', sortable: false, key: 'id' },
-  { title: 'Тип', key: 'type', align: 'end' },
-  { title: 'Автор', key: 'author_display_name', align: 'end' },
-  { title: 'Статус', key: 'status', align: 'end' },
+  { title: 'Задача', key: 'info', align: 'start', sortable: false },
+  { title: '', key: 'status', align: 'center', sortable: false, width: '40px' },
 ])
 
 const serverItems = ref([])
@@ -121,14 +121,14 @@ const TASK_TYPE_ICONS = {
 }
 const taskTypeIcon = (type) => TASK_TYPE_ICONS[type] || 'mdi-cog'
 
-const STATUS_LABELS = {
-  new: 'Создается',
-  queued: 'Ожидает',
-  running: 'В процессе',
-  success: 'Готово',
-  error: 'Ошибка',
+const STATUS_ICONS = {
+  new: 'mdi-clock-outline',
+  queued: 'mdi-clock-outline',
+  running: 'mdi-progress-clock',
+  success: 'mdi-check-circle',
+  error: 'mdi-alert-circle',
 }
-const statusLabel = (status) => STATUS_LABELS[status] || status
+const statusIcon = (status) => STATUS_ICONS[status] || 'mdi-help-circle'
 
 let lastTableOptions = { page: 1, itemsPerPage: itemsPerPage.value }
 let hasAutoSelected = false

@@ -116,6 +116,16 @@ const canUploadPages = computed(() => {
   return Number.isInteger(position.value) && position.value >= 0 && position.value <= props.pageCount
 })
 
+// Позиция вставки (после какой страницы) - используется EditView для подсветки
+// места между плитками, куда будут вставлены новые страницы.
+const insertGapPosition = computed(() => {
+  if (position.value === '' || position.value === null) return null
+  if (!Number.isInteger(position.value) || position.value < 0 || position.value > props.pageCount) return null
+  return position.value
+})
+
+defineExpose({ insertGapPosition })
+
 // Сортировка по имени файла с учётом чисел (page2 раньше page10)
 const sortedPageFiles = computed(() => {
   return [...pageFiles.value]

@@ -378,19 +378,23 @@ def regenerate_branch_cache(repo_path: str, branch_id: int, branch: Optional[str
         commit_out = run_git(repo_path, "rev-parse", repo_branch)
         commit = commit_out.stdout.strip()
 
+        # git ls-tree сортирует строки лексикографически (1, 10, 11, ..., 2, 20, ...),
+        # а не по номеру страницы - нужна сортировка по имени файла (см. natural_sort_key).
         image_out = run_git(
             repo_path, "ls-tree", "-r", "--name-only", repo_branch, "./img"
         )
-        image_files = str(image_out.stdout).splitlines()
-        if len(image_files):
-            image_files.pop(0)
+        image_files = sorted(
+            (f for f in str(image_out.stdout).splitlines() if re.search(r"\d", f)),
+            key=lambda f: natural_sort_key(Path(f).name),
+        )
 
         doc_out = run_git(
             repo_path, "ls-tree", "-r", "--name-only", repo_branch, "./doc"
         )
-        doc_files = str(doc_out.stdout).splitlines()
-        if len(doc_files):
-            doc_files.pop(0)
+        doc_files = sorted(
+            (f for f in str(doc_out.stdout).splitlines() if re.search(r"\d", f)),
+            key=lambda f: natural_sort_key(Path(f).name),
+        )
 
         if len(image_files) != len(doc_files):
             raise ValueError(f"len(doc) != len(img)")
@@ -437,9 +441,10 @@ def regenerate_branch_cache(repo_path: str, branch_id: int, branch: Optional[str
 
             queries.append(
                 (
-                    "INSERT INTO page (commit, pos, image_hash, text_hash) VALUES (%s, %s, %s, %s) "
+                    "INSERT INTO page (commit, pos, image_hash, text_hash, image_file, text_file) "
+                    "VALUES (%s, %s, %s, %s, %s, %s) "
                     "ON CONFLICT (commit, pos) DO NOTHING",
-                    (commit, pos, image_hash, doc_hash),
+                    (commit, pos, image_hash, doc_hash, Path(image_file).name, Path(doc_file).name),
                 )
             )
 

@@ -6,7 +6,7 @@
         <v-col cols="6">
           <PageNumberField
             v-model="resetTextStart"
-            label="С страницы"
+            label="Со страницы"
             :min="1"
             :max="pageCount"
           ></PageNumberField>
@@ -66,6 +66,14 @@ const canResetText = computed(() => {
   if (!Number.isInteger(start) || !Number.isInteger(end)) return false
   return start >= 1 && end >= start && end <= props.pageCount
 })
+
+// Диапазон страниц, у которых будет убран текст - используется EditView для подсветки плиток.
+const highlightRange = computed(() => {
+  if (!canResetText.value) return null
+  return { start: resetTextStart.value, end: resetTextEnd.value }
+})
+
+defineExpose({ highlightRange })
 
 const handleResetText = async () => {
   resettingText.value = true

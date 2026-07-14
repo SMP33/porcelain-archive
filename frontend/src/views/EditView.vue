@@ -113,6 +113,7 @@
           <v-col>
             <AddPagesPanel
               v-if="!isLocked && activeView === 'add'"
+              ref="addPagesRef"
               :branch-id="branch.id"
               :page-count="pageCount"
               :allowed-extensions="allowedExtensions"
@@ -121,6 +122,7 @@
 
             <RemovePagesPanel
               v-if="!isLocked && activeView === 'remove'"
+              ref="removePagesRef"
               :branch-id="branch.id"
               :page-count="pageCount"
               @removed="onPagesChanged"
@@ -128,6 +130,7 @@
 
             <SetTextPanel
               v-if="!isLocked && activeView === 'set_text'"
+              ref="setTextRef"
               :branch-id="branch.id"
               :page-count="pageCount"
               @submitted="branchTasksRef.reload()"
@@ -135,6 +138,7 @@
 
             <ResetTextPanel
               v-if="!isLocked && activeView === 'reset_text'"
+              ref="resetTextRef"
               :branch-id="branch.id"
               :page-count="pageCount"
               @submitted="branchTasksRef.reload()"
@@ -152,11 +156,18 @@
               <v-card-text>
                 <div v-if="!pageCount" class="text-medium-emphasis">Страниц пока нет</div>
                 <v-row v-else dense>
-                  <v-col v-for="pos in pageCount" :key="pos" cols="6" sm="4" md="3" lg="2">
-                    <v-card variant="outlined" class="gallery-thumb" @click="galleryRef.show(pos)">
+                  <v-col v-for="pos in pageCount" :key="pos" cols="6" sm="4" md="3" lg="2" class="gallery-thumb-col">
+                    <div v-if="activeInsertGap === 0 && pos === 1" class="insert-gap-marker insert-gap-marker--left"></div>
+                    <v-card
+                      variant="outlined"
+                      class="gallery-thumb"
+                      :class="isPageHighlighted(pos) ? 'gallery-thumb--' + activeHighlightColor : ''"
+                      @click="galleryRef.show(pos)"
+                    >
                       <v-img :src="galleryRef && galleryRef.previewImageUrl(pos)" height="120" cover></v-img>
                       <div class="text-caption text-center pa-1">{{ pos }}</div>
                     </v-card>
+                    <div v-if="activeInsertGap === pos" class="insert-gap-marker insert-gap-marker--right"></div>
                   </v-col>
                 </v-row>
               </v-card-text>
@@ -247,6 +258,34 @@ let confirmReadyTimer = null
 
 const branchTasksRef = ref(null)
 const galleryRef = ref(null)
+const addPagesRef = ref(null)
+const removePagesRef = ref(null)
+const setTextRef = ref(null)
+const resetTextRef = ref(null)
+
+// Диапазон страниц для подсветки плиток - берётся из активной вкладки задачи.
+const activeHighlightRange = computed(() => {
+  if (activeView.value === 'remove') return removePagesRef.value?.highlightRange ?? null
+  if (activeView.value === 'set_text') return setTextRef.value?.highlightRange ?? null
+  if (activeView.value === 'reset_text') return resetTextRef.value?.highlightRange ?? null
+  return null
+})
+const activeHighlightColor = computed(() => {
+  if (activeView.value === 'remove') return 'red'
+  if (activeView.value === 'set_text') return 'blue'
+  if (activeView.value === 'reset_text') return 'yellow'
+  return null
+})
+const isPageHighlighted = (pos) => {
+  const range = activeHighlightRange.value
+  return !!range && pos >= range.start && pos <= range.end
+}
+
+// Позиция вставки (0 - перед первой страницей) - подсвечивает границу между
+// плитками, куда будут вставлены новые страницы, на вкладке "Добавить страницы".
+const activeInsertGap = computed(() => (
+  activeView.value === 'add' ? addPagesRef.value?.insertGapPosition ?? null : null
+))
 
 const isAuthor = computed(() => !!(user.value && branch.value && user.value.id === branch.value.authorId))
 const isLocked = computed(() => !!(branch.value && LOCKED_STATUSES.includes(branch.value.status)))
@@ -409,6 +448,40 @@ onUnmounted(() => {
 <style scoped>
 .gallery-thumb {
   cursor: pointer;
+  transition: border-color .15s, background-color .15s;
+}
+.gallery-thumb--red {
+  border-color: #f44336 !important;
+  border-width: 2px !important;
+  background-color: rgba(244, 67, 54, 0.12);
+}
+.gallery-thumb--blue {
+  border-color: #2196f3 !important;
+  border-width: 2px !important;
+  background-color: rgba(33, 150, 243, 0.12);
+}
+.gallery-thumb--yellow {
+  border-color: #fbc02d !important;
+  border-width: 2px !important;
+  background-color: rgba(251, 192, 45, 0.15);
+}
+.gallery-thumb-col {
+  position: relative;
+}
+.insert-gap-marker {
+  position: absolute;
+  top: 4px;
+  bottom: 20px;
+  width: 5px;
+  border-radius: 3px;
+  background-color: #4caf50;
+  z-index: 1;
+}
+.insert-gap-marker--left {
+  left: -3px;
+}
+.insert-gap-marker--right {
+  right: -3px;
 }
 .edit-view-menu-card {
   width: min-content;

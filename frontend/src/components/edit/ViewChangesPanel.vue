@@ -13,13 +13,11 @@
             :key="row.oldPos + '-' + row.newPos + '-' + row.status"
             :id="'change-item-' + row.oldPos + '-' + row.newPos + '-' + row.status"
             class="changes-list-item"
-            :class="['bg-' + STATUS_COLORS[row.status] + '-lighten-4', { 'changes-list-item--active': row === selectedRow }]"
+            :class="['changes-list-item--' + row.status, { 'changes-list-item--active': row === selectedRow }]"
             @click="selectedRow = row"
           >
             <img :src="previewUrl(row)" class="changes-list-item-img">
-            <v-chip :color="STATUS_COLORS[row.status]" label class="changes-list-item-chip">
-              {{ row.oldPos ?? '—' }}/{{ row.newPos ?? '—' }}
-            </v-chip>
+            <div class="changes-list-item-label">{{ row.oldPos ?? '—' }}/{{ row.newPos ?? '—' }}</div>
           </div>
         </div>
 
@@ -84,7 +82,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { diffArrays } from 'diff'
+import { structuralDiff } from '../../../../js-packages/structuralDiff/structuralDiff.js'
 import http from '../../api/http'
 
 const props = defineProps({
@@ -96,18 +94,12 @@ const props = defineProps({
 const STATUS_LABELS = {
   removed: 'Удалено',
   new: 'Новое',
-  unchanged: 'Без изменений',
   text_changed: 'Текст изменён',
-  image_changed: 'Изображение изменено',
-  moved: 'Перемещено',
 }
 const STATUS_COLORS = {
   removed: 'red',
   new: 'green',
-  unchanged: 'grey',
-  text_changed: 'amber',
-  image_changed: 'orange',
-  moved: 'blue',
+  text_changed: 'blue',
 }
 
 const currentPages = ref([])
@@ -155,149 +147,30 @@ const load = async () => {
 
 watch(() => [props.branchId, props.initialCommit, props.lastCommit], load, { immediate: true })
 
-// Сколько раз встречается каждое значение поля - используется, чтобы не
-// матчить страницы по хешу, который не уникален (см. buildMatcher).
-const buildCounts = (pages, field) => {
-  const counts = new Map()
-  for (const page of pages) {
-    const value = page[field]
-    if (value == null) continue
-    counts.set(value, (counts.get(value) || 0) + 1)
-  }
-  return counts
+// Статусы structuralDiff (added/deleted/modified) -> статусы отображения.
+const DIFF_STATUS_MAP = {
+  added: 'new',
+  deleted: 'removed',
+  modified: 'text_changed',
 }
 
-/*
- * Страница считается "той же" страницей на старой (initial_commit) и новой
- * (last_commit) стороне ветки, если совпадает image_hash ИЛИ text_hash
- * (непустой) - этого требует случай "картинка заменена, текст сохранён"
- * наравне со случаем "текст заменён, картинка сохранена".
- *
- * Хеш засчитывается как совпадение, только если он уникален и в старом, и в
- * новом списке страниц. Иначе, например, все страницы с "убранным" текстом
- * (text_hash - это хеш одного и того же пустого содержимого у всех, см.
- * reset_text) ложно матчились бы друг с другом, из-за чего перемещение
- * страницы могло определиться неверно (сматчить не ту пару, а настоящую
- * пару страниц оставить как "Новое"/"Изображение изменено").
- *
- * diffArrays с этим компаратором сразу даёт выравнивание oldPos <-> newPos:
- * страницы вне пары - добавлены/удалены целиком (вместе с текстом, см.
- * regenerate_branch_cache), для пар остаётся сравнить image_hash и text_hash
- * между собой, чтобы понять, что именно изменилось.
- *
- * Если различаются оба хеша сразу (или оба неуникальны), компаратор их не
- * сматчит - такая пара не отличима от удаления одной страницы и добавления
- * другой, и корректно попадёт в removed+new, а не в один "изменённый" ряд.
- */
-const buildMatcher = (oldPages, newPages) => {
-  const oldImageCounts = buildCounts(oldPages, 'image_hash')
-  const newImageCounts = buildCounts(newPages, 'image_hash')
-  const oldTextCounts = buildCounts(oldPages, 'text_hash')
-  const newTextCounts = buildCounts(newPages, 'text_hash')
-
-  return (oldPage, newPage) => {
-    if (
-      oldPage.image_hash != null &&
-      oldPage.image_hash === newPage.image_hash &&
-      oldImageCounts.get(oldPage.image_hash) === 1 &&
-      newImageCounts.get(newPage.image_hash) === 1
-    ) return true
-
-    if (
-      oldPage.text_hash != null &&
-      oldPage.text_hash === newPage.text_hash &&
-      oldTextCounts.get(oldPage.text_hash) === 1 &&
-      newTextCounts.get(newPage.text_hash) === 1
-    ) return true
-
-    return false
-  }
-}
-
+// structuralDiff сопоставляет страницы по x (image_hash - identity страницы)
+// и сравнивает y (text_hash) у сопоставленной пары, чтобы понять, изменился
+// ли текст. Если у страницы поменялась картинка (другой image_hash), это уже
+// не та же страница - она проходит как удаление старой и добавление новой.
 const diffRows = computed(() => {
-  const oldPages = initialPages.value
-  const newPages = currentPages.value
-  const pagesMatch = buildMatcher(oldPages, newPages)
+  const toEntry = (page) => ({ x: page.image_hash ?? '', y: page.text_hash ?? '' })
+  const oldArr = initialPages.value.map(toEntry)
+  const newArr = currentPages.value.map(toEntry)
 
-  const parts = diffArrays(oldPages, newPages, { comparator: pagesMatch })
-
-  const commonRows = []
-  const removedEntries = []
-  const addedEntries = []
-  let oldPos = 0
-  let newPos = 0
-
-  for (const part of parts) {
-    for (let i = 0; i < part.value.length; i += 1) {
-      if (part.removed) {
-        oldPos += 1
-        removedEntries.push({ oldPos, page: oldPages[oldPos - 1] })
-      } else if (part.added) {
-        newPos += 1
-        addedEntries.push({ newPos, page: newPages[newPos - 1] })
-      } else {
-        const oldPage = oldPages[oldPos]
-        const newPage = newPages[newPos]
-        oldPos += 1
-        newPos += 1
-
-        const imageSame = oldPage.image_hash === newPage.image_hash
-        const textSame = oldPage.text_hash === newPage.text_hash
-
-        let status
-        if (imageSame && textSame) status = 'unchanged'
-        else if (imageSame) status = 'text_changed'
-        else status = 'image_changed'
-
-        commonRows.push({ oldPos, newPos, status })
-      }
-    }
-  }
-
-  /*
-   * diffArrays (LCS) добавляет в общую последовательность только страницы,
-   * не нарушающие относительный порядок - настоящее перемещение (страница
-   * переставлена мимо своего "естественного" места) он поэтому не находит и
-   * отдаёт как отдельные removed+added. Ищем среди этих остатков пары с тем
-   * же image_hash/text_hash (тем же pagesMatch, что и выше) и превращаем их
-   * в одну строку "Перемещено" - в подавляющем большинстве случаев у
-   * страницы уникальный хеш, и пара находится однозначно. Если хеш совпадает
-   * у нескольких страниц (редкий случай), какие-то из них могут остаться
-   * непарными - это ломает только красивость отображения (лишние
-   * добавления/удаления вместо перемещения для части страниц), не сам расчёт.
-   */
-  const usedAdded = new Set()
-  const movedRows = []
-  const stillRemoved = []
-
-  for (const removedEntry of removedEntries) {
-    const matchIndex = addedEntries.findIndex(
-      (addedEntry, idx) => !usedAdded.has(idx) && pagesMatch(removedEntry.page, addedEntry.page)
-    )
-    if (matchIndex === -1) {
-      stillRemoved.push(removedEntry)
-    } else {
-      usedAdded.add(matchIndex)
-      movedRows.push({ oldPos: removedEntry.oldPos, newPos: addedEntries[matchIndex].newPos, status: 'moved' })
-    }
-  }
-
-  const stillAdded = addedEntries.filter((_, idx) => !usedAdded.has(idx))
-
-  const rows = [
-    ...commonRows,
-    ...movedRows,
-    ...stillRemoved.map((entry) => ({ oldPos: entry.oldPos, newPos: null, status: 'removed' })),
-    ...stillAdded.map((entry) => ({ oldPos: null, newPos: entry.newPos, status: 'new' })),
-  ]
-
-  // Единый порядок отображения: по новой позиции, для чистых удалений - по старой.
-  rows.sort((a, b) => (a.newPos ?? a.oldPos) - (b.newPos ?? b.oldPos))
-
-  return rows
+  return structuralDiff(oldArr, newArr).map((entry) => ({
+    oldPos: entry.oldIndex != null ? entry.oldIndex + 1 : null,
+    newPos: entry.newIndex != null ? entry.newIndex + 1 : null,
+    status: DIFF_STATUS_MAP[entry.status],
+  }))
 })
 
-const changedRows = computed(() => diffRows.value.filter((row) => row.status !== 'unchanged'))
+const changedRows = diffRows
 
 // Удалённая страница есть только в initial_commit, во всех остальных случаях смотрим last_commit.
 const commitForRow = (row) => (row.status === 'removed' ? props.initialCommit : props.lastCommit)
@@ -373,8 +246,8 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 .changes-list {
   flex: 0 0 auto;
   box-sizing: content-box;
-  width: 64px;
-  padding: 8px 16px 8px 8px;
+  width: 50px;
+  padding: 8px 10px 8px 6px;
   background-color: rgba(var(--v-theme-on-surface), 0.05);
   border-radius: 6px;
   max-height: 600px;
@@ -396,33 +269,37 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 .changes-list-item {
   cursor: pointer;
   box-sizing: content-box;
-  width: 56px;
-  padding: 4px;
+  width: 37px;
+  padding: 3px;
   border-radius: 4px;
   outline: 2px solid transparent;
   outline-offset: -2px;
-  transition: outline-color .15s;
+  transition: outline-color .15s, background-color .15s;
   text-align: center;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
+}
+.changes-list-item--new {
+  background-color: rgba(76, 175, 80, 0.3);
+}
+.changes-list-item--removed {
+  background-color: rgba(244, 67, 54, 0.3);
+}
+.changes-list-item--text_changed {
+  background-color: rgba(33, 150, 243, 0.3);
 }
 .changes-list-item--active {
   outline-color: rgb(var(--v-theme-primary));
 }
 .changes-list-item-img {
-  width: 56px;
-  height: 56px;
+  width: 37px;
+  height: 37px;
   object-fit: cover;
   border-radius: 4px;
   display: block;
 }
-.changes-list-item-chip {
-  width: 56px;
-  min-width: 56px;
-  height: auto;
-  margin-top: 4px;
-  padding: 3px 0;
-  justify-content: center;
-  font-size: 13px;
+.changes-list-item-label {
+  font-size: 10px;
+  line-height: 1.5;
   font-weight: 600;
 }
 .change-viewer-body {

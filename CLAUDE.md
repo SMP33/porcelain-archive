@@ -23,6 +23,7 @@
 - porcelain_archive/task_manager - менеджер задач
 - porcelain_archive/task/script - задачи, которыми управляет task_manager
 - папки и остальные каталоги в корне проекта - рабочие файлы, которые должны читаться и изменяться только по запросу
+- js-packages - кастомные js пакеты
 - postgresql - обеспечивается извне
 - запуск сервера - вручную .\.venv\Scripts\python.exe -m porcelain_archive
 - TRANSLATE.md - словарь терминов, которые используются в коде, и как они должны отображаться для пользователя в frontend

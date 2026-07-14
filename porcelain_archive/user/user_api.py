@@ -11,7 +11,7 @@ router = APIRouter(
     tags=["users"],
 )
 
-oauth2_scheme = OAuth2PasswordBearerWithCookie()
+oauth2_scheme = OAuth2PasswordBearerWithCookie(token_url="api/users/login")
 user_service = UserService()
 
 
@@ -45,7 +45,7 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     response.set_cookie(key="session_token", value=token, httponly=True)
-    return {"message": "Login successful"}
+    return {"message": "Login successful", "access_token": token, "token_type": "bearer"}
 
 @router.post("/logout")
 async def logout(response: Response, token: Annotated[str, Depends(oauth2_scheme)]):

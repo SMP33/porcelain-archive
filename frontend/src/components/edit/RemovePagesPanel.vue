@@ -6,7 +6,7 @@
         <v-col cols="6">
           <PageNumberField
             v-model="removeStart"
-            label="С страницы"
+            label="Со страницы"
             :min="1"
             :max="pageCount"
           ></PageNumberField>
@@ -37,7 +37,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import http from '../../api/http'
 import PageNumberField from '../PageNumberField.vue'
 
@@ -48,16 +48,11 @@ const props = defineProps({
 
 const emit = defineEmits(['removed'])
 
-const removeStart = ref(props.pageCount ? 1 : 0)
-const removeEnd = ref(props.pageCount)
+const removeStart = ref(null)
+const removeEnd = ref(null)
 const removingPages = ref(false)
 const removeError = ref('')
 const removeSuccess = ref(false)
-
-watch(() => props.pageCount, (count) => {
-  removeStart.value = count ? 1 : 0
-  removeEnd.value = count
-}, { immediate: true })
 
 const canRemovePages = computed(() => {
   if (!props.pageCount) return false
@@ -66,6 +61,14 @@ const canRemovePages = computed(() => {
   if (!Number.isInteger(start) || !Number.isInteger(end)) return false
   return start >= 1 && end >= start && end <= props.pageCount
 })
+
+// Диапазон удаляемых страниц - используется EditView для подсветки плиток.
+const highlightRange = computed(() => {
+  if (!canRemovePages.value) return null
+  return { start: removeStart.value, end: removeEnd.value }
+})
+
+defineExpose({ highlightRange })
 
 const handleRemovePages = async () => {
   removingPages.value = true
