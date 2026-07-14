@@ -63,19 +63,6 @@ CREATE    TABLE IF NOT EXISTS task (
           CHECK (status IN ('new', 'queued', 'running', 'success', 'error'))
           );
 
--- Стек редактирования
-CREATE    TABLE IF NOT EXISTS branch_edit_stack (
-          branch_id BIGINT REFERENCES branch (id) ON DELETE SET NULL, -- Ветка
-          commit TEXT, -- Коммит
-          
-          data JSONB, -- Данные
-          created_time TIMESTAMP, -- Время создания
-          started_time TIMESTAMP, -- Время начала выполнения
-          finished_time TIMESTAMP, -- Время завершения
-          status TEXT NOT NULL DEFAULT 'new' -- Статус задачи
-          CHECK (status IN ('new', 'queued', 'running', 'success', 'error'))
-          );
-
 -- Сообщения
 CREATE    TABLE IF NOT EXISTS message (
           author_id BIGINT REFERENCES member (id) ON DELETE SET NULL, -- Автор
