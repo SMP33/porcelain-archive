@@ -3,7 +3,12 @@
     <AppToolbar />
     <v-main>
       <v-container>
-        <v-card v-if="!loading && document">
+        <v-tabs v-if="!loading && document && hasRole('moderator')" v-model="activeTab" class="mb-4">
+          <v-tab value="document">Документ</v-tab>
+          <v-tab value="pages">Страницы документа</v-tab>
+        </v-tabs>
+
+        <v-card v-if="!loading && document && (!hasRole('moderator') || activeTab === 'document')">
           <v-card-title>
             {{ document.name }}
           </v-card-title>
@@ -31,7 +36,35 @@
           <v-alert v-if="editError" type="error" density="compact">{{ editError }}</v-alert>
         </v-card>
 
-        <v-card v-if="!loading && document && masterBranchId" class="mt-4">
+        <v-card v-if="!loading && document && hasRole('moderator') && activeTab === 'document'" class="mt-4">
+          <v-card-title class="text-subtitle-1">Наборы изменений</v-card-title>
+          <v-card-text>
+            <v-data-table-server
+              v-model:items-per-page="branchesItemsPerPage"
+              :headers="branchesHeaders"
+              :items-length="branchesTotal"
+              :items="branchesItems"
+              :loading="branchesLoading"
+              :items-per-page-options="[
+                { value: 25, title: '25' },
+                { value: 50, title: '50' },
+                { value: 100, title: '100' },
+              ]"
+              class="elevation-1"
+              item-value="id"
+              @update:options="loadBranches"
+              @click:row="openBranch"
+            >
+              <template v-slot:item.status="{ item }">
+                <v-chip :color="branchStatusColors[item.status] || 'grey'" size="small">
+                  {{ branchStatusLabels[item.status] || item.status }}
+                </v-chip>
+              </template>
+            </v-data-table-server>
+          </v-card-text>
+        </v-card>
+
+        <v-card v-if="!loading && document && masterBranchId && (!hasRole('moderator') || activeTab === 'pages')" class="mt-4">
           <v-card-title class="text-subtitle-1">Страницы</v-card-title>
           <v-card-text>
             <v-progress-circular v-if="galleryLoading" indeterminate size="20"></v-progress-circular>
@@ -82,10 +115,39 @@ const editError = ref('')
 
 const visibilityLoading = ref(false)
 
+const activeTab = ref('document')
+
 const masterBranchId = ref(null)
 const galleryPageCount = ref(0)
 const galleryLoading = ref(true)
 const galleryRef = ref(null)
+
+const branchStatusLabels = {
+  in_work: 'В работе',
+  in_review: 'Проверяется',
+  in_accept: 'Завершение правок',
+  accepted: 'Принято',
+  rejected: 'Отклонено',
+}
+const branchStatusColors = {
+  in_work: 'blue',
+  in_review: '#b39ddb',
+  in_accept: 'teal',
+  accepted: 'green',
+  rejected: 'red',
+}
+
+const branchesItemsPerPage = ref(25)
+const branchesHeaders = ref([
+  { title: 'ID', align: 'start', sortable: false, key: 'id' },
+  { title: 'Автор', key: 'author_name', align: 'end' },
+  { title: 'Дата создания', key: 'created_at', align: 'end' },
+  { title: 'Дата последнего изменения', key: 'last_change_at', align: 'end' },
+  { title: 'Статус', key: 'status', align: 'end', sortable: false },
+])
+const branchesItems = ref([])
+const branchesLoading = ref(true)
+const branchesTotal = ref(0)
 
 const loadDocument = async (id) => {
   try {
@@ -121,6 +183,26 @@ const loadGallery = async () => {
   } finally {
     galleryLoading.value = false
   }
+}
+
+const loadBranches = async ({ page, itemsPerPage }) => {
+  branchesLoading.value = true
+  try {
+    const offset = (page - 1) * itemsPerPage
+    const response = await http.get(`/api/documents/${document.value.id}/branches`, {
+      params: { offset, limit: itemsPerPage },
+    })
+    branchesItems.value = response.data.items
+    branchesTotal.value = response.data.total
+  } catch (err) {
+    console.error('Ошибка при загрузке наборов изменений документа:', err)
+  } finally {
+    branchesLoading.value = false
+  }
+}
+
+const openBranch = (event, { item }) => {
+  router.push(`/edit/${item.id}`)
 }
 
 const handleToggleVisibility = async (isVisible) => {

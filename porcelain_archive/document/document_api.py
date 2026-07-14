@@ -398,6 +398,27 @@ async def get_master_branch_id(
     return {"branch_id": branch_id}
 
 
+@router.get("/{document_id}/branches")
+async def read_document_branches(
+    document_id: int,
+    token: Annotated[str, Depends(oauth2_scheme)],
+    offset: int = 0,
+    limit: int = 25,
+) -> Dict[str, Any]:
+    """
+    Возвращает список наборов изменений конкретного документа. Требует роли moderator+.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not role_at_least(user.get("role"), "moderator"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра наборов изменений документа")
+
+    branches = await document_service.get_branches_by_document_paginated(document_id, offset=offset, limit=limit)
+    total = await document_service.get_branch_count_by_document(document_id)
+    return {"items": branches, "total": total}
+
+
 @router.get("/branches/{branch_id}/pages/{page_index}/image")
 async def get_branch_page_image(
     branch_id: int,

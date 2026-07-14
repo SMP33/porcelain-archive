@@ -562,6 +562,47 @@ class DocumentService:
 
         return {}
 
+    async def get_branch_count_by_document(self, document_id: int) -> int:
+        """
+        Возвращает количество наборов изменений документа (кроме master).
+        """
+        rows = await db.execute_read(
+            "SELECT COUNT(*) FROM branch WHERE document_id = %s AND name != 'master'",
+            (document_id,),
+        )
+        return rows[0][0]
+
+    async def get_branches_by_document_paginated(
+        self, document_id: int, offset: int = 0, limit: int = 25
+    ) -> List[Dict[str, Any]]:
+        """
+        Возвращает срез списка наборов изменений документа (кроме master), от новых к старым.
+        """
+        rows = await db.execute_read(
+            """
+            SELECT b.id, b.document_id, d.name, b.author_id, a.display_name, b.created_time, b.last_change_time, b.status
+            FROM branch b
+            JOIN document d ON d.id = b.document_id
+            LEFT JOIN member a ON a.id = b.author_id
+            WHERE b.document_id = %s AND b.name != 'master'
+            ORDER BY b.id DESC LIMIT %s OFFSET %s
+            """,
+            (document_id, limit, offset),
+        )
+        return [
+            {
+                "id": row[0],
+                "document_id": row[1],
+                "document_name": row[2],
+                "author_id": row[3],
+                "author_name": row[4],
+                "created_at": row[5],
+                "last_change_at": row[6],
+                "status": row[7],
+            }
+            for row in rows
+        ]
+
     async def get_master_branch_id(self, document_id: int) -> Optional[int]:
         """
         Возвращает id основной (master) ветки документа.
