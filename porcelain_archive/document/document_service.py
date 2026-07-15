@@ -227,6 +227,22 @@ class DocumentService:
         role = await db.get_user_role(user_id)
         return role_at_least(role, "moderator")
 
+    async def is_branch_editable(self, user_id: Optional[int], branch_id: int) -> bool:
+        """
+        Проверяет, можно ли сейчас вносить изменения в ветку: помимо прав
+        (is_edit_available) ветка должна быть в статусе in_work - во время
+        проверки (in_review) и после (in_accept/accepted/rejected) редактирование
+        запрещено, хотя просмотр (is_branch_viewable) остаётся доступен.
+        """
+        if not await self.is_edit_available(user_id, branch_id):
+            return False
+
+        rows = await db.execute_read("SELECT status FROM branch WHERE id = %s", (branch_id,))
+        if not rows:
+            return False
+
+        return rows[0][0] == "in_work"
+
     async def is_branch_list_available(self, user_id: Optional[int]) -> bool:
         """
         Проверяет, доступен ли список наборов изменений указанному пользователю.

@@ -23,7 +23,7 @@
     </v-list>
 
     <template v-slot:append>
-      <div class="app-sidebar-foot tw:px-2 tw:py-3">
+      <div class="app-sidebar-foot tw:px-2 tw:pt-3 tw:pb-6">
         <div v-if="user" class="tw:px-3 tw:pb-2 tw:text-xs tw:truncate" style="color: rgba(255,255,255,0.45);">
           {{ user.display_name || user.username }}
         </div>
@@ -36,16 +36,10 @@
             <v-list-item title="Список задач" to="/tasks"></v-list-item>
             <v-list-item title="Сменить пароль" @click="showResetPasswordDialog = true"></v-list-item>
             <v-list-item title="Изменить ФИО" @click="showSetDisplayNameDialog = true"></v-list-item>
+            <v-divider class="tw:my-1"></v-divider>
+            <v-list-item prepend-icon="mdi-logout" title="Выйти" @click="handleLogout"></v-list-item>
           </v-list>
         </v-menu>
-
-        <v-list-item
-          v-if="user"
-          prepend-icon="mdi-logout"
-          title="Выйти"
-          class="app-sidebar-link"
-          @click="handleLogout"
-        ></v-list-item>
         <v-list-item
           v-else
           prepend-icon="mdi-login"

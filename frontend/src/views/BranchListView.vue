@@ -1,7 +1,7 @@
 <template>
-  <v-layout>
+  <v-layout full-height>
     <AppToolbar />
-    <v-main>
+    <v-main scrollable>
       <v-container>
         <v-card>
           <v-card-title>Наборы изменений</v-card-title>

@@ -1,7 +1,7 @@
 <template>
-  <v-layout>
+  <v-layout full-height>
     <AppToolbar />
-    <v-main>
+    <v-main scrollable>
       <v-container>
         <v-tabs v-if="!loading && document && hasRole('moderator')" v-model="activeTab" class="mb-4">
           <v-tab value="document">Документ</v-tab>

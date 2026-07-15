@@ -49,7 +49,7 @@
           </v-row>
         </div>
 
-        <div class="page-thumb-strip">
+        <div class="page-thumb-strip" @wheel="onThumbStripWheel">
           <div
             v-for="pos in pageCount"
             :key="pos"
@@ -103,6 +103,12 @@ const hoveredSpanIndex = ref(null)
 const hasPrev = computed(() => currentPos.value > 1)
 const hasNext = computed(() => currentPos.value < props.pageCount)
 const showTextColumn = computed(() => textLoading.value || spans.value.length > 0)
+
+// Переводит вертикальную прокрутку колесом мыши в горизонтальную прокрутку ленты миниатюр.
+const onThumbStripWheel = (event) => {
+  event.preventDefault()
+  event.currentTarget.scrollLeft += event.deltaY
+}
 
 const previewImageUrl = (pos) => `/api/documents/branches/${props.branchId}/pages/${pos}/image/preview`
 const fullImageUrl = (pos) => `/api/documents/branches/${props.branchId}/pages/${pos}/image`

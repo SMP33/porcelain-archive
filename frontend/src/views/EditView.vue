@@ -1,7 +1,7 @@
 <template>
-  <v-layout>
+  <v-layout full-height>
     <AppToolbar />
-    <v-main>
+    <v-main scrollable>
       <v-container fluid>
         <v-card v-if="!loading && branch">
           <v-card-title class="d-flex justify-space-between align-center">
@@ -23,7 +23,7 @@
                 <span :style="{ color: statusColors[item.value] || 'grey' }">{{ item.title }}</span>
               </template>
               <template v-slot:item="{ item, props }">
-                <v-list-item v-bind="props" :disabled="item.value === 'accepted'" title="">
+                <v-list-item v-if="item.value !== 'accepted'" v-bind="props" title="">
                   <span :style="{ color: statusColors[item.value] || 'grey' }">{{ item.title }}</span>
                 </v-list-item>
               </template>
@@ -155,21 +155,29 @@
               <v-card-title class="text-subtitle-1">Страницы</v-card-title>
               <v-card-text>
                 <div v-if="!pageCount" class="text-medium-emphasis">Страниц пока нет</div>
-                <v-row v-else dense>
-                  <v-col v-for="pos in pageCount" :key="pos" cols="6" sm="4" md="3" lg="2" class="gallery-thumb-col">
-                    <div v-if="activeInsertGap === 0 && pos === 1" class="insert-gap-marker insert-gap-marker--left"></div>
-                    <v-card
-                      variant="outlined"
-                      class="gallery-thumb"
-                      :class="isPageHighlighted(pos) ? 'gallery-thumb--' + activeHighlightColor : ''"
-                      @click="galleryRef.show(pos)"
+                <div v-else class="pages-scroll-area">
+                  <v-row dense>
+                    <v-col
+                      v-for="pos in pageCount"
+                      :key="pos"
+                      :id="'page-tile-' + pos"
+                      cols="6" sm="4" md="3" lg="2"
+                      class="gallery-thumb-col"
                     >
-                      <v-img :src="galleryRef && galleryRef.previewImageUrl(pos)" height="120" cover></v-img>
-                      <div class="text-caption text-center pa-1">{{ pos }}</div>
-                    </v-card>
-                    <div v-if="activeInsertGap === pos" class="insert-gap-marker insert-gap-marker--right"></div>
-                  </v-col>
-                </v-row>
+                      <div v-if="activeInsertGap === 0 && pos === 1" class="insert-gap-marker insert-gap-marker--left"></div>
+                      <v-card
+                        variant="outlined"
+                        class="gallery-thumb"
+                        :class="isPageHighlighted(pos) ? 'gallery-thumb--' + activeHighlightColor : ''"
+                        @click="galleryRef.show(pos)"
+                      >
+                        <v-img :src="galleryRef && galleryRef.previewImageUrl(pos)" height="120" cover></v-img>
+                        <div class="text-caption text-center pa-1">{{ pos }}</div>
+                      </v-card>
+                      <div v-if="activeInsertGap === pos" class="insert-gap-marker insert-gap-marker--right"></div>
+                    </v-col>
+                  </v-row>
+                </div>
               </v-card-text>
             </v-card>
           </v-col>
@@ -197,7 +205,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import http from '../api/http'
 import { useAuth } from '../composables/useAuth'
@@ -246,7 +254,7 @@ watch(activeView, (value) => {
   localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, value)
 })
 
-const LOCKED_STATUSES = ['accepted', 'rejected', 'in_accept']
+const LOCKED_STATUSES = ['in_review', 'accepted', 'rejected', 'in_accept']
 
 const statusLoading = ref(false)
 const statusActionLoading = ref(false)
@@ -286,6 +294,27 @@ const isPageHighlighted = (pos) => {
 const activeInsertGap = computed(() => (
   activeView.value === 'add' ? addPagesRef.value?.insertGapPosition ?? null : null
 ))
+
+// Страница, к которой нужно проскроллить плитки при изменении полей активной вкладки задачи.
+// Для "Удалить страницы"/"Убрать текст" зависит от того, какое поле в фокусе
+// (начало или конец диапазона) - см. scrollTargetPos в соответствующих панелях.
+const scrollTargetPos = computed(() => {
+  if (activeView.value === 'add') {
+    const gap = activeInsertGap.value
+    return gap == null ? null : Math.max(gap, 1)
+  }
+  if (activeView.value === 'remove') return removePagesRef.value?.scrollTargetPos ?? activeHighlightRange.value?.start ?? null
+  if (activeView.value === 'reset_text') return resetTextRef.value?.scrollTargetPos ?? activeHighlightRange.value?.start ?? null
+  return activeHighlightRange.value?.start ?? null
+})
+
+watch(scrollTargetPos, (pos) => {
+  if (pos == null) return
+  nextTick(() => {
+    const el = window.document.getElementById('page-tile-' + pos)
+    if (el) el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  })
+})
 
 const isAuthor = computed(() => !!(user.value && branch.value && user.value.id === branch.value.authorId))
 const isLocked = computed(() => !!(branch.value && LOCKED_STATUSES.includes(branch.value.status)))
@@ -446,6 +475,24 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.pages-scroll-area {
+  max-height: 660px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(128, 128, 128, 0.3) transparent;
+}
+.pages-scroll-area::-webkit-scrollbar {
+  width: 3px;
+}
+.pages-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+.pages-scroll-area::-webkit-scrollbar-thumb {
+  background-color: rgba(128, 128, 128, 0.3);
+  border-radius: 2px;
+}
 .gallery-thumb {
   cursor: pointer;
   transition: border-color .15s, background-color .15s;

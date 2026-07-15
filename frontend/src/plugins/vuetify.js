@@ -11,8 +11,8 @@ const archiveTheme = {
   colors: {
     background: '#f6f1ea',
     surface: '#FFFFFF',
-    primary: '#dc2626',
-    'primary-darken-1': '#b91c1c',
+    primary: '#8c1b1b',
+    'primary-darken-1': '#721616',
     secondary: '#1f1f1f',
     'secondary-darken-1': '#080808',
     error: '#dc2626',

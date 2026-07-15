@@ -9,6 +9,7 @@
             label="Со страницы"
             :min="1"
             :max="pageCount"
+            @focus="focusedField = 'start'"
           ></PageNumberField>
         </v-col>
         <v-col cols="6">
@@ -17,6 +18,7 @@
             label="По страницу"
             :min="resetTextStart || 1"
             :max="pageCount"
+            @focus="focusedField = 'end'"
           ></PageNumberField>
         </v-col>
       </v-row>
@@ -37,7 +39,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import http from '../../api/http'
 import PageNumberField from '../PageNumberField.vue'
 
@@ -48,16 +50,12 @@ const props = defineProps({
 
 const emit = defineEmits(['submitted'])
 
-const resetTextStart = ref(props.pageCount ? 1 : 0)
-const resetTextEnd = ref(props.pageCount)
+const resetTextStart = ref(null)
+const resetTextEnd = ref(null)
 const resettingText = ref(false)
 const resetTextError = ref('')
 const resetTextSuccess = ref(false)
-
-watch(() => props.pageCount, (count) => {
-  resetTextStart.value = count ? 1 : 0
-  resetTextEnd.value = count
-}, { immediate: true })
+const focusedField = ref(null)
 
 const canResetText = computed(() => {
   if (!props.pageCount) return false
@@ -68,12 +66,25 @@ const canResetText = computed(() => {
 })
 
 // Диапазон страниц, у которых будет убран текст - используется EditView для подсветки плиток.
+// Подсвечивается сразу по мере ввода, не дожидаясь заполнения обоих полей -
+// незаполненное поле считается равным заполненному.
 const highlightRange = computed(() => {
-  if (!canResetText.value) return null
-  return { start: resetTextStart.value, end: resetTextEnd.value }
+  const start = Number.isInteger(resetTextStart.value) ? resetTextStart.value : null
+  const end = Number.isInteger(resetTextEnd.value) ? resetTextEnd.value : null
+  if (start == null && end == null) return null
+  const rangeStart = start ?? end
+  const rangeEnd = end ?? start
+  return { start: Math.min(rangeStart, rangeEnd), end: Math.max(rangeStart, rangeEnd) }
 })
 
-defineExpose({ highlightRange })
+// Страница, которую нужно показать в области плиток - зависит от того, какое
+// поле сейчас в фокусе (начало или конец диапазона).
+const scrollTargetPos = computed(() => {
+  const pos = focusedField.value === 'start' ? resetTextStart.value : focusedField.value === 'end' ? resetTextEnd.value : null
+  return Number.isInteger(pos) ? pos : null
+})
+
+defineExpose({ highlightRange, scrollTargetPos })
 
 const handleResetText = async () => {
   resettingText.value = true

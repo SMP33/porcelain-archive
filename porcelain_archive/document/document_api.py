@@ -252,8 +252,8 @@ async def add_pages(
     user = await user_service.get_user_by_token(token)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
-    if not await document_service.is_edit_available(user["id"], branch_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для редактирования ветки")
+    if not await document_service.is_branch_editable(user["id"], branch_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Редактирование ветки недоступно")
 
     try:
         return await document_service.add_pages(branch_id=branch_id, files=files, position=position, user_id=user["id"])
@@ -276,8 +276,8 @@ async def remove_pages(
     user = await user_service.get_user_by_token(token)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
-    if not await document_service.is_edit_available(user["id"], branch_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для редактирования ветки")
+    if not await document_service.is_branch_editable(user["id"], branch_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Редактирование ветки недоступно")
 
     try:
         return await document_service.remove_pages(branch_id=branch_id, start=payload.start, end=payload.end, user_id=user["id"])
@@ -301,8 +301,8 @@ async def set_text(
     user = await user_service.get_user_by_token(token)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
-    if not await document_service.is_edit_available(user["id"], branch_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для редактирования ветки")
+    if not await document_service.is_branch_editable(user["id"], branch_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Редактирование ветки недоступно")
 
     try:
         return await document_service.set_text(branch_id=branch_id, file=file, position=position, user_id=user["id"])
@@ -326,8 +326,8 @@ async def reset_text(
     user = await user_service.get_user_by_token(token)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
-    if not await document_service.is_edit_available(user["id"], branch_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для редактирования ветки")
+    if not await document_service.is_branch_editable(user["id"], branch_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Редактирование ветки недоступно")
 
     try:
         return await document_service.reset_text(branch_id=branch_id, start=payload.start, end=payload.end, user_id=user["id"])

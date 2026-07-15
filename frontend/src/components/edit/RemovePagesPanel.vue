@@ -9,6 +9,7 @@
             label="Со страницы"
             :min="1"
             :max="pageCount"
+            @focus="focusedField = 'start'"
           ></PageNumberField>
         </v-col>
         <v-col cols="6">
@@ -17,6 +18,7 @@
             label="По страницу"
             :min="removeStart || 1"
             :max="pageCount"
+            @focus="focusedField = 'end'"
           ></PageNumberField>
         </v-col>
       </v-row>
@@ -53,6 +55,7 @@ const removeEnd = ref(null)
 const removingPages = ref(false)
 const removeError = ref('')
 const removeSuccess = ref(false)
+const focusedField = ref(null)
 
 const canRemovePages = computed(() => {
   if (!props.pageCount) return false
@@ -63,12 +66,25 @@ const canRemovePages = computed(() => {
 })
 
 // Диапазон удаляемых страниц - используется EditView для подсветки плиток.
+// Подсвечивается сразу по мере ввода, не дожидаясь заполнения обоих полей -
+// незаполненное поле считается равным заполненному.
 const highlightRange = computed(() => {
-  if (!canRemovePages.value) return null
-  return { start: removeStart.value, end: removeEnd.value }
+  const start = Number.isInteger(removeStart.value) ? removeStart.value : null
+  const end = Number.isInteger(removeEnd.value) ? removeEnd.value : null
+  if (start == null && end == null) return null
+  const rangeStart = start ?? end
+  const rangeEnd = end ?? start
+  return { start: Math.min(rangeStart, rangeEnd), end: Math.max(rangeStart, rangeEnd) }
 })
 
-defineExpose({ highlightRange })
+// Страница, которую нужно показать в области плиток - зависит от того, какое
+// поле сейчас в фокусе (начало или конец диапазона).
+const scrollTargetPos = computed(() => {
+  const pos = focusedField.value === 'start' ? removeStart.value : focusedField.value === 'end' ? removeEnd.value : null
+  return Number.isInteger(pos) ? pos : null
+})
+
+defineExpose({ highlightRange, scrollTargetPos })
 
 const handleRemovePages = async () => {
   removingPages.value = true

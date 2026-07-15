@@ -1,7 +1,7 @@
 <template>
-  <v-layout>
+  <v-layout full-height>
     <AppToolbar />
-    <v-main>
+    <v-main scrollable>
       <v-container fluid>
         <v-row>
           <v-col :cols="selectedTask ? 4 : 12">

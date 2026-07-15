@@ -9,7 +9,7 @@
     :max="max"
     class="page-number-field"
     @wheel="onWheel"
-    @focus="focused = true"
+    @focus="handleFocus"
     @blur="focused = false"
   ></v-text-field>
 </template>
@@ -24,9 +24,14 @@ const props = defineProps({
   max: { type: [Number, String], default: undefined },
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'focus'])
 
 const focused = ref(false)
+
+const handleFocus = () => {
+  focused.value = true
+  emit('focus')
+}
 
 const onUpdate = (val) => {
   emit('update:modelValue', val === '' ? '' : Number(val))
