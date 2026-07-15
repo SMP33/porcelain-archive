@@ -18,21 +18,10 @@ LOG_FILE="$RUN_DIR/shared_dev.log"
 
 mkdir -p "$RUN_DIR"
 
-running_pids() {
-    # Паттерн включает "--port 80", чтобы не задеть процесс, запущенный
-    # обычным start.sh на порту 8000 (и наоборот).
-    pgrep -f "porcelain_archive --host $HOST --port $PORT" || true
-}
-
-EXISTING_PIDS="$(running_pids)"
-if [ -n "$EXISTING_PIDS" ]; then
-    echo "Сервер уже запущен на $HOST:$PORT (PID: $EXISTING_PIDS), перезапускаю..."
-    kill $EXISTING_PIDS 2>/dev/null || true
+if pgrep -f "porcelain_archive" > /dev/null 2>&1; then
+    echo "Найдены запущенные процессы porcelain_archive, останавливаю..."
+    pkill -9 -f "porcelain_archive" || true
     sleep 1
-    STILL_ALIVE="$(running_pids)"
-    if [ -n "$STILL_ALIVE" ]; then
-        kill -9 $STILL_ALIVE 2>/dev/null || true
-    fi
 fi
 
 echo "Сборка frontend..."
@@ -44,7 +33,7 @@ echo "Запуск сервера на $HOST:$PORT..."
 disown
 
 sleep 1
-NEW_PIDS="$(running_pids)"
+NEW_PIDS="$(pgrep -f "porcelain_archive" || true)"
 if [ -n "$NEW_PIDS" ]; then
     echo "Сервер запущен, PID: $NEW_PIDS. Лог: $LOG_FILE"
 else

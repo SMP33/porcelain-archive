@@ -1,34 +1,23 @@
 #!/usr/bin/env bash
-# Остановка сервера, запущенного через start.sh.
-# Для сервера, запущенного через start_shared_dev.sh, используйте его - паттерн
-# поиска процесса здесь намеренно не матчит порт 80.
+# Остановка сервера (start.sh или start_shared_dev.sh) и всех его процессов,
+# включая дочерний task_manager - жёстко убивает всё с "porcelain_archive" в имени.
 
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-running_pids() {
-    pgrep -f -- '-m porcelain_archive$' || true
-}
-
-PIDS="$(running_pids)"
-
-if [ -z "$PIDS" ]; then
+if ! pgrep -f "porcelain_archive" > /dev/null 2>&1; then
     echo "Сервер не запущен."
     exit 0
 fi
 
-echo "Останавливаю сервер (PID: $PIDS)..."
-kill $PIDS 2>/dev/null || true
+echo "Останавливаю все процессы porcelain_archive..."
+pkill -9 -f "porcelain_archive" || true
 
-for _ in $(seq 1 20); do
-    STILL_ALIVE="$(running_pids)"
-    if [ -z "$STILL_ALIVE" ]; then
-        echo "Сервер остановлен."
-        exit 0
-    fi
-    sleep 0.5
-done
+sleep 0.5
+if pgrep -f "porcelain_archive" > /dev/null 2>&1; then
+    echo "Не удалось остановить все процессы." >&2
+    exit 1
+fi
 
-echo "Сервер не остановился за 10с, завершаю принудительно (SIGKILL)..."
-kill -9 $(running_pids) 2>/dev/null || true
+echo "Сервер остановлен."

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Пересобирает frontend (npm install + npm run build) и запускает сервер
 # (python -m porcelain_archive) в фоне, вывод дублируется в консоль и в лог-файл.
-# Если сервер уже запущен - перезапускает его.
+# Если сервер (или его дочерний task_manager, оставшийся висеть) уже запущен -
+# останавливает все процессы porcelain_archive и запускает заново.
 #
 # Слушает 127.0.0.1:8000 (значения по умолчанию из porcelain_archive/__main__.py) -
 # рассчитан на работу за reverse proxy (nginx и т.п.). Для временного публичного
@@ -16,21 +17,10 @@ LOG_FILE="$RUN_DIR/server.log"
 
 mkdir -p "$RUN_DIR"
 
-running_pids() {
-    # Паттерн ищет подстроку "-m porcelain_archive" без "--port" - чтобы не
-    # задеть процесс, запущенный start_shared_dev.sh на порту 80 (и наоборот).
-    pgrep -f -- '-m porcelain_archive$' || true
-}
-
-EXISTING_PIDS="$(running_pids)"
-if [ -n "$EXISTING_PIDS" ]; then
-    echo "Сервер уже запущен (PID: $EXISTING_PIDS), перезапускаю..."
-    kill $EXISTING_PIDS 2>/dev/null || true
+if pgrep -f "porcelain_archive" > /dev/null 2>&1; then
+    echo "Найдены запущенные процессы porcelain_archive, останавливаю..."
+    pkill -9 -f "porcelain_archive" || true
     sleep 1
-    STILL_ALIVE="$(running_pids)"
-    if [ -n "$STILL_ALIVE" ]; then
-        kill -9 $STILL_ALIVE 2>/dev/null || true
-    fi
 fi
 
 echo "Сборка frontend..."
@@ -42,7 +32,7 @@ echo "Запуск сервера..."
 disown
 
 sleep 1
-NEW_PIDS="$(running_pids)"
+NEW_PIDS="$(pgrep -f "porcelain_archive" || true)"
 if [ -n "$NEW_PIDS" ]; then
     echo "Сервер запущен, PID: $NEW_PIDS. Лог: $LOG_FILE"
 else
