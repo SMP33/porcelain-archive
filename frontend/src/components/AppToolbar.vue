@@ -23,7 +23,7 @@
     </v-list>
 
     <template v-slot:append>
-      <div class="app-sidebar-foot tw:px-2 tw:pt-3 tw:pb-6">
+      <div class="app-sidebar-foot">
         <div v-if="user" class="tw:px-3 tw:pb-2 tw:text-xs tw:truncate" style="color: rgba(255,255,255,0.45);">
           {{ user.display_name || user.username }}
         </div>

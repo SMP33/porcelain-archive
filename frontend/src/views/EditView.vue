@@ -17,7 +17,7 @@
               hide-details
               style="max-width: 220px"
               :loading="statusLoading"
-              :disabled="isLocked"
+              :disabled="isStatusSelectLocked"
             >
               <template v-slot:selection="{ item }">
                 <span :style="{ color: statusColors[item.value] || 'grey' }">{{ item.title }}</span>
@@ -255,6 +255,10 @@ watch(activeView, (value) => {
 })
 
 const LOCKED_STATUSES = ['in_review', 'accepted', 'rejected', 'in_accept']
+// Статусы, при которых комбобокс смены статуса недоступен даже модератору -
+// в отличие от LOCKED_STATUSES, "in_review" сюда не входит: именно на этой
+// стадии модератору и нужно менять статус (принять/отклонить/вернуть в работу).
+const STATUS_SELECT_LOCKED_STATUSES = ['accepted', 'rejected', 'in_accept']
 
 const statusLoading = ref(false)
 const statusActionLoading = ref(false)
@@ -318,6 +322,7 @@ watch(scrollTargetPos, (pos) => {
 
 const isAuthor = computed(() => !!(user.value && branch.value && user.value.id === branch.value.authorId))
 const isLocked = computed(() => !!(branch.value && LOCKED_STATUSES.includes(branch.value.status)))
+const isStatusSelectLocked = computed(() => !!(branch.value && STATUS_SELECT_LOCKED_STATUSES.includes(branch.value.status)))
 
 watch(isLocked, (locked) => {
   if (locked && activeView.value !== 'view_changes') {

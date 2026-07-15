@@ -1,9 +1,8 @@
 /* Утилиты Tailwind без preflight (сброс стилей уже делает Vuetify) и с префиксом tw:,
    чтобы имена классов не пересекались с утилитами Vuetify (d-flex, justify-center и т.п.) */
-@import "tailwindcss/theme" layer(theme) prefix(tw);
-@import "tailwindcss/utilities" layer(utilities) prefix(tw);
+@import "tailwindcss" prefix(tw);
 
-@theme {
+@theme prefix(tw) {
   --color-clay-50: #fff5f5;
   --color-clay-100: #ffe4e4;
   --color-clay-200: #fecaca;
