@@ -10,7 +10,6 @@ const router = useRouter()
 const PAGE_SIZE = 20
 
 const q = computed(() => route.query.q || '')
-const factoryId = computed(() => parseInt(route.query.factory_id) || 0)
 const docType = computed(() => route.query.doc_type || '')
 const authenticity = computed(() => route.query.authenticity || '')
 const language = computed(() => route.query.language || '')
@@ -27,7 +26,7 @@ const total = ref(0)
 const loading = ref(true)
 
 const facets = ref({
-  factories: [], doc_types: [], authenticities: [], languages: [], keywords: [],
+  doc_types: [], authenticities: [], languages: [], keywords: [],
   year_min: null, year_max: null,
 })
 
@@ -36,7 +35,6 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)
 function activeFilterParams() {
   const params = {}
   if (q.value) params.q = q.value
-  if (factoryId.value) params.factory_id = factoryId.value
   if (docType.value) params.doc_type = docType.value
   if (authenticity.value) params.authenticity = authenticity.value
   if (language.value) params.language = language.value
@@ -74,7 +72,7 @@ function reload() {
 
 onMounted(reload)
 watch(
-  () => [q.value, factoryId.value, docType.value, authenticity.value, language.value, keyword.value, yearFrom.value, yearTo.value, page.value],
+  () => [q.value, docType.value, authenticity.value, language.value, keyword.value, yearFrom.value, yearTo.value, page.value],
   reload
 )
 
@@ -106,7 +104,7 @@ function goToPage(p) {
 }
 
 const hasActiveFilters = computed(
-  () => q.value || factoryId.value || docType.value || authenticity.value || language.value || keyword.value || yearFrom.value || yearTo.value
+  () => q.value || docType.value || authenticity.value || language.value || keyword.value || yearFrom.value || yearTo.value
 )
 </script>
 
@@ -127,10 +125,6 @@ const hasActiveFilters = computed(
         <router-link v-if="q" :to="{ query: withoutKeys(['q']) }"
            class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
           «{{ q }}» <span class="tw:hover:text-clay-900 tw:font-bold tw:leading-none">×</span>
-        </router-link>
-        <router-link v-if="factoryId" :to="{ query: withoutKeys(['factory_id']) }"
-           class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
-          {{ facets.factories.find((f) => f.id === factoryId)?.name }} <span class="tw:hover:text-clay-900 tw:font-bold tw:leading-none">×</span>
         </router-link>
         <router-link v-if="docType" :to="{ query: withoutKeys(['doc_type']) }"
            class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
@@ -177,21 +171,6 @@ const hasActiveFilters = computed(
             Применить
           </button>
         </form>
-      </div>
-
-      <!-- Объект -->
-      <div v-if="facets.factories.length" class="tw:mb-6">
-        <p class="tw:text-xs tw:font-semibold tw:text-gray-400 tw:uppercase tw:tracking-wider tw:mb-2">Объект</p>
-        <ul class="tw:space-y-0.5">
-          <li v-for="f in facets.factories.filter((x) => x.count > 0)" :key="f.id">
-            <router-link :to="{ query: { ...route.query, factory_id: f.id, page: undefined } }"
-               class="tw:flex tw:items-center tw:justify-between tw:px-2 tw:py-1 tw:rounded-lg tw:text-sm tw:transition-colors"
-               :class="factoryId === f.id ? 'tw:bg-clay-100 tw:text-clay-700 tw:font-medium' : 'tw:text-gray-600 tw:hover:bg-gray-100'">
-              <span class="tw:break-words tw:min-w-0">{{ f.name }}</span>
-              <span class="tw:text-xs tw:text-gray-400 tw:shrink-0 tw:ml-1">{{ f.count }}</span>
-            </router-link>
-          </li>
-        </ul>
       </div>
 
       <!-- Тип документа -->
@@ -278,7 +257,6 @@ const hasActiveFilters = computed(
             <p class="tw:text-sm tw:font-medium tw:text-ink-900 tw:group-hover:text-clay-500 tw:transition-colors tw:leading-snug tw:truncate"
                v-html="doc.title_hl || doc.title"></p>
             <div class="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-0.5 tw:mt-0.5">
-              <span v-if="doc.factory_name" class="tw:text-xs tw:text-gray-400">{{ doc.factory_name }}</span>
               <span v-if="doc.doc_type" class="tw:text-xs tw:text-gray-400">{{ doc.doc_type }}</span>
               <span v-if="doc.doc_date" class="tw:text-xs tw:text-gray-400">{{ doc.doc_date }}</span>
             </div>

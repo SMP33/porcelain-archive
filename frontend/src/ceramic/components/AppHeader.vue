@@ -25,7 +25,7 @@ function isActive(path) {
 
       <!-- Desktop nav -->
       <nav class="tw:hidden tw:md:flex tw:items-center tw:gap-2">
-        <router-link to="/ceramic/objects" class="skew-btn skew-btn--nav" :class="{ active: isActive('/ceramic/objects') }">Объекты</router-link>
+        <router-link to="/ceramic/materials" class="skew-btn skew-btn--nav" :class="{ active: isActive('/ceramic/materials') }">Материалы</router-link>
         <router-link to="/ceramic/search" class="skew-btn skew-btn--nav" :class="{ active: isActive('/ceramic/search') }">Поиск по материалам</router-link>
         <router-link to="/ceramic/feedback" class="skew-btn skew-btn--nav" :class="{ active: isActive('/ceramic/feedback') }">Обратная связь</router-link>
       </nav>
@@ -43,7 +43,7 @@ function isActive(path) {
     <!-- Mobile dropdown -->
     <div v-show="isOpen" class="tw:md:hidden tw:border-t tw:border-gray-200 tw:bg-white">
       <nav class="tw:max-w-6xl tw:mx-auto tw:px-6 tw:py-3 tw:flex tw:flex-col tw:gap-2 tw:text-sm">
-        <router-link to="/ceramic/objects" class="skew-btn skew-btn--nav tw:self-start">Объекты</router-link>
+        <router-link to="/ceramic/materials" class="skew-btn skew-btn--nav tw:self-start">Материалы</router-link>
         <router-link to="/ceramic/search" class="skew-btn skew-btn--nav tw:self-start">Поиск по материалам</router-link>
         <router-link to="/ceramic/feedback" class="skew-btn skew-btn--nav tw:self-start">Обратная связь</router-link>
       </nav>

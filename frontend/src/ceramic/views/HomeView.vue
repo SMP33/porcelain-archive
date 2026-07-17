@@ -5,7 +5,7 @@ import { useHomeAnimations } from '../composables/useHomeAnimations'
 import teapotIcon from '../assets/img/teapot-icon.png'
 import cupSaucer from '../assets/img/cup-saucer.png'
 
-const stats = ref({ factory_count: 0, doc_count: 0, page_count: 0 })
+const stats = ref({ doc_count: 0, page_count: 0 })
 
 async function loadStats() {
   try {
@@ -329,13 +329,6 @@ const teamMembers = [
           </div>
 
           <div class="tw:flex tw:flex-col tw:space-y-10">
-            <router-link to="/ceramic/objects"
-               class="tw:block tw:border tw:border-gray-200 tw:rounded-lg tw:px-4 tw:py-3 tw:w-2/3 tw:hover:border-gray-300 tw:transition-colors tw:group">
-              <div class="tw:text-sm tw:font-semibold tw:text-ink-900 tw:mb-0.5 tw:group-hover:text-clay-500 tw:transition-colors">
-                Каталог объектов →
-              </div>
-              <p class="tw:text-xs tw:text-gray-400">{{ stats.factory_count }} заводов и предприятий</p>
-            </router-link>
             <router-link to="/ceramic/search"
                class="tw:block tw:border tw:border-gray-200 tw:rounded-lg tw:px-4 tw:py-3 tw:w-2/3 tw:hover:border-gray-300 tw:transition-colors tw:group">
               <div class="tw:text-sm tw:font-semibold tw:text-ink-900 tw:mb-0.5 tw:group-hover:text-clay-500 tw:transition-colors">

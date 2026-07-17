@@ -4,9 +4,12 @@ import re
 import time
 from collections import defaultdict
 
-from porcelain_archive.ceramic.database import db
+from porcelain_archive.database import db as porcelain_db
 
-_EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+# Обратная связь хранится в общей с porcelain_archive таблице message
+# (receiver_type='feedback'). Отметка "важное" - отдельная таблица
+# important_feedback (наличие строки = отмечено важным).
+_FEEDBACK_RECEIVER_TYPE = "feedback"
 
 # In-memory rate limiter: максимум 3 сообщения / 10 минут на IP.
 # Для многопроцессного деплоя нужен общий стор.
@@ -25,56 +28,107 @@ def _feedback_allowed(ip: str) -> bool:
     return True
 
 
+def _compose_text(name: str, email: str, message: str) -> str:
+    """
+    message.text не имеет отдельных колонок под имя/email отправителя (в
+    отличие от старой ceramic-таблицы feedback) - отправитель обычно аноним
+    (author_id NULL), поэтому имя/email сохраняются первой строкой текста.
+    См. _parse_text - обратное разбирание при чтении.
+    """
+    header_parts = []
+    name = name.strip()
+    email = email.strip()
+    if name:
+        header_parts.append(name)
+    if email:
+        header_parts.append(f"<{email}>")
+    header = " ".join(header_parts)
+    return f"{header}\n\n{message}" if header else message
+
+
+def _parse_text(text: str) -> tuple[str | None, str | None, str]:
+    """Обратная операция к _compose_text. При несовпадении формата (например,
+    сообщение создано не через _compose_text) возвращает весь текст как есть."""
+    if "\n\n" not in text:
+        return None, None, text
+    header, _, body = text.partition("\n\n")
+    match = re.match(r"^(.*?)(?:\s*<(.+)>)?$", header)
+    if not match:
+        return None, None, text
+    name = (match.group(1) or "").strip() or None
+    email = match.group(2)
+    if name is None and email is None:
+        return None, None, text
+    return name, email, body
+
+
 class FeedbackService:
-    async def submit(self, name: str, email: str, message: str, ip: str) -> None:
+    async def submit(self, name: str, email: str, message: str, ip: str, author_id: int | None) -> None:
         if not _feedback_allowed(ip):
             raise ValueError("rate_limited")
-        await db.execute_write(
-            "INSERT INTO feedback (name, email, message) VALUES (%s, %s, %s)",
-            (name.strip() or None, email.strip() or None, message.strip()),
+        text = _compose_text(name, email, message.strip())
+        await porcelain_db.execute_write(
+            "INSERT INTO message (author_id, receiver_type, text, is_read, create_time) VALUES (%s, %s, %s, 0, now())",
+            (author_id, _FEEDBACK_RECEIVER_TYPE, text),
         )
 
     async def list_messages(self, offset: int, limit: int) -> dict:
-        total_row = await db.execute_read_one("SELECT COUNT(*) AS cnt FROM feedback")
-        items = await db.execute_read(
-            "SELECT * FROM feedback ORDER BY is_read ASC, created_at DESC LIMIT %s OFFSET %s",
-            (limit, offset),
+        total_rows = await porcelain_db.execute_read(
+            "SELECT COUNT(*) FROM message WHERE receiver_type = %s", (_FEEDBACK_RECEIVER_TYPE,)
         )
-        return {"items": items, "total": total_row["cnt"] if total_row else 0}
+        total = total_rows[0][0] if total_rows else 0
+
+        rows = await porcelain_db.execute_read(
+            """
+            SELECT m.id, m.text, m.is_read, m.create_time, m.author_id,
+                   (imp.message_id IS NOT NULL) AS is_important
+            FROM message m
+            LEFT JOIN important_feedback imp ON imp.message_id = m.id
+            WHERE m.receiver_type = %s
+            ORDER BY m.is_read ASC, m.create_time DESC
+            LIMIT %s OFFSET %s
+            """,
+            (_FEEDBACK_RECEIVER_TYPE, limit, offset),
+        )
+
+        items = []
+        for msg_id, text, is_read, create_time, author_id, is_important in rows:
+            name, email, body = _parse_text(text or "")
+            items.append({
+                "id": msg_id,
+                "name": name,
+                "email": email,
+                "message": body,
+                "is_read": bool(is_read),
+                "is_important": bool(is_important),
+                "created_at": create_time,
+                "author_id": author_id,
+            })
+        return {"items": items, "total": total}
 
     async def update_status(self, message_id: int, is_read: bool | None, is_important: bool | None) -> None:
         if is_read is not None:
-            await db.execute_write(
-                "UPDATE feedback SET is_read = %s WHERE id = %s", (is_read, message_id)
+            await porcelain_db.execute_write(
+                "UPDATE message SET is_read = %s WHERE id = %s AND receiver_type = %s",
+                (1 if is_read else 0, message_id, _FEEDBACK_RECEIVER_TYPE),
             )
         if is_important is not None:
-            await db.execute_write(
-                "UPDATE feedback SET is_important = %s WHERE id = %s", (is_important, message_id)
-            )
+            if is_important:
+                await porcelain_db.execute_write(
+                    "INSERT INTO important_feedback (message_id) VALUES (%s) ON CONFLICT DO NOTHING",
+                    (message_id,),
+                )
+            else:
+                await porcelain_db.execute_write(
+                    "DELETE FROM important_feedback WHERE message_id = %s", (message_id,)
+                )
 
     async def unread_count(self) -> int:
-        row = await db.execute_read_one("SELECT COUNT(*) AS cnt FROM feedback WHERE is_read = false")
-        return row["cnt"] if row else 0
-
-    async def subscribe(self, email: str) -> None:
-        email = email.strip().lower()
-        if not _EMAIL_RE.match(email):
-            raise ValueError("invalid_email")
-        await db.execute_write(
-            "INSERT INTO subscribers (email) VALUES (%s) ON CONFLICT (lower(email)) DO NOTHING",
-            (email,),
+        rows = await porcelain_db.execute_read(
+            "SELECT COUNT(*) FROM message WHERE receiver_type = %s AND is_read = 0",
+            (_FEEDBACK_RECEIVER_TYPE,),
         )
-
-    async def list_subscribers(self, offset: int, limit: int) -> dict:
-        total_row = await db.execute_read_one("SELECT COUNT(*) AS cnt FROM subscribers")
-        items = await db.execute_read(
-            "SELECT * FROM subscribers ORDER BY created_at DESC LIMIT %s OFFSET %s",
-            (limit, offset),
-        )
-        return {"items": items, "total": total_row["cnt"] if total_row else 0}
-
-    async def delete_subscriber(self, subscriber_id: int) -> None:
-        await db.execute_write("DELETE FROM subscribers WHERE id = %s", (subscriber_id,))
+        return rows[0][0] if rows else 0
 
 
 feedback_service = FeedbackService()

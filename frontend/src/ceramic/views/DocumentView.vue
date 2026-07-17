@@ -11,11 +11,47 @@ const doc = ref(null)
 const pages = ref([])
 const related = ref([])
 
+// Документы теперь общие с porcelain_archive (document/branch/page) - список
+// страниц и картинки берутся из его API (master-ветка документа). Поля вроде
+// doc_type/authenticity/geography/keywords/факт привязки к заводу - заглушка
+// (null/пусто): в porcelain_archive.document таких полей нет. Текст страниц
+// (расшифровка) тоже не подгружается - porcelain отдаёт текст постранично
+// блоками для подсветки на картинке, а не готовой строкой на весь документ.
 async function load() {
-  const { data } = await http.get(`/api/ceramic/documents/${props.id}`)
-  doc.value = data
-  pages.value = data.pages || []
-  related.value = data.related || []
+  const { data: docData } = await http.get(`/api/documents/${props.id}`)
+  const { data: branchData } = await http.get(`/api/documents/${props.id}/master_branch_id`)
+  const branchId = branchData.branch_id
+  const { data: countData } = await http.get(`/api/documents/branches/${branchId}/pages/count`)
+  const count = countData.count
+
+  doc.value = {
+    title: docData.name,
+    author: docData.author,
+    page_count: count,
+    doc_type: null,
+    doc_date: null,
+    authenticity: null,
+    language: null,
+    geography: null,
+    source_archive: null,
+    fund: null,
+    inventory_no: null,
+    case_no: null,
+    sheets: null,
+    keywords: null,
+    description: null,
+  }
+
+  pages.value = Array.from({ length: count }, (_, i) => {
+    const pos = i + 1
+    return {
+      page_number: pos,
+      thumb_url: `/api/documents/branches/${branchId}/pages/${pos}/image/preview`,
+      image_url: `/api/documents/branches/${branchId}/pages/${pos}/image`,
+      ocr_text: null,
+    }
+  })
+  related.value = []
 }
 onMounted(load)
 watch(() => props.id, load)
@@ -40,11 +76,7 @@ function copyTranscript(pageNumber, text) {
   <div v-if="doc">
     <div class="tw:border-b tw:border-gray-100">
       <div class="tw:max-w-6xl tw:mx-auto tw:px-4 tw:py-2 tw:text-sm tw:text-gray-500 tw:flex tw:items-center tw:gap-2 tw:flex-wrap">
-        <router-link to="/ceramic/objects" class="tw:hover:text-clay-500 tw:transition-colors">Объекты</router-link>
-        <template v-if="doc.factory_id">
-          <span>›</span>
-          <router-link :to="`/ceramic/object/${doc.factory_id}`" class="tw:hover:text-clay-500 tw:transition-colors">{{ doc.factory_name }}</router-link>
-        </template>
+        <router-link to="/ceramic/materials" class="tw:hover:text-clay-500 tw:transition-colors">Материалы</router-link>
         <span>›</span>
         <span class="tw:text-ink-800">{{ doc.title }}</span>
       </div>
@@ -90,13 +122,6 @@ function copyTranscript(pageNumber, text) {
                 <dd class="tw:text-sm tw:text-ink-800">{{ doc.page_count }}</dd>
               </div>
             </dl>
-
-            <div v-if="doc.factory_name" class="tw:pt-4 tw:border-t tw:border-clay-100">
-              <p class="tw:text-xs tw:text-gray-400 tw:uppercase tw:tracking-wide tw:mb-1">Объект</p>
-              <router-link :to="`/ceramic/object/${doc.factory_id}`" class="tw:text-sm tw:text-clay-500 tw:hover:text-clay-400 tw:transition-colors">
-                {{ doc.factory_name }}
-              </router-link>
-            </div>
 
             <div v-if="doc.source_archive || doc.fund || doc.inventory_no || doc.case_no || doc.sheets"
                  class="tw:pt-4 tw:border-t tw:border-clay-100">

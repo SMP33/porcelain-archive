@@ -3,17 +3,18 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
-from porcelain_archive.ceramic.document import document_service
-from porcelain_archive.ceramic.factory import factory_service
+from porcelain_archive.database import db
 
 router = APIRouter(tags=["site"])
 
 
 @router.get("/api/ceramic/site/stats")
 async def stats():
-    data = await factory_service.stats()
-    data["recent"] = await factory_service.list_recent(3)
-    return data
+    # page_count - заглушка (0): дешёвого агрегата по страницам всех документов нет
+    # (страницы считаются per-branch через meta->>'page_count', см. document_service).
+    rows = await db.execute_read("SELECT COUNT(*) FROM document WHERE is_visible = 1")
+    doc_count = rows[0][0] if rows else 0
+    return {"doc_count": doc_count, "page_count": 0}
 
 
 @router.get("/robots.txt")
@@ -30,14 +31,11 @@ async def robots(request: Request):
 @router.get("/sitemap.xml")
 async def sitemap(request: Request):
     base = str(request.base_url).rstrip("/") + "/ceramic"
-    urls = [base + "/", base + "/objects", base + "/search", base + "/about", base + "/feedback"]
+    urls = [base + "/", base + "/search", base + "/about", base + "/feedback"]
 
-    factories = await factory_service.list_factories(0, 10_000)
-    for f in factories["items"]:
-        urls.append(f"{base}/object/{f['id']}")
-
-    for doc_id in await document_service.sitemap_document_ids():
-        urls.append(f"{base}/document/{doc_id}")
+    doc_rows = await db.execute_read("SELECT id FROM document WHERE is_visible = 1")
+    for row in doc_rows:
+        urls.append(f"{base}/document/{row[0]}")
 
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',

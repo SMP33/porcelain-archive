@@ -33,8 +33,8 @@
 
           <h2 class="tw:font-serif tw:text-xl tw:font-semibold tw:text-ink-900 tw:mt-8 tw:mb-3">Как пользоваться архивом</h2>
           <ul class="tw:list-disc tw:list-inside tw:space-y-2">
-            <li>Перейдите в <router-link to="/ceramic/objects" class="tw:text-clay-500 tw:hover:underline">Объекты</router-link> и выберите нужный</li>
-            <li>На странице объекта просматривайте документы в виде галереи</li>
+            <li>Перейдите в <router-link to="/ceramic/materials" class="tw:text-clay-500 tw:hover:underline">Материалы</router-link> и выберите нужный документ</li>
+            <li>Просматривайте страницы документа в виде галереи</li>
             <li>Используйте <router-link to="/ceramic/search" class="tw:text-clay-500 tw:hover:underline">Поиск</router-link> для поиска по названию, автору или типу документа</li>
             <li>Нажмите на документ, чтобы открыть все его страницы</li>
             <li>Кликните на страницу для просмотра в полном размере</li>

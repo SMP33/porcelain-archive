@@ -41,23 +41,13 @@ async function onLogout() {
 
     <!-- Sidebar -->
     <aside class="tw:w-52 tw:shrink-0 tw:bg-ink-900 tw:text-gray-300 tw:flex tw:flex-col tw:min-h-screen">
-      <router-link :to="hasRole('admin') ? '/ceramic/admin/factories' : '/ceramic/admin/documents/new'"
+      <router-link to="/ceramic/admin/feedback"
                    class="tw:px-5 tw:py-5 tw:border-b tw:border-white/10 tw:hover:opacity-80 tw:transition-opacity">
         <div class="tw:text-white tw:font-semibold tw:text-sm tw:leading-tight">Архив</div>
         <div class="tw:text-gray-500 tw:text-xs tw:mt-0.5">Управление</div>
       </router-link>
       <nav class="tw:flex tw:flex-col tw:py-3 tw:text-sm tw:flex-1">
         <template v-if="hasRole('admin')">
-          <router-link to="/ceramic/admin/factories"
-                       class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
-                       :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-factories') }">
-            🏛 Объекты
-          </router-link>
-          <router-link to="/ceramic/admin/documents"
-                       class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
-                       :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-document') }">
-            📄 Документы
-          </router-link>
           <router-link to="/ceramic/admin/feedback"
                        class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors tw:flex tw:items-center tw:gap-2"
                        :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-feedback') }">
@@ -70,18 +60,6 @@ async function onLogout() {
                        class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
                        :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-users') }">
             👥 Пользователи
-          </router-link>
-          <router-link to="/ceramic/admin/subscribers"
-                       class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
-                       :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-subscribers') }">
-            📬 Подписчики
-          </router-link>
-        </template>
-        <template v-else>
-          <router-link to="/ceramic/admin/documents/new"
-                       class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
-                       :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-document-new') }">
-            📄 Добавить документ
           </router-link>
         </template>
         <div class="tw:mt-auto tw:border-t tw:border-white/10 tw:pt-3">

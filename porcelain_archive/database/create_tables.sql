@@ -6,8 +6,12 @@ CREATE    TABLE IF NOT EXISTS member (
           email TEXT UNIQUE, -- Почтовый адрес
           hash TEXT, -- Хеш сумма пароля
           role TEXT NOT NULL DEFAULT 'user' -- Роль
-          CHECK (role IN ('user', 'moderator', 'admin'))
+          CHECK (role IN ('user', 'moderator', 'admin')),
+          created_time TIMESTAMP -- Время создания учётной записи
           );
+
+-- На случай существующей БД, созданной до появления этого поля.
+ALTER TABLE member ADD COLUMN IF NOT EXISTS created_time TIMESTAMP;
 
 -- Сессии пользователей
 CREATE    TABLE IF NOT EXISTS session (
@@ -67,8 +71,27 @@ CREATE    TABLE IF NOT EXISTS task (
 
 -- Сообщения
 CREATE    TABLE IF NOT EXISTS message (
-          author_id BIGINT REFERENCES member (id) ON DELETE SET NULL, -- Автор
+          id BIGSERIAL PRIMARY KEY, -- Уникальный id
+          author_id BIGINT REFERENCES member (id) ON DELETE SET NULL, -- Автор (NULL - аноним)
           receiver_type TEXT, -- Тип получателя
           receiver_id BIGSERIAL, -- ID получателя
-          text TEXT -- Текст сообщения
+          text TEXT, -- Текст сообщения
+          is_read INTEGER DEFAULT 0, -- Прочитано ли сообщение
+          create_time TIMESTAMP -- Время создания
+          );
+
+-- На случай существующей БД, созданной до появления этих полей.
+ALTER TABLE message ADD COLUMN IF NOT EXISTS id BIGSERIAL;
+ALTER TABLE message ADD COLUMN IF NOT EXISTS is_read INTEGER DEFAULT 0;
+ALTER TABLE message ADD COLUMN IF NOT EXISTS create_time TIMESTAMP;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'message_pkey') THEN
+        ALTER TABLE message ADD PRIMARY KEY (id);
+    END IF;
+END $$;
+
+-- Отметка "важное" для сообщений (например, обратной связи - message.receiver_type = 'feedback').
+-- Присутствие строки = отмечено важным.
+CREATE    TABLE IF NOT EXISTS important_feedback (
+          message_id BIGINT PRIMARY KEY REFERENCES message (id) ON DELETE CASCADE -- Сообщение
           );
