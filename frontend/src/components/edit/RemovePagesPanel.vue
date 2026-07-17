@@ -1,41 +1,37 @@
 <template>
-  <v-card>
-    <v-card-title class="text-subtitle-1">Удалить страницы</v-card-title>
-    <v-card-text>
-      <v-row dense>
-        <v-col cols="6">
-          <PageNumberField
-            v-model="removeStart"
-            label="Со страницы"
-            :min="1"
-            :max="pageCount"
-            @focus="focusedField = 'start'"
-          ></PageNumberField>
-        </v-col>
-        <v-col cols="6">
-          <PageNumberField
-            v-model="removeEnd"
-            label="По страницу"
-            :min="removeStart || 1"
-            :max="pageCount"
-            @focus="focusedField = 'end'"
-          ></PageNumberField>
-        </v-col>
-      </v-row>
-      <v-alert v-if="removeError" type="error" density="compact">{{ removeError }}</v-alert>
-      <v-alert v-if="removeSuccess" type="success" density="compact">
-        Задача на удаление страниц поставлена в очередь.
-      </v-alert>
-    </v-card-text>
-    <v-card-actions>
-      <v-btn
-        color="error"
-        :loading="removingPages"
-        :disabled="!canRemovePages"
-        @click="handleRemovePages"
-      >Удалить страницы</v-btn>
-    </v-card-actions>
-  </v-card>
+  <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:p-6">
+    <h2 class="tw:font-serif tw:font-semibold tw:text-ink-900 tw:mb-4">Удалить страницы</h2>
+    <div class="tw:grid tw:grid-cols-2 tw:gap-3">
+      <PageNumberField
+        v-model="removeStart"
+        label="Со страницы"
+        :min="1"
+        :max="pageCount"
+        @focus="focusedField = 'start'"
+      />
+      <PageNumberField
+        v-model="removeEnd"
+        label="По страницу"
+        :min="removeStart || 1"
+        :max="pageCount"
+        @focus="focusedField = 'end'"
+      />
+    </div>
+    <div v-if="removeError" class="tw:text-sm tw:text-red-600 tw:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:px-3 tw:py-2 tw:mt-3">
+      {{ removeError }}
+    </div>
+    <div v-if="removeSuccess" class="tw:text-sm tw:text-green-700 tw:bg-green-50 tw:border tw:border-green-200 tw:rounded-lg tw:px-3 tw:py-2 tw:mt-3">
+      Задача на удаление страниц поставлена в очередь.
+    </div>
+    <button
+      type="button"
+      :disabled="!canRemovePages || removingPages"
+      class="tw:mt-4 tw:px-5 tw:py-2 tw:bg-red-700 tw:hover:bg-red-600 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
+      @click="handleRemovePages"
+    >
+      {{ removingPages ? 'Удаление…' : 'Удалить страницы' }}
+    </button>
+  </div>
 </template>
 
 <script setup>

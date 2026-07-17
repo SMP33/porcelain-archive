@@ -1,101 +1,105 @@
 <template>
-  <v-layout full-height>
+  <div class="tw:min-h-screen tw:bg-gray-100">
     <AppToolbar />
-    <v-main scrollable>
-      <v-container fluid>
-        <v-row>
-          <v-col :cols="selectedTask ? 4 : 12">
-            <v-card>
-              <v-card-title>Задачи</v-card-title>
-              <v-card-text>
-                <v-data-table-server
-                  v-model:page="page"
-                  v-model:items-per-page="itemsPerPage"
-                  :headers="headers"
-                  :items-length="totalItems"
-                  :items="serverItems"
-                  :loading="loading"
-                  :items-per-page-options="[
-                    { value: 25, title: '25' },
-                    { value: 50, title: '50' },
-                    { value: 100, title: '100' },
-                    { value: 500, title: '500' },
-                  ]"
-                  class="elevation-1"
-                  item-value="id"
-                  @update:options="loadItems"
-                  @click:row="selectTask"
-                >
-                  <template v-slot:item.icon="{ item }">
-                    <v-icon :color="statusColor(item.status)" size="18">{{ taskTypeIcon(item.type) }}</v-icon>
-                  </template>
-                  <template v-slot:item.info="{ item }">
-                    <div>№{{ item.id }} {{ taskTypeLabel(item.type) }}</div>
-                    <div class="text-caption text-medium-emphasis">{{ item.author_display_name || '—' }}</div>
-                  </template>
-                  <template v-slot:item.status="{ item }">
-                    <v-icon :color="statusColor(item.status)">{{ statusIcon(item.status) }}</v-icon>
-                  </template>
-                </v-data-table-server>
-              </v-card-text>
-            </v-card>
-          </v-col>
+    <main class="tw:md:pl-[232px]">
+      <div class="tw:border-b tw:border-gray-200 tw:bg-white tw:px-8 tw:py-4">
+        <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">Задачи</h1>
+      </div>
+      <div class="tw:px-8 tw:py-6">
+        <div class="tw:grid tw:grid-cols-1" :class="selectedTask ? 'tw:lg:grid-cols-12 tw:gap-4' : ''">
+          <div :class="selectedTask ? 'tw:lg:col-span-4' : ''" class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:overflow-hidden">
+            <div class="tw:overflow-x-auto">
+              <table class="tw:w-full tw:text-sm">
+                <tbody class="tw:divide-y tw:divide-gray-100">
+                  <tr
+                    v-for="item in items"
+                    :key="item.id"
+                    class="tw:cursor-pointer tw:transition-colors"
+                    :class="selectedTask && selectedTask.id === item.id ? 'tw:bg-clay-50' : 'tw:hover:bg-clay-50/60'"
+                    @click="selectTask(item)"
+                  >
+                    <td class="tw:pl-4 tw:py-3 tw:w-10">
+                      <i :class="taskTypeIcon(item.type)" class="mdi tw:text-lg" :style="{ color: statusColor(item.status) }" />
+                    </td>
+                    <td class="tw:py-3">
+                      <div class="tw:text-gray-800">№{{ item.id }} {{ taskTypeLabel(item.type) }}</div>
+                      <div class="tw:text-xs tw:text-gray-400">{{ item.author_display_name || '—' }}</div>
+                    </td>
+                    <td class="tw:pr-4 tw:py-3 tw:w-10 tw:text-right">
+                      <i :class="statusIcon(item.status)" class="mdi tw:text-lg" :style="{ color: statusColor(item.status) }" />
+                    </td>
+                  </tr>
+                  <tr v-if="!loading && !items.length">
+                    <td colspan="3" class="tw:px-4 tw:py-8 tw:text-center tw:text-gray-400">Нет данных</td>
+                  </tr>
+                  <tr v-if="loading">
+                    <td colspan="3" class="tw:px-4 tw:py-8 tw:text-center tw:text-gray-400">Загрузка…</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="tw:px-4 tw:pb-4">
+              <AppPager
+                :page="page"
+                :page-count="pageCount"
+                :items-per-page="itemsPerPage"
+                :items-per-page-options="[25, 50, 100, 500]"
+                :total="total"
+                @update:page="goToPage"
+                @update:items-per-page="setItemsPerPage"
+              />
+            </div>
+          </div>
 
-          <v-col v-if="selectedTask" cols="8">
-            <v-card>
-              <v-card-title class="d-flex justify-space-between align-center">
-                <span>Данные задачи №{{ selectedTask.id }}</span>
-                <v-btn icon variant="text" @click="selectedTask = null">
-                  <v-icon>mdi-close</v-icon>
-                </v-btn>
-              </v-card-title>
-              <v-card-text>
-                <pre class="text-body-2">{{ JSON.stringify(selectedTask.data, null, 2) }}</pre>
+          <div v-if="selectedTask" class="tw:lg:col-span-8 tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:p-6">
+            <div class="tw:flex tw:items-center tw:justify-between tw:mb-4">
+              <span class="tw:font-serif tw:font-semibold tw:text-ink-900">Данные задачи №{{ selectedTask.id }}</span>
+              <button type="button" class="tw:p-1 tw:text-gray-400 tw:hover:text-gray-600 tw:transition-colors" @click="selectedTask = null">
+                <i class="mdi mdi-close tw:text-lg" />
+              </button>
+            </div>
+            <pre class="tw:text-xs tw:text-gray-700 tw:whitespace-pre-wrap tw:break-words">{{ JSON.stringify(selectedTask.data, null, 2) }}</pre>
 
-                <v-divider class="my-4"></v-divider>
+            <div class="tw:my-4 tw:border-t tw:border-gray-100" />
 
-                <div class="text-subtitle-2 mb-2">Лог</div>
-                <v-progress-circular v-if="taskLogLoading" indeterminate size="20"></v-progress-circular>
-                <div v-else class="log-scroll-area">
-                  <pre class="log-text">{{ taskLog || "Лог пуст" }}</pre>
-                </div>
-              </v-card-text>
-            </v-card>
-          </v-col>
-        </v-row>
-      </v-container>
-    </v-main>
-  </v-layout>
+            <div class="tw:text-sm tw:font-medium tw:text-gray-700 tw:mb-2">Лог</div>
+            <div v-if="taskLogLoading" class="tw:text-sm tw:text-gray-400">Загрузка…</div>
+            <div v-else class="tw:max-h-[500px] tw:overflow-y-auto tw:bg-ink-800 tw:rounded-lg">
+              <pre class="tw:m-0 tw:p-3 tw:text-white tw:text-xs tw:whitespace-pre-wrap tw:break-words">{{ taskLog || 'Лог пуст' }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import http from '../api/http'
 import AppToolbar from '../components/AppToolbar.vue'
+import AppPager from '../components/AppPager.vue'
+import { usePagedTable } from '../composables/usePagedTable'
 
-const page = ref(1)
-const itemsPerPage = ref(25)
-const headers = ref([
-  { title: '', key: 'icon', align: 'center', sortable: false, width: '40px' },
-  { title: 'Задача', key: 'info', align: 'start', sortable: false },
-  { title: '', key: 'status', align: 'center', sortable: false, width: '40px' },
-])
+const { page, itemsPerPage, items, total, loading, pageCount, reload, goToPage, setItemsPerPage } = usePagedTable(
+  async ({ offset, limit }) => {
+    const response = await http.get('/api/tasks/', { params: { offset, limit } })
+    return { items: response.data.items, total: response.data.total }
+  },
+)
 
-const serverItems = ref([])
-const loading = ref(true)
-const totalItems = ref(0)
 const selectedTask = ref(null)
 const taskLog = ref('')
 const taskLogLoading = ref(false)
 
 const statusColor = (status) => {
   switch (status) {
-    case 'success': return 'green'
-    case 'error': return 'red'
-    case 'running': return 'blue'
+    case 'success': return '#16a34a'
+    case 'error': return '#dc2626'
+    case 'running': return '#2563eb'
     case 'queued':
     case 'new':
-    default: return 'grey'
+    default: return '#9ca3af'
   }
 }
 
@@ -130,35 +134,11 @@ const STATUS_ICONS = {
 }
 const statusIcon = (status) => STATUS_ICONS[status] || 'mdi-help-circle'
 
-let lastTableOptions = { page: 1, itemsPerPage: itemsPerPage.value }
 let hasAutoSelected = false
 let ws = null
 let wsShouldReconnect = true
 
-const loadItems = async (options) => {
-  lastTableOptions = options
-  const { page, itemsPerPage } = options
-  loading.value = true
-  try {
-    const offset = (page - 1) * itemsPerPage
-    const response = await http.get('/api/tasks/', {
-      params: { offset, limit: itemsPerPage },
-    })
-    serverItems.value = response.data.items
-    totalItems.value = response.data.total
-
-    if (!hasAutoSelected && serverItems.value.length) {
-      hasAutoSelected = true
-      await selectTask(null, { item: serverItems.value[0] })
-    }
-  } catch (error) {
-    console.error('Ошибка при загрузке задач:', error)
-  } finally {
-    loading.value = false
-  }
-}
-
-const refreshSelectedTaskLog = async () => {
+async function refreshSelectedTaskLog() {
   if (!selectedTask.value) return
   try {
     const response = await http.get(`/api/tasks/${selectedTask.value.id}/log`)
@@ -168,25 +148,47 @@ const refreshSelectedTaskLog = async () => {
   }
 }
 
-const connectTaskUpdates = () => {
+async function selectTask(item) {
+  selectedTask.value = item
+  taskLog.value = ''
+  taskLogLoading.value = true
+  try {
+    const response = await http.get(`/api/tasks/${item.id}/log`)
+    taskLog.value = response.data.log
+  } catch (error) {
+    console.error('Ошибка при загрузке лога задачи:', error)
+  } finally {
+    taskLogLoading.value = false
+  }
+}
+
+async function loadItemsAndAutoSelect() {
+  await reload()
+  if (!hasAutoSelected && items.value.length) {
+    hasAutoSelected = true
+    await selectTask(items.value[0])
+  }
+}
+
+function connectTaskUpdates() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   ws = new WebSocket(`${protocol}//${window.location.host}/api/tasks/ws`)
 
   ws.onmessage = async () => {
-    const previousTotal = totalItems.value
-    await loadItems(lastTableOptions)
+    const previousTotal = total.value
+    await reload()
 
-    if (totalItems.value > previousTotal) {
+    if (total.value > previousTotal) {
       // Появилась новая задача - переключаемся на неё
       page.value = 1
-      await loadItems({ ...lastTableOptions, page: 1 })
-      selectedTask.value = serverItems.value[0]
+      await reload()
+      selectedTask.value = items.value[0]
       await refreshSelectedTaskLog()
       return
     }
 
     if (selectedTask.value) {
-      const updated = serverItems.value.find((task) => task.id === selectedTask.value.id)
+      const updated = items.value.find((task) => task.id === selectedTask.value.id)
       if (updated) {
         selectedTask.value = updated
       }
@@ -201,21 +203,10 @@ const connectTaskUpdates = () => {
   }
 }
 
-const selectTask = async (event, { item }) => {
-  selectedTask.value = item
-  taskLog.value = ''
-  taskLogLoading.value = true
-  try {
-    const response = await http.get(`/api/tasks/${item.id}/log`)
-    taskLog.value = response.data.log
-  } catch (error) {
-    console.error('Ошибка при загрузке лога задачи:', error)
-  } finally {
-    taskLogLoading.value = false
-  }
-}
-
-onMounted(connectTaskUpdates)
+onMounted(() => {
+  loadItemsAndAutoSelect()
+  connectTaskUpdates()
+})
 
 onUnmounted(() => {
   wsShouldReconnect = false
@@ -224,20 +215,3 @@ onUnmounted(() => {
   }
 })
 </script>
-
-<style scoped>
-.log-scroll-area {
-  max-height: 500px;
-  overflow-y: auto;
-  background-color: #333;
-  border-radius: 4px;
-}
-.log-text {
-  margin: 0;
-  padding: 12px;
-  color: #fff;
-  background-color: #333;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-</style>

@@ -1,41 +1,37 @@
 <template>
-  <v-card>
-    <v-card-title class="text-subtitle-1">Убрать текст</v-card-title>
-    <v-card-text>
-      <v-row dense>
-        <v-col cols="6">
-          <PageNumberField
-            v-model="resetTextStart"
-            label="Со страницы"
-            :min="1"
-            :max="pageCount"
-            @focus="focusedField = 'start'"
-          ></PageNumberField>
-        </v-col>
-        <v-col cols="6">
-          <PageNumberField
-            v-model="resetTextEnd"
-            label="По страницу"
-            :min="resetTextStart || 1"
-            :max="pageCount"
-            @focus="focusedField = 'end'"
-          ></PageNumberField>
-        </v-col>
-      </v-row>
-      <v-alert v-if="resetTextError" type="error" density="compact">{{ resetTextError }}</v-alert>
-      <v-alert v-if="resetTextSuccess" type="success" density="compact">
-        Задача на удаление текста поставлена в очередь.
-      </v-alert>
-    </v-card-text>
-    <v-card-actions>
-      <v-btn
-        color="error"
-        :loading="resettingText"
-        :disabled="!canResetText"
-        @click="handleResetText"
-      >Убрать текст</v-btn>
-    </v-card-actions>
-  </v-card>
+  <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:p-6">
+    <h2 class="tw:font-serif tw:font-semibold tw:text-ink-900 tw:mb-4">Убрать текст</h2>
+    <div class="tw:grid tw:grid-cols-2 tw:gap-3">
+      <PageNumberField
+        v-model="resetTextStart"
+        label="Со страницы"
+        :min="1"
+        :max="pageCount"
+        @focus="focusedField = 'start'"
+      />
+      <PageNumberField
+        v-model="resetTextEnd"
+        label="По страницу"
+        :min="resetTextStart || 1"
+        :max="pageCount"
+        @focus="focusedField = 'end'"
+      />
+    </div>
+    <div v-if="resetTextError" class="tw:text-sm tw:text-red-600 tw:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:px-3 tw:py-2 tw:mt-3">
+      {{ resetTextError }}
+    </div>
+    <div v-if="resetTextSuccess" class="tw:text-sm tw:text-green-700 tw:bg-green-50 tw:border tw:border-green-200 tw:rounded-lg tw:px-3 tw:py-2 tw:mt-3">
+      Задача на удаление текста поставлена в очередь.
+    </div>
+    <button
+      type="button"
+      :disabled="!canResetText || resettingText"
+      class="tw:mt-4 tw:px-5 tw:py-2 tw:bg-red-700 tw:hover:bg-red-600 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
+      @click="handleResetText"
+    >
+      {{ resettingText ? 'Отправка…' : 'Убрать текст' }}
+    </button>
+  </div>
 </template>
 
 <script setup>

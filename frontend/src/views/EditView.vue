@@ -1,116 +1,122 @@
 <template>
-  <v-layout full-height>
+  <div class="tw:min-h-screen tw:bg-gray-100">
     <AppToolbar />
-    <v-main scrollable>
-      <v-container fluid>
-        <v-card v-if="!loading && branch">
-          <v-card-title class="d-flex justify-space-between align-center">
-            <span>{{ branch.documentName }}</span>
-            <v-select
+    <main class="tw:md:pl-[232px]">
+      <div class="tw:border-b tw:border-gray-200 tw:bg-white tw:px-8 tw:py-4">
+        <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">Редактирование набора изменений</h1>
+      </div>
+      <div class="tw:px-8 tw:py-6 tw:space-y-4">
+        <div v-if="!loading && branch" class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:p-6">
+          <div class="tw:flex tw:items-center tw:justify-between tw:mb-1 tw:gap-4">
+            <span class="tw:font-serif tw:font-semibold tw:text-ink-900">{{ branch.documentName }}</span>
+            <AppListbox
               v-if="hasRole('moderator')"
               :model-value="branch.status"
-              @update:model-value="requestSetStatus"
-              :items="statusOptions"
-              item-title="title"
-              item-value="value"
-              density="compact"
-              hide-details
-              style="max-width: 220px"
+              :options="statusListboxOptions"
               :loading="statusLoading"
               :disabled="isStatusSelectLocked"
-            >
-              <template v-slot:selection="{ item }">
-                <span :style="{ color: statusColors[item.value] || 'grey' }">{{ item.title }}</span>
-              </template>
-              <template v-slot:item="{ item, props }">
-                <v-list-item v-if="item.value !== 'accepted'" v-bind="props" title="">
-                  <span :style="{ color: statusColors[item.value] || 'grey' }">{{ item.title }}</span>
-                </v-list-item>
-              </template>
-            </v-select>
-            <v-chip v-else :color="statusColors[branch.status] || 'grey'">
+              @update:model-value="requestSetStatus"
+            />
+            <span v-else class="tw:inline-block tw:px-2 tw:py-0.5 tw:rounded-full tw:text-xs tw:font-medium" :class="statusBadgeClass(branch.status)">
               {{ statusLabels[branch.status] || branch.status }}
-            </v-chip>
-          </v-card-title>
-          <v-card-subtitle>
-            № {{ branch.id }}
-          </v-card-subtitle>
-          <v-card-text>
-            <p>Это страница редактирования набора изменений с ID: <strong>{{ branch.id }}</strong>.</p>
-            <p>Страниц в наборе изменений: <strong>{{ pageCount }}</strong></p>
-          </v-card-text>
-          <v-card-actions>
-            <v-btn color="primary" to="/">Назад к списку</v-btn>
-            <v-btn
+            </span>
+          </div>
+          <div class="tw:text-sm tw:text-gray-400 tw:mb-4">№ {{ branch.id }}</div>
+
+          <p class="tw:text-sm tw:text-gray-600">Это страница редактирования набора изменений с ID: <strong>{{ branch.id }}</strong>.</p>
+          <p class="tw:text-sm tw:text-gray-600 tw:mt-1">Страниц в наборе изменений: <strong>{{ pageCount }}</strong></p>
+
+          <div class="tw:flex tw:items-center tw:gap-3 tw:mt-5">
+            <router-link to="/" class="tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors">Назад к списку</router-link>
+            <button
               v-if="isAuthor && branch.status === 'in_work'"
-              color="primary"
-              :loading="statusActionLoading"
+              type="button"
+              :disabled="statusActionLoading"
+              class="tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
               @click="handleSubmitForReview"
-            >Отправить на проверку</v-btn>
-            <v-btn
+            >
+              Отправить на проверку
+            </button>
+            <button
               v-if="isAuthor && branch.status === 'in_review'"
-              color="secondary"
-              :loading="statusActionLoading"
+              type="button"
+              :disabled="statusActionLoading"
+              class="tw:px-5 tw:py-2 tw:bg-ink-900 tw:hover:bg-ink-800 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
               @click="handleReturnToWork"
-            >Вернуть в работу</v-btn>
-          </v-card-actions>
-        </v-card>
+            >
+              Вернуть в работу
+            </button>
+          </div>
+        </div>
 
-        <v-dialog v-model="confirmStatusDialog" max-width="480">
-          <v-card>
-            <v-card-title>Подтверждение изменения статуса</v-card-title>
-            <v-card-text>
-              Изменить статус набора изменений № {{ branch && branch.id }} на «<span :style="{ color: statusColors[pendingStatus] || 'grey' }">{{ statusLabels[pendingStatus] }}</span>»?
-              <template v-if="pendingStatus === 'in_accept'">
-                <br>Изменения будут автоматически слиты в основную версию документа.
-              </template>
-            </v-card-text>
-            <v-card-actions>
-              <v-spacer></v-spacer>
-              <v-btn @click="cancelSetStatus">Отмена</v-btn>
-              <v-btn color="primary" :loading="statusLoading" :disabled="!confirmReady" @click="confirmSetStatus">Подтвердить</v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
+        <AppModal v-model="confirmStatusDialog" max-width="tw:max-w-md" :persistent="true" :show-close="false">
+          <h2 class="tw:font-serif tw:font-bold tw:text-lg tw:text-ink-900 tw:mb-4">Подтверждение изменения статуса</h2>
+          <p class="tw:text-sm tw:text-gray-600">
+            Изменить статус набора изменений № {{ branch && branch.id }} на «<span :style="{ color: statusColors[pendingStatus] || 'grey' }">{{ statusLabels[pendingStatus] }}</span>»?
+            <template v-if="pendingStatus === 'in_accept'"><br>Изменения будут автоматически слиты в основную версию документа.</template>
+          </p>
+          <div class="tw:flex tw:items-center tw:justify-end tw:gap-2 tw:mt-6">
+            <button type="button" class="tw:px-5 tw:py-2 tw:text-sm tw:text-gray-500 tw:hover:text-gray-700 tw:transition-colors" @click="cancelSetStatus">Отмена</button>
+            <button
+              type="button"
+              :disabled="!confirmReady"
+              class="tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
+              @click="confirmSetStatus"
+            >
+              {{ statusLoading ? 'Сохранение…' : 'Подтвердить' }}
+            </button>
+          </div>
+        </AppModal>
 
-        <v-row v-if="!loading && branch" class="mt-1">
-          <v-col cols="auto">
-            <v-card class="edit-view-menu-card">
-              <v-list density="compact" nav class="edit-view-menu">
-                <v-list-item
-                  v-if="!isLocked"
-                  prepend-icon="mdi-file-plus"
-                  :active="activeView === 'add'"
-                  @click="activeView = 'add'"
-                ><span class="edit-view-menu-label">Добавить страницы</span></v-list-item>
-                <v-list-item
-                  v-if="!isLocked"
-                  prepend-icon="mdi-file-remove"
-                  :active="activeView === 'remove'"
-                  @click="activeView = 'remove'"
-                ><span class="edit-view-menu-label">Удалить страницы</span></v-list-item>
-                <v-list-item
-                  v-if="!isLocked"
-                  prepend-icon="mdi-file-pdf-box"
-                  :active="activeView === 'set_text'"
-                  @click="activeView = 'set_text'"
-                ><span class="edit-view-menu-label">Задать текст</span></v-list-item>
-                <v-list-item
-                  v-if="!isLocked"
-                  prepend-icon="mdi-text-box-remove"
-                  :active="activeView === 'reset_text'"
-                  @click="activeView = 'reset_text'"
-                ><span class="edit-view-menu-label">Убрать текст</span></v-list-item>
-                <v-list-item
-                  prepend-icon="mdi-compare"
-                  :active="activeView === 'view_changes'"
-                  @click="activeView = 'view_changes'"
-                ><span class="edit-view-menu-label">Просмотр изменений</span></v-list-item>
-              </v-list>
-            </v-card>
-          </v-col>
+        <div v-if="!loading && branch" class="tw:flex tw:flex-col tw:md:flex-row tw:gap-4 tw:items-start">
+          <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:p-2 tw:w-full tw:md:w-56 tw:shrink-0">
+            <button
+              v-if="!isLocked"
+              type="button"
+              class="tw:flex tw:items-center tw:gap-2 tw:w-full tw:px-3 tw:py-2 tw:rounded-lg tw:text-sm tw:text-left tw:transition-colors"
+              :class="activeView === 'add' ? 'tw:bg-clay-50 tw:text-clay-700' : 'tw:text-gray-600 tw:hover:bg-gray-50'"
+              @click="activeView = 'add'"
+            >
+              <i class="mdi mdi-file-plus" /> Добавить страницы
+            </button>
+            <button
+              v-if="!isLocked"
+              type="button"
+              class="tw:flex tw:items-center tw:gap-2 tw:w-full tw:px-3 tw:py-2 tw:rounded-lg tw:text-sm tw:text-left tw:transition-colors"
+              :class="activeView === 'remove' ? 'tw:bg-clay-50 tw:text-clay-700' : 'tw:text-gray-600 tw:hover:bg-gray-50'"
+              @click="activeView = 'remove'"
+            >
+              <i class="mdi mdi-file-remove" /> Удалить страницы
+            </button>
+            <button
+              v-if="!isLocked"
+              type="button"
+              class="tw:flex tw:items-center tw:gap-2 tw:w-full tw:px-3 tw:py-2 tw:rounded-lg tw:text-sm tw:text-left tw:transition-colors"
+              :class="activeView === 'set_text' ? 'tw:bg-clay-50 tw:text-clay-700' : 'tw:text-gray-600 tw:hover:bg-gray-50'"
+              @click="activeView = 'set_text'"
+            >
+              <i class="mdi mdi-file-pdf-box" /> Задать текст
+            </button>
+            <button
+              v-if="!isLocked"
+              type="button"
+              class="tw:flex tw:items-center tw:gap-2 tw:w-full tw:px-3 tw:py-2 tw:rounded-lg tw:text-sm tw:text-left tw:transition-colors"
+              :class="activeView === 'reset_text' ? 'tw:bg-clay-50 tw:text-clay-700' : 'tw:text-gray-600 tw:hover:bg-gray-50'"
+              @click="activeView = 'reset_text'"
+            >
+              <i class="mdi mdi-text-box-remove" /> Убрать текст
+            </button>
+            <button
+              type="button"
+              class="tw:flex tw:items-center tw:gap-2 tw:w-full tw:px-3 tw:py-2 tw:rounded-lg tw:text-sm tw:text-left tw:transition-colors"
+              :class="activeView === 'view_changes' ? 'tw:bg-clay-50 tw:text-clay-700' : 'tw:text-gray-600 tw:hover:bg-gray-50'"
+              @click="activeView = 'view_changes'"
+            >
+              <i class="mdi mdi-compare" /> Просмотр изменений
+            </button>
+          </div>
 
-          <v-col>
+          <div class="tw:flex-1 tw:w-full tw:space-y-4">
             <AddPagesPanel
               v-if="!isLocked && activeView === 'add'"
               ref="addPagesRef"
@@ -151,44 +157,32 @@
               :last-commit="branch.lastCommit"
             />
 
-            <v-card class="mt-4">
-              <v-card-title class="text-subtitle-1">Страницы</v-card-title>
-              <v-card-text>
-                <div v-if="!pageCount" class="text-medium-emphasis">Страниц пока нет</div>
-                <div v-else class="pages-scroll-area">
-                  <v-row dense>
-                    <v-col
-                      v-for="pos in pageCount"
-                      :key="pos"
-                      :id="'page-tile-' + pos"
-                      cols="6" sm="4" md="3" lg="2"
-                      class="gallery-thumb-col"
+            <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:p-6">
+              <h2 class="tw:font-serif tw:font-semibold tw:text-ink-900 tw:mb-4">Страницы</h2>
+              <div v-if="!pageCount" class="tw:text-sm tw:text-gray-400">Страниц пока нет</div>
+              <div v-else class="pages-scroll-area">
+                <div class="tw:grid tw:grid-cols-2 tw:sm:grid-cols-3 tw:md:grid-cols-4 tw:lg:grid-cols-6 tw:gap-3">
+                  <div v-for="pos in pageCount" :id="'page-tile-' + pos" :key="pos" class="tw:relative">
+                    <div v-if="activeInsertGap === 0 && pos === 1" class="insert-gap-marker insert-gap-marker--left" />
+                    <div
+                      class="tw:rounded-lg tw:border tw:overflow-hidden tw:cursor-pointer tw:transition-colors"
+                      :class="isPageHighlighted(pos) ? highlightClasses[activeHighlightColor] : 'tw:border-gray-200 tw:hover:border-clay-300'"
+                      @click="galleryRef.show(pos)"
                     >
-                      <div v-if="activeInsertGap === 0 && pos === 1" class="insert-gap-marker insert-gap-marker--left"></div>
-                      <v-card
-                        variant="outlined"
-                        class="gallery-thumb"
-                        :class="isPageHighlighted(pos) ? 'gallery-thumb--' + activeHighlightColor : ''"
-                        @click="galleryRef.show(pos)"
-                      >
-                        <v-img :src="galleryRef && galleryRef.previewImageUrl(pos)" height="120" cover></v-img>
-                        <div class="text-caption text-center pa-1">{{ pos }}</div>
-                      </v-card>
-                      <div v-if="activeInsertGap === pos" class="insert-gap-marker insert-gap-marker--right"></div>
-                    </v-col>
-                  </v-row>
+                      <img :src="galleryRef && galleryRef.previewImageUrl(pos)" class="tw:w-full tw:h-[120px] tw:object-cover">
+                      <div class="tw:text-xs tw:text-gray-500 tw:text-center tw:p-1">{{ pos }}</div>
+                    </div>
+                    <div v-if="activeInsertGap === pos" class="insert-gap-marker insert-gap-marker--right" />
+                  </div>
                 </div>
-              </v-card-text>
-            </v-card>
-          </v-col>
+              </div>
+            </div>
+          </div>
 
-          <v-col cols="12" md="2">
-            <BranchTasksPanel
-              ref="branchTasksRef"
-              :branch-id="branch.id"
-            />
-          </v-col>
-        </v-row>
+          <div class="tw:w-full tw:md:w-64 tw:shrink-0">
+            <BranchTasksPanel ref="branchTasksRef" :branch-id="branch.id" />
+          </div>
+        </div>
 
         <PageGalleryViewer
           v-if="branch"
@@ -197,11 +191,11 @@
           :page-count="pageCount"
         />
 
-        <v-progress-circular v-if="loading" indeterminate color="primary"></v-progress-circular>
-        <v-alert v-if="error" type="error">{{ error }}</v-alert>
-      </v-container>
-    </v-main>
-  </v-layout>
+        <div v-if="loading" class="tw:text-sm tw:text-gray-400">Загрузка…</div>
+        <div v-if="error" class="tw:text-sm tw:text-red-600 tw:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:px-3 tw:py-2">{{ error }}</div>
+      </div>
+    </main>
+  </div>
 </template>
 
 <script setup>
@@ -210,6 +204,8 @@ import { useRoute, useRouter } from 'vue-router'
 import http from '../api/http'
 import { useAuth } from '../composables/useAuth'
 import AppToolbar from '../components/AppToolbar.vue'
+import AppModal from '../components/AppModal.vue'
+import AppListbox from '../components/AppListbox.vue'
 import PageGalleryViewer from '../components/PageGalleryViewer.vue'
 import AddPagesPanel from '../components/edit/AddPagesPanel.vue'
 import RemovePagesPanel from '../components/edit/RemovePagesPanel.vue'
@@ -230,13 +226,30 @@ const statusLabels = {
   rejected: 'Отклонено',
 }
 const statusColors = {
-  in_work: 'blue',
-  in_review: '#b39ddb',
-  in_accept: 'teal',
-  accepted: 'green',
-  rejected: 'red',
+  in_work: '#2563eb',
+  in_review: '#9333ea',
+  in_accept: '#0d9488',
+  accepted: '#16a34a',
+  rejected: '#dc2626',
+}
+const statusBadgeClasses = {
+  in_work: 'tw:bg-blue-100 tw:text-blue-700',
+  in_review: 'tw:bg-purple-100 tw:text-purple-700',
+  in_accept: 'tw:bg-teal-100 tw:text-teal-700',
+  accepted: 'tw:bg-green-100 tw:text-green-700',
+  rejected: 'tw:bg-red-100 tw:text-red-700',
+}
+function statusBadgeClass(status) {
+  return statusBadgeClasses[status] || 'tw:bg-gray-100 tw:text-gray-600'
 }
 const statusOptions = Object.entries(statusLabels).map(([value, title]) => ({ value, title }))
+// В выпадающем списке статус "Принято" скрыт (достигается через отдельный флоу
+// приёмки, а не прямым выбором), но должен корректно отображаться, если он уже текущий.
+const statusListboxOptions = statusOptions.map((o) => ({
+  ...o,
+  color: statusColors[o.value],
+  hidden: o.value === 'accepted',
+}))
 
 const branch = ref(null)
 const loading = ref(true)
@@ -274,6 +287,12 @@ const addPagesRef = ref(null)
 const removePagesRef = ref(null)
 const setTextRef = ref(null)
 const resetTextRef = ref(null)
+
+const highlightClasses = {
+  red: 'tw:border-2 tw:border-red-400 tw:bg-red-50',
+  blue: 'tw:border-2 tw:border-blue-400 tw:bg-blue-50',
+  yellow: 'tw:border-2 tw:border-yellow-400 tw:bg-yellow-50',
+}
 
 // Диапазон страниц для подсветки плиток - берётся из активной вкладки задачи.
 const activeHighlightRange = computed(() => {
@@ -498,28 +517,6 @@ onUnmounted(() => {
   background-color: rgba(128, 128, 128, 0.3);
   border-radius: 2px;
 }
-.gallery-thumb {
-  cursor: pointer;
-  transition: border-color .15s, background-color .15s;
-}
-.gallery-thumb--red {
-  border-color: #f44336 !important;
-  border-width: 2px !important;
-  background-color: rgba(244, 67, 54, 0.12);
-}
-.gallery-thumb--blue {
-  border-color: #2196f3 !important;
-  border-width: 2px !important;
-  background-color: rgba(33, 150, 243, 0.12);
-}
-.gallery-thumb--yellow {
-  border-color: #fbc02d !important;
-  border-width: 2px !important;
-  background-color: rgba(251, 192, 45, 0.15);
-}
-.gallery-thumb-col {
-  position: relative;
-}
 .insert-gap-marker {
   position: absolute;
   top: 4px;
@@ -534,34 +531,5 @@ onUnmounted(() => {
 }
 .insert-gap-marker--right {
   right: -3px;
-}
-.edit-view-menu-card {
-  width: min-content;
-}
-.edit-view-menu :deep(.v-list-item) {
-  min-height: unset;
-  padding: 8px;
-  overflow: visible;
-}
-.edit-view-menu :deep(.v-list-item__content) {
-  overflow: visible;
-  min-width: min-content;
-}
-.edit-view-menu :deep(.v-list-item__prepend) {
-  margin-inline-end: 6px;
-}
-.edit-view-menu :deep(.v-list-item__prepend > .v-icon) {
-  margin-inline-end: 0;
-}
-.edit-view-menu :deep(.v-list-item__spacer) {
-  width: 6px;
-}
-.edit-view-menu-label {
-  display: block;
-  width: min-content;
-  white-space: normal;
-  overflow-wrap: normal;
-  word-break: normal;
-  line-height: 1.25;
 }
 </style>

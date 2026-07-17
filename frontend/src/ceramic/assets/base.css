@@ -1,0 +1,67 @@
+/* Общие стили, перенесённые дословно из инлайн <style> в base.html (шапка/skew-кнопки).
+   Правило body{background} из оригинала не переносится - затронуло бы все страницы
+   porcelain_archive, а не только /ceramic (фон публичных страниц ceramic задаётся
+   классом tw:bg-white на корневом элементе PublicLayout.vue). */
+
+.doc-thumb { aspect-ratio: 3/4; object-fit: cover; }
+
+.skew-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: #fff;
+  text-decoration: none;
+  isolation: isolate;
+  white-space: nowrap;
+}
+.skew-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: skewX(-12deg);
+  z-index: -1;
+  transition: background 0.15s ease;
+}
+
+.skew-btn--logo {
+  padding: 0 20px 0 14px;
+  gap: 10px;
+  height: 40px;
+}
+
+.skew-btn--nav {
+  padding: 0 14px;
+  height: 40px;
+  font-size: 0.875rem;
+  color: #1f1f1f;
+}
+.skew-btn--nav::before { background: transparent; }
+
+/* Итоговый каскад: без фоновых плашек, шапка высотой во весь хедер (4rem) */
+.skew-btn::before { display: none; }
+.skew-btn--logo { height: 4rem; color: #111111; }
+a.skew-btn--nav { height: 4rem; color: #111111; font-weight: 600; }
+a.skew-btn--nav.active { color: #dc2626; }
+button.skew-btn--nav { color: #374151; }
+
+mark { background: #fef3c7; color: #92400e; border-radius: 2px; padding: 0 2px; }
+
+/* Сброс типографики Vuetify внутри /ceramic (общий App.vue оборачивает всё в v-app,
+   а его дефолтные h1-h6 навязывают Material-размеры через !important, полностью
+   перебивая Tailwind-классы tw:text и tw:font на заголовках ceramic). Возвращает
+   заголовкам поведение обычного Tailwind preflight (font-size/weight: inherit),
+   как в исходном ceramic-frontend, где Vuetify не участвует вовсе. */
+.ceramic-reset h1,
+.ceramic-reset h2,
+.ceramic-reset h3,
+.ceramic-reset h4,
+.ceramic-reset h5,
+.ceramic-reset h6 {
+  font-family: inherit !important;
+  font-weight: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  letter-spacing: inherit !important;
+  text-transform: inherit !important;
+  color: inherit !important;
+}

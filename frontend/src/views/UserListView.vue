@@ -1,85 +1,122 @@
 <template>
-  <v-layout full-height>
+  <div class="tw:min-h-screen tw:bg-gray-100">
     <AppToolbar />
-    <v-main scrollable>
-      <v-container>
-        <v-card>
-          <v-card-title class="d-flex justify-space-between align-center">
-            <span>Пользователи</span>
-            <v-btn v-if="hasRole('admin')" color="primary" @click="showCreateUserDialog = true">Создать пользователя</v-btn>
-          </v-card-title>
-          <v-card-text>
-            <v-data-table-server
-              v-model:items-per-page="itemsPerPage"
-              :headers="headers"
-              :items-length="totalItems"
-              :items="serverItems"
-              :loading="loading"
-              :items-per-page-options="[
-                { value: 25, title: '25' },
-                { value: 50, title: '50' },
-                { value: 100, title: '100' },
-                { value: 500, title: '500' },
-              ]"
-              class="elevation-1"
-              item-value="id"
-              @update:options="loadItems"
-            >
-              <template v-slot:item.role="{ item }">
-                {{ roleLabels[item.role] || item.role }}
-              </template>
-            </v-data-table-server>
-          </v-card-text>
-        </v-card>
-      </v-container>
-    </v-main>
+    <main class="tw:md:pl-[232px]">
+      <div class="tw:border-b tw:border-gray-200 tw:bg-white tw:px-8 tw:py-4 tw:flex tw:items-center tw:justify-between">
+        <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">Пользователи</h1>
+        <button
+          v-if="hasRole('admin')"
+          type="button"
+          class="tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors"
+          @click="showCreateUserDialog = true"
+        >
+          Создать пользователя
+        </button>
+      </div>
+      <div class="tw:px-8 tw:py-6">
+        <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:overflow-hidden">
+          <div class="tw:overflow-x-auto">
+            <table class="tw:w-full tw:text-sm">
+              <thead class="tw:bg-gray-50 tw:border-b tw:border-gray-200">
+                <tr>
+                  <th class="tw:px-4 tw:py-3 tw:text-left tw:font-medium tw:text-gray-600">ID</th>
+                  <th class="tw:px-4 tw:py-3 tw:text-left tw:font-medium tw:text-gray-600">Логин</th>
+                  <th class="tw:px-4 tw:py-3 tw:text-left tw:font-medium tw:text-gray-600 tw:hidden tw:sm:table-cell">ФИО</th>
+                  <th class="tw:px-4 tw:py-3 tw:text-left tw:font-medium tw:text-gray-600 tw:hidden tw:md:table-cell">Email</th>
+                  <th class="tw:px-4 tw:py-3 tw:text-right tw:font-medium tw:text-gray-600">Роль</th>
+                </tr>
+              </thead>
+              <tbody class="tw:divide-y tw:divide-gray-100">
+                <tr v-for="item in items" :key="item.id" class="tw:transition-colors">
+                  <td class="tw:px-4 tw:py-3 tw:text-gray-500">{{ item.id }}</td>
+                  <td class="tw:px-4 tw:py-3 tw:font-medium tw:text-gray-800">{{ item.username }}</td>
+                  <td class="tw:px-4 tw:py-3 tw:text-gray-500 tw:hidden tw:sm:table-cell">{{ item.display_name }}</td>
+                  <td class="tw:px-4 tw:py-3 tw:text-gray-500 tw:hidden tw:md:table-cell">{{ item.email }}</td>
+                  <td class="tw:px-4 tw:py-3 tw:text-right tw:text-gray-500">{{ roleLabels[item.role] || item.role }}</td>
+                </tr>
+                <tr v-if="!loading && !items.length">
+                  <td colspan="5" class="tw:px-4 tw:py-8 tw:text-center tw:text-gray-400">Нет данных</td>
+                </tr>
+                <tr v-if="loading">
+                  <td colspan="5" class="tw:px-4 tw:py-8 tw:text-center tw:text-gray-400">Загрузка…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="tw:px-4 tw:pb-4">
+            <AppPager
+              :page="page"
+              :page-count="pageCount"
+              :items-per-page="itemsPerPage"
+              :items-per-page-options="[25, 50, 100, 500]"
+              :total="total"
+              @update:page="goToPage"
+              @update:items-per-page="setItemsPerPage"
+            />
+          </div>
+        </div>
+      </div>
+    </main>
 
-    <v-dialog v-model="showCreateUserDialog" max-width="500">
-      <v-card>
-        <v-card-title>Новый пользователь</v-card-title>
-        <v-card-text>
-          <v-text-field
-            v-model="newUser.username"
-            label="Логин"
-            autofocus
-          ></v-text-field>
-          <v-text-field
-            v-model="newUser.password"
-            label="Пароль"
-            type="password"
-          ></v-text-field>
-          <v-text-field
-            v-model="newUser.display_name"
-            label="ФИО"
-          ></v-text-field>
-          <v-text-field
-            v-model="newUser.email"
-            label="Email"
-          ></v-text-field>
-          <v-select
+    <AppModal v-model="showCreateUserDialog" max-width="tw:max-w-md">
+      <h2 class="tw:font-serif tw:font-bold tw:text-lg tw:text-ink-900 tw:mb-4">Новый пользователь</h2>
+      <div class="tw:space-y-4">
+        <div>
+          <label class="tw:block tw:text-sm tw:font-medium tw:text-gray-700 tw:mb-1">Логин</label>
+          <input v-model="newUser.username" type="text" autofocus
+                 class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300">
+        </div>
+        <div>
+          <label class="tw:block tw:text-sm tw:font-medium tw:text-gray-700 tw:mb-1">Пароль</label>
+          <input v-model="newUser.password" type="password"
+                 class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300">
+        </div>
+        <div>
+          <label class="tw:block tw:text-sm tw:font-medium tw:text-gray-700 tw:mb-1">ФИО</label>
+          <input v-model="newUser.display_name" type="text"
+                 class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300">
+        </div>
+        <div>
+          <label class="tw:block tw:text-sm tw:font-medium tw:text-gray-700 tw:mb-1">Email</label>
+          <input v-model="newUser.email" type="email"
+                 class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300">
+        </div>
+        <div>
+          <label class="tw:block tw:text-sm tw:font-medium tw:text-gray-700 tw:mb-1">Роль</label>
+          <select
             v-model="newUser.role"
-            label="Роль"
-            :items="roleOptions"
-            item-title="title"
-            item-value="value"
-          ></v-select>
-          <v-alert v-if="createUserError" type="error" density="compact" class="mt-2">{{ createUserError }}</v-alert>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn @click="showCreateUserDialog = false">Отмена</v-btn>
-          <v-btn color="primary" :loading="creatingUser" @click="handleCreateUser">Создать</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-  </v-layout>
+            class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300"
+          >
+            <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">{{ opt.title }}</option>
+          </select>
+        </div>
+        <div v-if="createUserError" class="tw:text-sm tw:text-red-600 tw:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:px-3 tw:py-2">
+          {{ createUserError }}
+        </div>
+      </div>
+      <div class="tw:flex tw:items-center tw:justify-end tw:gap-2 tw:mt-6">
+        <button type="button" class="tw:px-5 tw:py-2 tw:text-sm tw:text-gray-500 tw:hover:text-gray-700 tw:transition-colors" @click="showCreateUserDialog = false">Отмена</button>
+        <button
+          type="button"
+          :disabled="creatingUser"
+          class="tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
+          @click="handleCreateUser"
+        >
+          {{ creatingUser ? 'Создание…' : 'Создать' }}
+        </button>
+      </div>
+    </AppModal>
+  </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import http from '../api/http'
 import { useAuth } from '../composables/useAuth'
 import AppToolbar from '../components/AppToolbar.vue'
+import AppPager from '../components/AppPager.vue'
+import AppModal from '../components/AppModal.vue'
+import { usePagedTable } from '../composables/usePagedTable'
 
 const { hasRole } = useAuth()
 
@@ -94,18 +131,12 @@ const roleOptions = [
   { title: 'Администратор', value: 'admin' },
 ]
 
-const itemsPerPage = ref(25)
-const headers = ref([
-  { title: 'ID', align: 'start', sortable: false, key: 'id' },
-  { title: 'Логин', key: 'username', align: 'end' },
-  { title: 'ФИО', key: 'display_name', align: 'end' },
-  { title: 'Email', key: 'email', align: 'end' },
-  { title: 'Роль', key: 'role', align: 'center', sortable: false },
-])
-
-const serverItems = ref([])
-const loading = ref(true)
-const totalItems = ref(0)
+const { page, itemsPerPage, items, total, loading, pageCount, reload, goToPage, setItemsPerPage } = usePagedTable(
+  async ({ offset, limit }) => {
+    const response = await http.get('/api/users/', { params: { offset, limit } })
+    return { items: response.data.items, total: response.data.total }
+  },
+)
 
 const showCreateUserDialog = ref(false)
 const newUser = ref({
@@ -117,25 +148,6 @@ const newUser = ref({
 })
 const creatingUser = ref(false)
 const createUserError = ref('')
-
-let lastTableOptions = { page: 1, itemsPerPage: itemsPerPage.value }
-
-const loadItems = async ({ page, itemsPerPage }) => {
-  lastTableOptions = { page, itemsPerPage }
-  loading.value = true
-  try {
-    const offset = (page - 1) * itemsPerPage
-    const response = await http.get('/api/users/', {
-      params: { offset, limit: itemsPerPage },
-    })
-    serverItems.value = response.data.items
-    totalItems.value = response.data.total
-  } catch (error) {
-    console.error('Ошибка при загрузке пользователей:', error)
-  } finally {
-    loading.value = false
-  }
-}
 
 const handleCreateUser = async () => {
   if (!newUser.value.username || !newUser.value.password) {
@@ -154,7 +166,7 @@ const handleCreateUser = async () => {
       email: '',
       role: 'user',
     }
-    await loadItems(lastTableOptions)
+    await reload()
   } catch (error) {
     createUserError.value = (error.response && error.response.data && error.response.data.detail)
       || 'Не удалось создать пользователя.'
@@ -163,4 +175,6 @@ const handleCreateUser = async () => {
     creatingUser.value = false
   }
 }
+
+onMounted(reload)
 </script>

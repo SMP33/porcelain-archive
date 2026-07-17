@@ -1,69 +1,67 @@
 <template>
-  <v-card>
-    <v-card-title class="text-subtitle-1">Добавить страницы</v-card-title>
-    <v-card-text>
-      <div
-        class="upload-dropzone"
-        :class="{ 'upload-dropzone--active': isDragOver }"
-        @dragover.prevent="isDragOver = true"
-        @dragleave.prevent="isDragOver = false"
-        @drop.prevent="handleFileDrop"
-        @click="fileInputEl.click()"
+  <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:p-6">
+    <h2 class="tw:font-serif tw:font-semibold tw:text-ink-900 tw:mb-4">Добавить страницы</h2>
+
+    <div
+      class="tw:border-2 tw:border-dashed tw:rounded-lg tw:p-4 tw:text-center tw:cursor-pointer tw:transition-colors"
+      :class="isDragOver ? 'tw:border-clay-400 tw:bg-clay-50' : 'tw:border-gray-300'"
+      @dragover.prevent="isDragOver = true"
+      @dragleave.prevent="isDragOver = false"
+      @drop.prevent="handleFileDrop"
+      @click="fileInputEl.click()"
+    >
+      <i class="mdi mdi-tray-arrow-up tw:text-2xl tw:text-gray-400" />
+      <div class="tw:text-xs tw:text-gray-500 tw:mt-1">Перетащите файлы или нажмите, чтобы выбрать</div>
+      <input
+        ref="fileInputEl"
+        type="file"
+        multiple
+        :accept="allowedExtensions.join(',')"
+        class="tw:hidden"
+        @change="handleFileInputChange"
       >
-        <v-icon size="22">mdi-tray-arrow-up</v-icon>
-        <div class="text-caption">Перетащите файлы или нажмите, чтобы выбрать</div>
-        <input
-          ref="fileInputEl"
-          type="file"
-          multiple
-          :accept="allowedExtensions.join(',')"
-          style="display:none"
-          @change="handleFileInputChange"
+    </div>
+
+    <div v-if="sortedPageFiles.length" class="tw:grid tw:grid-cols-4 tw:sm:grid-cols-6 tw:gap-2 tw:mt-3">
+      <div v-for="entry in sortedPageFiles" :key="entry.name" class="tw:relative tw:border tw:border-gray-200 tw:rounded tw:overflow-hidden">
+        <img :src="entry.url" class="tw:w-full tw:h-[70px] tw:object-cover">
+        <button
+          type="button"
+          class="tw:absolute tw:top-0.5 tw:right-0.5 tw:w-5 tw:h-5 tw:flex tw:items-center tw:justify-center tw:bg-gray-800/70 tw:hover:bg-gray-800 tw:text-white tw:rounded-full tw:transition-colors"
+          @click.stop="removeFile(entry.file)"
         >
+          <i class="mdi mdi-close tw:text-xs" />
+        </button>
+        <div class="tw:text-[11px] tw:text-gray-500 tw:truncate tw:px-1">{{ entry.name }}</div>
       </div>
+    </div>
 
-      <v-row v-if="sortedPageFiles.length" dense class="mt-2">
-        <v-col v-for="entry in sortedPageFiles" :key="entry.name" cols="4" sm="3" md="2">
-          <v-card variant="outlined" class="upload-preview-card">
-            <v-img :src="entry.url" height="70" cover></v-img>
-            <v-btn
-              icon="mdi-close"
-              size="x-small"
-              density="compact"
-              variant="flat"
-              color="grey-darken-3"
-              class="upload-preview-remove"
-              @click.stop="removeFile(entry.file)"
-            ></v-btn>
-            <div class="text-caption text-truncate px-1">{{ entry.name }}</div>
-          </v-card>
-        </v-col>
-      </v-row>
+    <PageNumberField
+      v-model="position"
+      label="Номер страницы, после которой вставить (0 - в начало)"
+      class="tw:mt-3"
+      :min="0"
+      :max="pageCount"
+    />
+    <div v-if="uploadError" class="tw:text-sm tw:text-red-600 tw:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:px-3 tw:py-2 tw:mt-3">
+      {{ uploadError }}
+    </div>
+    <div v-if="rejectedFiles.length" class="tw:text-sm tw:text-amber-700 tw:bg-amber-50 tw:border tw:border-amber-200 tw:rounded-lg tw:px-3 tw:py-2 tw:mt-3">
+      Не приняты (недопустимый формат): {{ rejectedFiles.join(', ') }}
+    </div>
+    <div v-if="acceptedFiles.length" class="tw:text-sm tw:text-green-700 tw:bg-green-50 tw:border tw:border-green-200 tw:rounded-lg tw:px-3 tw:py-2 tw:mt-3">
+      Загружено: {{ acceptedFiles.join(', ') }}
+    </div>
 
-      <PageNumberField
-        v-model="position"
-        label="Номер страницы, после которой вставить (0 - в начало)"
-        class="mt-2"
-        :min="0"
-        :max="pageCount"
-      ></PageNumberField>
-      <v-alert v-if="uploadError" type="error" density="compact">{{ uploadError }}</v-alert>
-      <v-alert v-if="rejectedFiles.length" type="warning" density="compact">
-        Не приняты (недопустимый формат): {{ rejectedFiles.join(', ') }}
-      </v-alert>
-      <v-alert v-if="acceptedFiles.length" type="success" density="compact">
-        Загружено: {{ acceptedFiles.join(', ') }}
-      </v-alert>
-    </v-card-text>
-    <v-card-actions>
-      <v-btn
-        color="primary"
-        :loading="uploadingPages"
-        :disabled="!canUploadPages"
-        @click="handleUploadPages"
-      >Загрузить страницы</v-btn>
-    </v-card-actions>
-  </v-card>
+    <button
+      type="button"
+      :disabled="!canUploadPages || uploadingPages"
+      class="tw:mt-4 tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
+      @click="handleUploadPages"
+    >
+      {{ uploadingPages ? 'Загрузка…' : 'Загрузить страницы' }}
+    </button>
+  </div>
 </template>
 
 <script setup>
@@ -165,26 +163,3 @@ const handleUploadPages = async () => {
   }
 }
 </script>
-
-<style scoped>
-.upload-dropzone {
-  border: 2px dashed rgba(128, 128, 128, 0.5);
-  border-radius: 8px;
-  padding: 12px;
-  text-align: center;
-  cursor: pointer;
-  transition: border-color .15s, background-color .15s;
-}
-.upload-dropzone--active {
-  border-color: rgb(var(--v-theme-primary));
-  background-color: rgba(var(--v-theme-primary), 0.08);
-}
-.upload-preview-card {
-  position: relative;
-}
-.upload-preview-remove {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-}
-</style>

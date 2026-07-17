@@ -1,83 +1,86 @@
 <template>
-  <v-card>
-    <v-card-title class="text-subtitle-1">Просмотр изменений</v-card-title>
-    <v-card-text>
-      <v-alert v-if="error" type="error" density="compact">{{ error }}</v-alert>
-      <v-alert v-else-if="!loading && !changedRows.length" type="info" density="compact">
-        Изменений нет
-      </v-alert>
-      <div v-else class="d-flex">
-        <div class="changes-list">
-          <div
-            v-for="row in changedRows"
-            :key="row.oldPos + '-' + row.newPos + '-' + row.status"
-            :id="'change-item-' + row.oldPos + '-' + row.newPos + '-' + row.status"
-            class="changes-list-item"
-            :class="['changes-list-item--' + row.status, { 'changes-list-item--active': row === selectedRow }]"
-            @click="selectedRow = row"
-          >
-            <img :src="previewUrl(row)" class="changes-list-item-img">
-            <div class="changes-list-item-label">{{ row.oldPos ?? '—' }}/{{ row.newPos ?? '—' }}</div>
-          </div>
-        </div>
-
-        <div class="flex-grow-1 ml-3">
-          <template v-if="selectedRow">
-            <v-chip :color="STATUS_COLORS[selectedRow.status]" size="small" label class="mb-2">
-              {{ STATUS_LABELS[selectedRow.status] }} ({{ selectedRow.oldPos ?? '—' }}/{{ selectedRow.newPos ?? '—' }})
-            </v-chip>
-
-            <div class="change-viewer-body">
-              <v-btn
-                icon="mdi-chevron-left"
-                variant="tonal"
-                class="change-viewer-arrow change-viewer-arrow--left"
-                :disabled="!hasPrev"
-                @click="prevItem"
-              ></v-btn>
-              <v-btn
-                icon="mdi-chevron-right"
-                variant="tonal"
-                class="change-viewer-arrow change-viewer-arrow--right"
-                :disabled="!hasNext"
-                @click="nextItem"
-              ></v-btn>
-
-              <v-row dense>
-                <v-col cols="12" :md="showTextColumn ? 7 : 12">
-                  <div class="change-view-img-wrap">
-                    <img :src="fullUrl(selectedRow)" class="change-view-img">
-                    <div
-                      v-for="(span, idx) in spans"
-                      :key="idx"
-                      class="change-view-span-highlight"
-                      :class="{ 'change-view-span-highlight--active': hoveredSpanIndex === idx }"
-                      :style="spanHighlightStyle(span)"
-                      @mouseenter="hoveredSpanIndex = idx"
-                      @mouseleave="hoveredSpanIndex = null"
-                    ></div>
-                  </div>
-                </v-col>
-                <v-col v-if="showTextColumn" cols="12" md="5">
-                  <v-progress-circular v-if="textLoading" indeterminate size="20"></v-progress-circular>
-                  <div v-else class="change-view-text">
-                    <div
-                      v-for="(span, idx) in spans"
-                      :key="idx"
-                      class="change-view-span"
-                      :class="{ 'change-view-span--active': hoveredSpanIndex === idx }"
-                      @mouseenter="hoveredSpanIndex = idx"
-                      @mouseleave="hoveredSpanIndex = null"
-                    >{{ span.text }}</div>
-                  </div>
-                </v-col>
-              </v-row>
-            </div>
-          </template>
+  <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:p-6">
+    <h2 class="tw:font-serif tw:font-semibold tw:text-ink-900 tw:mb-4">Просмотр изменений</h2>
+    <div v-if="error" class="tw:text-sm tw:text-red-600 tw:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:px-3 tw:py-2">{{ error }}</div>
+    <div v-else-if="!loading && !changedRows.length" class="tw:text-sm tw:text-blue-700 tw:bg-blue-50 tw:border tw:border-blue-200 tw:rounded-lg tw:px-3 tw:py-2">
+      Изменений нет
+    </div>
+    <div v-else class="tw:flex">
+      <div class="changes-list">
+        <div
+          v-for="row in changedRows"
+          :id="'change-item-' + row.oldPos + '-' + row.newPos + '-' + row.status"
+          :key="row.oldPos + '-' + row.newPos + '-' + row.status"
+          class="changes-list-item"
+          :class="['changes-list-item--' + row.status, { 'changes-list-item--active': row === selectedRow }]"
+          @click="selectedRow = row"
+        >
+          <img :src="previewUrl(row)" class="changes-list-item-img">
+          <div class="changes-list-item-label">{{ row.oldPos ?? '—' }}/{{ row.newPos ?? '—' }}</div>
         </div>
       </div>
-    </v-card-text>
-  </v-card>
+
+      <div class="tw:flex-1 tw:ml-3">
+        <template v-if="selectedRow">
+          <span
+            class="tw:inline-block tw:px-2 tw:py-0.5 tw:rounded tw:text-xs tw:font-semibold tw:mb-2"
+            :class="STATUS_CLASSES[selectedRow.status]"
+          >
+            {{ STATUS_LABELS[selectedRow.status] }} ({{ selectedRow.oldPos ?? '—' }}/{{ selectedRow.newPos ?? '—' }})
+          </span>
+
+          <div class="change-viewer-body">
+            <button
+              type="button"
+              :disabled="!hasPrev"
+              class="change-viewer-arrow change-viewer-arrow--left tw:bg-white/90 tw:hover:bg-white tw:shadow tw:rounded-full tw:w-9 tw:h-9 tw:flex tw:items-center tw:justify-center tw:disabled:opacity-30 tw:transition-colors"
+              @click="prevItem"
+            >
+              <i class="mdi mdi-chevron-left tw:text-xl" />
+            </button>
+            <button
+              type="button"
+              :disabled="!hasNext"
+              class="change-viewer-arrow change-viewer-arrow--right tw:bg-white/90 tw:hover:bg-white tw:shadow tw:rounded-full tw:w-9 tw:h-9 tw:flex tw:items-center tw:justify-center tw:disabled:opacity-30 tw:transition-colors"
+              @click="nextItem"
+            >
+              <i class="mdi mdi-chevron-right tw:text-xl" />
+            </button>
+
+            <div class="tw:grid tw:grid-cols-1" :class="showTextColumn ? 'tw:md:grid-cols-12 tw:gap-4' : ''">
+              <div :class="showTextColumn ? 'tw:md:col-span-7' : ''">
+                <div class="change-view-img-wrap">
+                  <img :src="fullUrl(selectedRow)" class="change-view-img">
+                  <div
+                    v-for="(span, idx) in spans"
+                    :key="idx"
+                    class="change-view-span-highlight"
+                    :class="{ 'change-view-span-highlight--active': hoveredSpanIndex === idx }"
+                    :style="spanHighlightStyle(span)"
+                    @mouseenter="hoveredSpanIndex = idx"
+                    @mouseleave="hoveredSpanIndex = null"
+                  />
+                </div>
+              </div>
+              <div v-if="showTextColumn" class="tw:md:col-span-5">
+                <div v-if="textLoading" class="tw:text-sm tw:text-gray-400">Загрузка…</div>
+                <div v-else class="change-view-text">
+                  <div
+                    v-for="(span, idx) in spans"
+                    :key="idx"
+                    class="change-view-span"
+                    :class="{ 'change-view-span--active': hoveredSpanIndex === idx }"
+                    @mouseenter="hoveredSpanIndex = idx"
+                    @mouseleave="hoveredSpanIndex = null"
+                  >{{ span.text }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -96,10 +99,10 @@ const STATUS_LABELS = {
   new: 'Новое',
   text_changed: 'Текст изменён',
 }
-const STATUS_COLORS = {
-  removed: 'red',
-  new: 'green',
-  text_changed: 'blue',
+const STATUS_CLASSES = {
+  removed: 'tw:bg-red-100 tw:text-red-700',
+  new: 'tw:bg-green-100 tw:text-green-700',
+  text_changed: 'tw:bg-blue-100 tw:text-blue-700',
 }
 
 const currentPages = ref([])
@@ -248,7 +251,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
   box-sizing: content-box;
   width: 50px;
   padding: 8px 10px 8px 6px;
-  background-color: rgba(var(--v-theme-on-surface), 0.05);
+  background-color: rgba(0, 0, 0, 0.04);
   border-radius: 6px;
   max-height: 600px;
   overflow-y: auto;
@@ -288,7 +291,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
   background-color: rgba(33, 150, 243, 0.3);
 }
 .changes-list-item--active {
-  outline-color: rgb(var(--v-theme-primary));
+  outline-color: var(--tw-color-clay-500, #dc2626);
 }
 .changes-list-item-img {
   width: 37px;

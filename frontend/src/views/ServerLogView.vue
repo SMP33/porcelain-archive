@@ -1,25 +1,28 @@
 <template>
-  <v-layout full-height>
+  <div class="tw:min-h-screen tw:bg-gray-100">
     <AppToolbar />
-    <v-main scrollable>
-      <v-container>
-        <v-card>
-          <v-card-title class="d-flex justify-space-between align-center">
-            <span>Лог сервера</span>
-            <v-btn icon variant="text" :loading="serverLogLoading" @click="fetchServerLog">
-              <v-icon>mdi-refresh</v-icon>
-            </v-btn>
-          </v-card-title>
-          <v-card-text>
-            <v-progress-circular v-if="serverLogLoading" indeterminate size="20"></v-progress-circular>
-            <div v-else class="log-scroll-area">
-              <pre class="log-text">{{ serverLog || "Лог пуст" }}</pre>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-container>
-    </v-main>
-  </v-layout>
+    <main class="tw:md:pl-[232px]">
+      <div class="tw:border-b tw:border-gray-200 tw:bg-white tw:px-8 tw:py-4 tw:flex tw:items-center tw:justify-between">
+        <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">Лог сервера</h1>
+        <button
+          type="button"
+          :disabled="serverLogLoading"
+          class="tw:p-2 tw:text-gray-500 tw:hover:text-clay-500 tw:transition-colors tw:disabled:opacity-50"
+          @click="fetchServerLog"
+        >
+          <i class="mdi mdi-refresh tw:text-xl" :class="{ 'tw:animate-spin': serverLogLoading }" />
+        </button>
+      </div>
+      <div class="tw:px-8 tw:py-6">
+        <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:p-6">
+          <div v-if="serverLogLoading" class="tw:text-sm tw:text-gray-400">Загрузка…</div>
+          <div v-else class="tw:max-h-[70vh] tw:overflow-y-auto tw:bg-ink-800 tw:rounded-lg">
+            <pre class="tw:m-0 tw:p-3 tw:text-white tw:text-xs tw:whitespace-pre-wrap tw:break-words">{{ serverLog || 'Лог пуст' }}</pre>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
 </template>
 
 <script setup>
@@ -65,20 +68,3 @@ onMounted(() => {
   fetchServerLog()
 })
 </script>
-
-<style scoped>
-.log-scroll-area {
-  max-height: 70vh;
-  overflow-y: auto;
-  background-color: #333;
-  border-radius: 4px;
-}
-.log-text {
-  margin: 0;
-  padding: 12px;
-  color: #fff;
-  background-color: #333;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-</style>

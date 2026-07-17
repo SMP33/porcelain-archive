@@ -1,37 +1,46 @@
 <template>
-  <v-layout class="d-flex flex-column align-center justify-center" style="min-height: 100vh;">
+  <div class="tw:bg-gray-100 tw:min-h-screen tw:flex tw:flex-col tw:items-center tw:justify-center tw:p-4">
     <div class="tw:flex tw:items-center tw:gap-3 tw:mb-6">
-      <span
-        class="tw:flex tw:items-center tw:justify-center tw:w-9 tw:h-9 tw:shrink-0 tw:rounded tw:bg-clay-500"
-        style="transform: skewX(-10deg);"
-      >
-        <v-icon size="20" color="white" style="transform: skewX(10deg);">mdi-book-open-page-variant</v-icon>
+      <span class="tw:flex tw:items-center tw:justify-center tw:w-9 tw:h-9 tw:shrink-0 tw:rounded tw:bg-clay-500" style="transform: skewX(-10deg);">
+        <i class="mdi mdi-book-open-page-variant tw:text-white tw:text-xl" style="transform: skewX(10deg); display: inline-block;" />
       </span>
-      <span class="tw:font-serif tw:font-bold tw:text-xl" style="color: #111111;">Архив</span>
+      <span class="tw:font-serif tw:font-bold tw:text-xl tw:text-ink-800">Архив</span>
     </div>
-    <v-card width="400" class="pa-4">
-      <v-card-title class="text-center">Авторизация</v-card-title>
-      <v-card-text>
-        <v-form @submit.prevent="handleLogin">
-          <v-text-field
+
+    <div class="tw:bg-white tw:rounded-xl tw:shadow-md tw:p-8 tw:w-full tw:max-w-sm">
+      <h1 class="tw:font-serif tw:font-bold tw:text-lg tw:text-ink-900 tw:text-center tw:mb-6">Авторизация</h1>
+      <form class="tw:space-y-4" @submit.prevent="handleLogin">
+        <div>
+          <label class="tw:block tw:text-sm tw:font-medium tw:text-gray-700 tw:mb-1">Логин</label>
+          <input
             v-model="username"
-            label="Логин"
-            prepend-inner-icon="mdi-account"
+            type="text"
             required
-          ></v-text-field>
-          <v-text-field
+            class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300"
+          >
+        </div>
+        <div>
+          <label class="tw:block tw:text-sm tw:font-medium tw:text-gray-700 tw:mb-1">Пароль</label>
+          <input
             v-model="password"
-            label="Пароль"
             type="password"
-            prepend-inner-icon="mdi-lock"
             required
-          ></v-text-field>
-          <v-alert v-if="error" type="error" density="compact" class="mb-4">{{ error }}</v-alert>
-          <v-btn type="submit" color="primary" block :loading="loading">Войти</v-btn>
-        </v-form>
-      </v-card-text>
-    </v-card>
-  </v-layout>
+            class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300"
+          >
+        </div>
+        <div v-if="error" class="tw:text-sm tw:text-red-600 tw:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:px-3 tw:py-2">
+          {{ error }}
+        </div>
+        <button
+          type="submit"
+          :disabled="loading"
+          class="tw:w-full tw:px-5 tw:py-2.5 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
+        >
+          {{ loading ? 'Вход…' : 'Войти' }}
+        </button>
+      </form>
+    </div>
+  </div>
 </template>
 
 <script setup>

@@ -1,17 +1,18 @@
 <template>
-  <v-text-field
-    :model-value="modelValue"
-    @update:model-value="onUpdate"
-    :label="label"
-    type="number"
-    density="compact"
-    :min="min"
-    :max="max"
-    class="page-number-field"
-    @wheel="onWheel"
-    @focus="handleFocus"
-    @blur="focused = false"
-  ></v-text-field>
+  <div>
+    <label v-if="label" class="tw:block tw:text-xs tw:font-medium tw:text-gray-600 tw:mb-1">{{ label }}</label>
+    <input
+      :value="modelValue"
+      type="number"
+      :min="min"
+      :max="max"
+      class="page-number-field tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-1.5 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300"
+      @input="onUpdate($event.target.value)"
+      @wheel="onWheel"
+      @focus="handleFocus"
+      @blur="focused = false"
+    >
+  </div>
 </template>
 
 <script setup>
@@ -56,11 +57,11 @@ const onWheel = (event) => {
 </script>
 
 <style scoped>
-.page-number-field :deep(input[type="number"]) {
+.page-number-field {
   -moz-appearance: textfield;
 }
-.page-number-field :deep(input[type="number"]::-webkit-inner-spin-button),
-.page-number-field :deep(input[type="number"]::-webkit-outer-spin-button) {
+.page-number-field::-webkit-inner-spin-button,
+.page-number-field::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }

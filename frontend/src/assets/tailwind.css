@@ -1,5 +1,5 @@
-/* Утилиты Tailwind без preflight (сброс стилей уже делает Vuetify) и с префиксом tw:,
-   чтобы имена классов не пересекались с утилитами Vuetify (d-flex, justify-center и т.п.) */
+/* Утилиты Tailwind с префиксом tw: (исторически - чтобы не пересекаться с классами
+   Vuetify; сохранён и после ухода от Vuetify, чтобы не переименовывать все классы). */
 @import "tailwindcss" prefix(tw);
 
 @theme prefix(tw) {

@@ -1,30 +1,31 @@
 <template>
-  <v-card>
-    <v-card-title class="text-subtitle-1">История</v-card-title>
-    <v-card-text>
-      <v-alert v-if="tasksError" type="error" density="compact" class="mb-2">{{ tasksError }}</v-alert>
-      <v-progress-circular v-if="tasksLoading" indeterminate size="20"></v-progress-circular>
-      <div v-else-if="!branchTasks.length" class="text-medium-emphasis">Задач пока нет</div>
-      <div v-else class="task-list">
-        <v-tooltip v-for="task in branchTasks" :key="task.id" location="top">
-          <template v-slot:activator="{ props }">
-            <div v-bind="props" class="task-list-item">
-              <v-icon :color="statusColor(task.status)" size="22">{{ taskTypeIcon(task.type) }}</v-icon>
-              <span class="task-list-item-id text-medium-emphasis">{{ task.id }}</span>
-            </div>
-          </template>
+  <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:p-6">
+    <h2 class="tw:font-serif tw:font-semibold tw:text-ink-900 tw:mb-4">История</h2>
+    <div v-if="tasksError" class="tw:text-sm tw:text-red-600 tw:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:px-3 tw:py-2 tw:mb-2">
+      {{ tasksError }}
+    </div>
+    <div v-if="tasksLoading" class="tw:text-sm tw:text-gray-400">Загрузка…</div>
+    <div v-else-if="!branchTasks.length" class="tw:text-sm tw:text-gray-400">Задач пока нет</div>
+    <div v-else class="tw:flex tw:flex-wrap tw:gap-2 tw:max-h-[600px] tw:overflow-y-auto">
+      <AppTooltip v-for="task in branchTasks" :key="task.id">
+        <div class="tw:flex tw:flex-col tw:items-center tw:w-11 tw:cursor-default">
+          <i :class="taskTypeIcon(task.type)" class="mdi tw:text-xl" :style="{ color: statusColor(task.status) }" />
+          <span class="tw:text-[11px] tw:leading-tight tw:text-gray-400 tw:mt-0.5">{{ task.id }}</span>
+        </div>
+        <template #content>
           <div>№{{ task.id }} · {{ taskTypeLabel(task.type) }}</div>
           <div>{{ task.author_display_name || '—' }}</div>
           <div>{{ statusLabel(task.status) }}</div>
-        </v-tooltip>
-      </div>
-    </v-card-text>
-  </v-card>
+        </template>
+      </AppTooltip>
+    </div>
+  </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import http from '../../api/http'
+import AppTooltip from '../AppTooltip.vue'
 
 const props = defineProps({
   branchId: { type: [Number, String], required: true },
@@ -36,12 +37,12 @@ const tasksError = ref('')
 
 const statusColor = (status) => {
   switch (status) {
-    case 'success': return 'green'
-    case 'error': return 'red'
-    case 'running': return 'blue'
+    case 'success': return '#16a34a'
+    case 'error': return '#dc2626'
+    case 'running': return '#2563eb'
     case 'queued':
     case 'new':
-    default: return 'grey'
+    default: return '#9ca3af'
   }
 }
 
@@ -96,25 +97,3 @@ onMounted(reload)
 
 defineExpose({ reload })
 </script>
-
-<style scoped>
-.task-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  max-height: 600px;
-  overflow-y: auto;
-}
-.task-list-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 44px;
-  cursor: default;
-}
-.task-list-item-id {
-  font-size: 11px;
-  line-height: 1.2;
-  margin-top: 2px;
-}
-</style>

@@ -1,92 +1,86 @@
 <template>
-  <v-dialog v-model="dialog" max-width="1400">
-    <v-card>
-      <v-card-text class="pa-2">
-        <div class="gallery-viewer-body">
-          <v-btn
-            icon="mdi-chevron-left"
-            variant="tonal"
-            class="gallery-viewer-arrow gallery-viewer-arrow--left"
-            :disabled="!hasPrev"
-            @click="prevPage"
-          ></v-btn>
-          <v-btn
-            icon="mdi-chevron-right"
-            variant="tonal"
-            class="gallery-viewer-arrow gallery-viewer-arrow--right"
-            :disabled="!hasNext"
-            @click="nextPage"
-          ></v-btn>
+  <AppModal v-model="dialog" max-width="tw:max-w-[1400px]" body-class="tw:p-4">
+    <div class="gallery-viewer-body">
+      <button
+        type="button"
+        :disabled="!hasPrev"
+        class="gallery-viewer-arrow gallery-viewer-arrow--left tw:bg-white/90 tw:hover:bg-white tw:shadow tw:rounded-full tw:w-9 tw:h-9 tw:flex tw:items-center tw:justify-center tw:disabled:opacity-30 tw:disabled:cursor-not-allowed tw:transition-colors"
+        @click="prevPage"
+      >
+        <i class="mdi mdi-chevron-left tw:text-xl" />
+      </button>
+      <button
+        type="button"
+        :disabled="!hasNext"
+        class="gallery-viewer-arrow gallery-viewer-arrow--right tw:bg-white/90 tw:hover:bg-white tw:shadow tw:rounded-full tw:w-9 tw:h-9 tw:flex tw:items-center tw:justify-center tw:disabled:opacity-30 tw:disabled:cursor-not-allowed tw:transition-colors"
+        @click="nextPage"
+      >
+        <i class="mdi mdi-chevron-right tw:text-xl" />
+      </button>
 
-          <v-row dense>
-            <v-col cols="12" :md="showTextColumn ? 7 : 12">
-              <div class="page-image-wrap">
-                <img :src="dialogUrl">
-                <div
-                  v-for="(span, idx) in spans"
-                  :key="idx"
-                  class="page-span-highlight"
-                  :class="{ 'page-span-highlight--active': hoveredSpanIndex === idx }"
-                  :style="spanHighlightStyle(span)"
-                  @mouseenter="hoveredSpanIndex = idx"
-                  @mouseleave="hoveredSpanIndex = null"
-                ></div>
-              </div>
-            </v-col>
-            <v-col v-if="showTextColumn" cols="12" md="5">
-              <v-progress-circular v-if="textLoading" indeterminate size="20"></v-progress-circular>
-              <div v-else class="page-text-panel">
-                <div
-                  v-for="(span, idx) in spans"
-                  :key="idx"
-                  class="page-text-span"
-                  :class="{ 'page-text-span--active': hoveredSpanIndex === idx }"
-                  @mouseenter="hoveredSpanIndex = idx"
-                  @mouseleave="hoveredSpanIndex = null"
-                >{{ span.text }}</div>
-              </div>
-            </v-col>
-          </v-row>
-        </div>
-
-        <div class="page-thumb-strip" @wheel="onThumbStripWheel">
-          <div
-            v-for="pos in pageCount"
-            :key="pos"
-            :id="'gallery-thumb-' + pos"
-            class="page-thumb-strip-item"
-            :class="{ 'page-thumb-strip-item--active': pos === currentPos }"
-            @click="show(pos)"
-          >
-            <img :src="previewImageUrl(pos)" class="page-thumb-strip-img">
-            <div class="page-thumb-strip-label">{{ pos }}</div>
+      <div class="tw:grid tw:grid-cols-1" :class="showTextColumn ? 'tw:md:grid-cols-12 tw:gap-4' : ''">
+        <div :class="showTextColumn ? 'tw:md:col-span-7' : ''">
+          <div class="page-image-wrap">
+            <img :src="dialogUrl">
+            <div
+              v-for="(span, idx) in spans"
+              :key="idx"
+              class="page-span-highlight"
+              :class="{ 'page-span-highlight--active': hoveredSpanIndex === idx }"
+              :style="spanHighlightStyle(span)"
+              @mouseenter="hoveredSpanIndex = idx"
+              @mouseleave="hoveredSpanIndex = null"
+            />
           </div>
         </div>
-      </v-card-text>
-      <v-card-actions>
-        <v-btn
-          icon="mdi-chevron-left"
-          variant="text"
-          :disabled="!hasPrev"
-          @click="prevPage"
-        ></v-btn>
-        <span class="text-caption">Страница {{ currentPos }} из {{ pageCount }}</span>
-        <v-btn
-          icon="mdi-chevron-right"
-          variant="text"
-          :disabled="!hasNext"
-          @click="nextPage"
-        ></v-btn>
-        <v-spacer></v-spacer>
-        <v-btn @click="dialog = false">Закрыть</v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+        <div v-if="showTextColumn" class="tw:md:col-span-5">
+          <div v-if="textLoading" class="tw:text-sm tw:text-gray-400">Загрузка…</div>
+          <div v-else class="page-text-panel">
+            <div
+              v-for="(span, idx) in spans"
+              :key="idx"
+              class="page-text-span"
+              :class="{ 'page-text-span--active': hoveredSpanIndex === idx }"
+              @mouseenter="hoveredSpanIndex = idx"
+              @mouseleave="hoveredSpanIndex = null"
+            >{{ span.text }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-thumb-strip" @wheel="onThumbStripWheel">
+      <div
+        v-for="pos in pageCount"
+        :id="'gallery-thumb-' + pos"
+        :key="pos"
+        class="page-thumb-strip-item"
+        :class="{ 'page-thumb-strip-item--active': pos === currentPos }"
+        @click="show(pos)"
+      >
+        <img :src="previewImageUrl(pos)" class="page-thumb-strip-img">
+        <div class="page-thumb-strip-label tw:text-gray-500">{{ pos }}</div>
+      </div>
+    </div>
+
+    <div class="tw:flex tw:items-center tw:gap-2 tw:mt-2 tw:pt-2 tw:border-t tw:border-gray-100">
+      <button type="button" :disabled="!hasPrev" class="tw:p-2 tw:text-gray-500 tw:hover:text-clay-500 tw:disabled:opacity-30 tw:transition-colors" @click="prevPage">
+        <i class="mdi mdi-chevron-left tw:text-lg" />
+      </button>
+      <span class="tw:text-xs tw:text-gray-500">Страница {{ currentPos }} из {{ pageCount }}</span>
+      <button type="button" :disabled="!hasNext" class="tw:p-2 tw:text-gray-500 tw:hover:text-clay-500 tw:disabled:opacity-30 tw:transition-colors" @click="nextPage">
+        <i class="mdi mdi-chevron-right tw:text-lg" />
+      </button>
+      <div class="tw:flex-1" />
+      <button type="button" class="tw:px-5 tw:py-2 tw:text-sm tw:text-gray-500 tw:hover:text-gray-700 tw:transition-colors" @click="dialog = false">Закрыть</button>
+    </div>
+  </AppModal>
 </template>
 
 <script setup>
 import { ref, computed, nextTick, watch, onUnmounted } from 'vue'
 import http from '../api/http'
+import AppModal from './AppModal.vue'
 
 const props = defineProps({
   branchId: { type: [Number, String], required: true },
@@ -253,7 +247,7 @@ defineExpose({ show, previewImageUrl })
 }
 .page-thumb-strip-item--active {
   opacity: 1;
-  outline-color: rgb(var(--v-theme-primary));
+  outline-color: var(--tw-color-clay-500, #dc2626);
 }
 .page-thumb-strip-img {
   width: 64px;
