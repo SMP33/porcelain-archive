@@ -52,7 +52,7 @@ watch(() => route.query.page, loadDocs)
       </div>
 
       <div v-if="docs.length" class="tw:space-y-2">
-        <router-link v-for="doc in docs" :key="doc.id" :to="`/ceramic/document/${doc.id}`"
+        <router-link v-for="doc in docs" :key="doc.id" :to="`/document/${doc.id}`"
            class="tw:group tw:flex tw:items-center tw:gap-4 tw:bg-white tw:rounded-xl tw:border tw:border-clay-100 tw:shadow-sm tw:hover:shadow-md tw:hover:border-clay-200 tw:transition-all tw:p-3">
 
           <div class="tw:flex-1 tw:min-w-0">

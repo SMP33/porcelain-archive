@@ -22,7 +22,7 @@ async def robots(request: Request):
     base = str(request.base_url).rstrip("/")
     body = (
         "User-agent: *\n"
-        "Disallow: /ceramic/admin\n"
+        "Disallow: /admin\n"
         f"Sitemap: {base}/sitemap.xml\n"
     )
     return Response(content=body, media_type="text/plain")
@@ -30,7 +30,7 @@ async def robots(request: Request):
 
 @router.get("/sitemap.xml")
 async def sitemap(request: Request):
-    base = str(request.base_url).rstrip("/") + "/ceramic"
+    base = str(request.base_url).rstrip("/")
     urls = [base + "/", base + "/search", base + "/about", base + "/feedback"]
 
     doc_rows = await db.execute_read("SELECT id FROM document WHERE is_visible = 1")

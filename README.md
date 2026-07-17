@@ -15,15 +15,15 @@ sudo apt-get install -y nodejs
 
 PostgreSQL нужно настроить отдельно (создать БД и пользователя) - хост/порт/имя БД/логин/пароль потом указываются в `config.ini` (раздел `[Database]`).
 
-## Установка проекта (без sudo)
+## Установка проекта
 
 ```bash
 ./install.sh
 ```
 
-Создаёт `.venv` и ставит python-зависимости из `requirements.txt`, проверяет git/git-lfs (и настраивает `user.name`/`user.email`, если не заданы), проверяет node/npm, создаёт пустой шаблон `~/.config/porcelain-archive/config.ini` и прописывает переменную `ARCHIVE_CONFIG_INI_PATH` в `~/.bashrc`.
+Создаёт `.venv` и ставит python-зависимости из `requirements.txt`, проверяет git/git-lfs (и настраивает `user.name`/`user.email`, если не заданы), проверяет node/npm. Также создаёт пустой шаблон `/usr/share/porcelain-archive/config.ini` (требует sudo для создания каталога, дальше файл принадлежит текущему пользователю).
 
-После этого заполните `~/.config/porcelain-archive/config.ini`:
+После этого заполните `/usr/share/porcelain-archive/config.ini`:
 
 ```ini
 [Common]

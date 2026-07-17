@@ -146,7 +146,7 @@ const hasActiveFilters = computed(
            class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
           {{ yearFrom || facets.year_min }}–{{ yearTo || facets.year_max }} <span class="tw:hover:text-clay-900 tw:font-bold tw:leading-none">×</span>
         </router-link>
-        <router-link to="/ceramic/search" class="tw:text-xs tw:text-gray-400 tw:hover:text-gray-600 tw:transition-colors">Сбросить всё</router-link>
+        <router-link to="/search" class="tw:text-xs tw:text-gray-400 tw:hover:text-gray-600 tw:transition-colors">Сбросить всё</router-link>
       </div>
 
       <!-- Период -->
@@ -250,7 +250,7 @@ const hasActiveFilters = computed(
       </div>
 
       <div v-if="results.length" class="tw:space-y-2">
-        <router-link v-for="doc in results" :key="doc.id" :to="`/ceramic/document/${doc.id}`"
+        <router-link v-for="doc in results" :key="doc.id" :to="`/document/${doc.id}`"
            class="tw:group tw:flex tw:items-start tw:gap-4 tw:bg-white tw:rounded-xl tw:border tw:border-clay-100 tw:shadow-sm tw:hover:shadow-md tw:hover:border-clay-200 tw:transition-all tw:p-3">
 
           <div class="tw:flex-1 tw:min-w-0">

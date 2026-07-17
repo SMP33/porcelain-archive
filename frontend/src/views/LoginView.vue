@@ -69,7 +69,7 @@ const handleLogin = async () => {
 
     await http.post('/api/users/login', params)
     await checkAuth()
-    router.push(route.query.redirect || '/')
+    router.push(route.query.redirect || '/edit')
   } catch (err) {
     error.value = 'Неверный логин или пароль.'
     console.error('Ошибка входа:', err)

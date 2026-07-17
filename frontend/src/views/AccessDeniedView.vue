@@ -12,14 +12,14 @@
           </div>
           <div class="tw:flex tw:items-center tw:gap-3 tw:mt-4">
             <router-link
-              to="/"
+              to="/edit"
               class="tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors"
             >
               На главную
             </router-link>
             <router-link
               v-if="!user"
-              to="/login"
+              to="/edit/login"
               class="tw:px-5 tw:py-2 tw:text-sm tw:text-gray-500 tw:hover:text-gray-700 tw:transition-colors"
             >
               Войти

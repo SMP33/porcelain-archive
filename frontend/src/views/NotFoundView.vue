@@ -11,7 +11,7 @@
             Такой страницы не существует.
           </div>
           <router-link
-            to="/"
+            to="/edit"
             class="tw:inline-block tw:mt-4 tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors"
           >
             На главную

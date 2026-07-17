@@ -115,7 +115,7 @@ const creating = ref(false)
 const createError = ref('')
 
 function openDocument(item) {
-  router.push(`/document/${item.id}`)
+  router.push(`/edit/document/${item.id}`)
 }
 
 const handleCreateDocument = async () => {
@@ -126,7 +126,7 @@ const handleCreateDocument = async () => {
   createError.value = ''
   try {
     const response = await http.post('/api/documents/create', { name: newDocumentName.value })
-    router.push(`/document/${response.data.id}`)
+    router.push(`/edit/document/${response.data.id}`)
   } catch (error) {
     createError.value = 'Не удалось создать документ.'
     console.error('Ошибка при создании документа:', error)

@@ -18,7 +18,7 @@ async function onSubmit() {
   error.value = ''
   try {
     await login(username.value, password.value)
-    router.push(route.query.redirect || '/ceramic/admin')
+    router.push(route.query.redirect || '/admin')
   } catch (e) {
     if (e.response?.status === 429) {
       error.value = 'Слишком много попыток входа. Попробуйте позже.'

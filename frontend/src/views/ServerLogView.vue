@@ -51,7 +51,7 @@ const fetchServerLog = async () => {
       return
     }
     if (status === 403) {
-      router.push('/access-denied')
+      router.push('/edit/access-denied')
       return
     }
     console.error('Ошибка при загрузке лога сервера:', error)
@@ -62,7 +62,7 @@ const fetchServerLog = async () => {
 
 onMounted(() => {
   if (!hasRole('admin')) {
-    router.push('/access-denied')
+    router.push('/edit/access-denied')
     return
   }
   fetchServerLog()

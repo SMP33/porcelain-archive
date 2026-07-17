@@ -27,7 +27,7 @@
           <p class="tw:text-sm tw:text-gray-600 tw:mt-1">Страниц в наборе изменений: <strong>{{ pageCount }}</strong></p>
 
           <div class="tw:flex tw:items-center tw:gap-3 tw:mt-5">
-            <router-link to="/" class="tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors">Назад к списку</router-link>
+            <router-link to="/edit" class="tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors">Назад к списку</router-link>
             <button
               v-if="isAuthor && branch.status === 'in_work'"
               type="button"
@@ -371,7 +371,7 @@ const loadBranch = async (id) => {
       return
     }
     if (status === 403 || status === 404) {
-      router.push('/access-denied')
+      router.push('/edit/access-denied')
       return
     }
     error.value = 'Не удалось загрузить набор изменений.'

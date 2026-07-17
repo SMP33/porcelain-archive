@@ -11,13 +11,13 @@ const {
 
 const navItems = computed(() => {
   const items = [
-    { to: '/', title: 'Документы', icon: 'mdi mdi-file-document-multiple-outline' },
-    { to: '/branches', title: 'Наборы изменений', icon: 'mdi mdi-source-branch' },
-    { to: '/tasks', title: 'Задачи', icon: 'mdi mdi-format-list-checks' },
-    { to: '/users', title: 'Пользователи', icon: 'mdi mdi-account-group-outline' },
+    { to: '/edit', title: 'Документы', icon: 'mdi mdi-file-document-multiple-outline' },
+    { to: '/edit/branches', title: 'Наборы изменений', icon: 'mdi mdi-source-branch' },
+    { to: '/edit/tasks', title: 'Задачи', icon: 'mdi mdi-format-list-checks' },
+    { to: '/edit/users', title: 'Пользователи', icon: 'mdi mdi-account-group-outline' },
   ]
   if (hasRole('admin')) {
-    items.push({ to: '/server-log', title: 'Лог сервера', icon: 'mdi mdi-text-box-search-outline' })
+    items.push({ to: '/edit/server-log', title: 'Лог сервера', icon: 'mdi mdi-text-box-search-outline' })
   }
   return items
 })
@@ -60,7 +60,7 @@ function onLogoutClick() {
 <template>
   <!-- Десктоп: постоянный тёмный сайдбар слева -->
   <aside class="tw:hidden tw:md:flex tw:flex-col tw:fixed tw:inset-y-0 tw:left-0 tw:w-[232px] tw:bg-ink-900 tw:text-gray-300 tw:z-20">
-    <router-link to="/" class="tw:flex tw:items-center tw:gap-3 tw:px-5 tw:py-5 tw:text-white tw:no-underline tw:border-b tw:border-white/10">
+    <router-link to="/edit" class="tw:flex tw:items-center tw:gap-3 tw:px-5 tw:py-5 tw:text-white tw:no-underline tw:border-b tw:border-white/10">
       <span class="tw:flex tw:items-center tw:justify-center tw:w-8 tw:h-8 tw:shrink-0 tw:rounded tw:bg-clay-500" style="transform: skewX(-10deg);">
         <i class="mdi mdi-book-open-page-variant tw:text-white tw:text-lg" style="transform: skewX(10deg); display: inline-block;" />
       </span>
@@ -95,7 +95,7 @@ function onLogoutClick() {
           v-if="accountMenuOpen"
           class="tw:absolute tw:bottom-full tw:left-2 tw:mb-1 tw:w-48 tw:bg-white tw:rounded-lg tw:shadow-lg tw:border tw:border-gray-200 tw:py-1 tw:text-ink-900"
         >
-          <router-link to="/tasks" class="tw:block tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50" @click="accountMenuOpen = false">Список задач</router-link>
+          <router-link to="/edit/tasks" class="tw:block tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50" @click="accountMenuOpen = false">Список задач</router-link>
           <button type="button" class="tw:block tw:w-full tw:text-left tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50" @click="openResetPassword">Сменить пароль</button>
           <button type="button" class="tw:block tw:w-full tw:text-left tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50" @click="openSetDisplayName">Изменить ФИО</button>
           <div class="tw:my-1 tw:border-t tw:border-gray-100" />
@@ -104,7 +104,7 @@ function onLogoutClick() {
           </button>
         </div>
       </div>
-      <router-link v-else to="/login" class="tw:flex tw:items-center tw:gap-3 tw:px-3 tw:py-2 tw:rounded-lg tw:text-sm tw:hover:bg-white/10 tw:transition-colors">
+      <router-link v-else to="/edit/login" class="tw:flex tw:items-center tw:gap-3 tw:px-3 tw:py-2 tw:rounded-lg tw:text-sm tw:hover:bg-white/10 tw:transition-colors">
         <i class="mdi mdi-login tw:text-lg" /> Войти
       </router-link>
     </div>
@@ -112,7 +112,7 @@ function onLogoutClick() {
 
   <!-- Мобильный вариант: тёмный топбар с гамбургер-меню -->
   <header class="tw:md:hidden tw:sticky tw:top-0 tw:z-20 tw:flex tw:items-center tw:bg-ink-900 tw:text-white tw:h-14 tw:px-4">
-    <router-link to="/" class="tw:flex tw:items-center tw:gap-2 tw:text-white tw:no-underline">
+    <router-link to="/edit" class="tw:flex tw:items-center tw:gap-2 tw:text-white tw:no-underline">
       <span class="tw:flex tw:items-center tw:justify-center tw:w-7 tw:h-7 tw:shrink-0 tw:rounded tw:bg-clay-500" style="transform: skewX(-10deg);">
         <i class="mdi mdi-book-open-page-variant tw:text-white tw:text-base" style="transform: skewX(10deg); display: inline-block;" />
       </span>
@@ -150,7 +150,7 @@ function onLogoutClick() {
         <button v-if="user" type="button" class="tw:flex tw:items-center tw:gap-2 tw:w-full tw:text-left tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50" @click="onLogoutClick">
           <i class="mdi mdi-logout" /> Выйти
         </button>
-        <router-link v-else to="/login" class="tw:flex tw:items-center tw:gap-2 tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50" @click="mobileMenuOpen = false">
+        <router-link v-else to="/edit/login" class="tw:flex tw:items-center tw:gap-2 tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50" @click="mobileMenuOpen = false">
           <i class="mdi mdi-login" /> Войти
         </router-link>
       </div>

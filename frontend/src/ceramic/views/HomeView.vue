@@ -329,14 +329,14 @@ const teamMembers = [
           </div>
 
           <div class="tw:flex tw:flex-col tw:space-y-10">
-            <router-link to="/ceramic/search"
+            <router-link to="/search"
                class="tw:block tw:border tw:border-gray-200 tw:rounded-lg tw:px-4 tw:py-3 tw:w-2/3 tw:hover:border-gray-300 tw:transition-colors tw:group">
               <div class="tw:text-sm tw:font-semibold tw:text-ink-900 tw:mb-0.5 tw:group-hover:text-clay-500 tw:transition-colors">
                 Поиск по материалам →
               </div>
               <p class="tw:text-xs tw:text-gray-400">{{ stats.doc_count }} документов в базе</p>
             </router-link>
-            <router-link to="/ceramic/feedback"
+            <router-link to="/feedback"
                class="tw:block tw:border tw:border-gray-200 tw:rounded-lg tw:px-4 tw:py-3 tw:w-2/3 tw:hover:border-gray-300 tw:transition-colors tw:group">
               <div class="tw:text-sm tw:font-semibold tw:text-ink-900 tw:mb-0.5 tw:group-hover:text-clay-500 tw:transition-colors">
                 Связаться с нами →

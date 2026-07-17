@@ -14,11 +14,11 @@ import teapotIcon from '../assets/img/teapot-icon.png'
         Возможно, адрес изменился или такой страницы никогда не существовало.
       </p>
       <div class="tw:flex tw:items-center tw:gap-4">
-        <router-link to="/ceramic"
+        <router-link to="/"
            class="tw:px-5 tw:py-2.5 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors">
           На главную
         </router-link>
-        <router-link to="/ceramic/search"
+        <router-link to="/search"
            class="tw:px-5 tw:py-2.5 tw:border tw:border-clay-200 tw:hover:bg-clay-50 tw:text-ink-800 tw:text-sm tw:rounded-lg tw:transition-colors">
           Поиск
         </router-link>

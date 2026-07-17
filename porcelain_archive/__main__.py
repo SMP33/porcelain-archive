@@ -14,7 +14,6 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _SECRET_CONFIG_PATH = os.path.join(ROOT, ".secret", "config.ini")
-_HOME_CONFIG_PATH = os.path.expanduser("~/.config/porcelain-archive/config.ini")
 _SYSTEM_CONFIG_PATH = "/usr/share/porcelain-archive/config.ini"
 
 _EMPTY_CONFIG_TEMPLATE = """[Common]
@@ -40,8 +39,7 @@ def _resolve_config_ini_path() -> str:
     Ищет config.ini по приоритету:
     1. .secret/config.ini рядом с проектом (локальная разработка).
     2. Переменная окружения ARCHIVE_CONFIG_INI_PATH, если задана.
-    3. ~/.config/porcelain-archive/config.ini.
-    4. /usr/share/porcelain-archive/config.ini - если и его нет,
+    3. /usr/share/porcelain-archive/config.ini - если и его нет,
        создаётся пустой шаблон (только поля, без значений).
     """
     if os.path.exists(_SECRET_CONFIG_PATH):
@@ -50,9 +48,6 @@ def _resolve_config_ini_path() -> str:
     env_path = os.environ.get("ARCHIVE_CONFIG_INI_PATH")
     if env_path:
         return env_path
-
-    if os.path.exists(_HOME_CONFIG_PATH):
-        return _HOME_CONFIG_PATH
 
     if os.path.exists(_SYSTEM_CONFIG_PATH):
         return _SYSTEM_CONFIG_PATH

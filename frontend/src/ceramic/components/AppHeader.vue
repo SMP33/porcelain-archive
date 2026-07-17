@@ -18,16 +18,16 @@ function isActive(path) {
   <header class="tw:bg-white tw:border-b tw:border-gray-200 tw:relative tw:z-30 tw:h-16">
     <div class="tw:max-w-6xl tw:mx-auto tw:px-6 tw:h-full tw:flex tw:items-center tw:justify-between">
 
-      <router-link to="/ceramic" class="skew-btn skew-btn--logo tw:font-serif tw:font-bold tw:text-lg tw:leading-tight tw:min-w-0">
+      <router-link to="/" class="skew-btn skew-btn--logo tw:font-serif tw:font-bold tw:text-lg tw:leading-tight tw:min-w-0">
         <img :src="teapotIcon" alt="" aria-hidden="true" class="tw:w-8 tw:h-8 tw:shrink-0 tw:object-contain">
         <span class="tw:truncate tw:min-w-0">Архив документации фарфорных заводов</span>
       </router-link>
 
       <!-- Desktop nav -->
       <nav class="tw:hidden tw:md:flex tw:items-center tw:gap-2">
-        <router-link to="/ceramic/materials" class="skew-btn skew-btn--nav" :class="{ active: isActive('/ceramic/materials') }">Материалы</router-link>
-        <router-link to="/ceramic/search" class="skew-btn skew-btn--nav" :class="{ active: isActive('/ceramic/search') }">Поиск по материалам</router-link>
-        <router-link to="/ceramic/feedback" class="skew-btn skew-btn--nav" :class="{ active: isActive('/ceramic/feedback') }">Обратная связь</router-link>
+        <router-link to="/materials" class="skew-btn skew-btn--nav" :class="{ active: isActive('/materials') }">Материалы</router-link>
+        <router-link to="/search" class="skew-btn skew-btn--nav" :class="{ active: isActive('/search') }">Поиск по материалам</router-link>
+        <router-link to="/feedback" class="skew-btn skew-btn--nav" :class="{ active: isActive('/feedback') }">Обратная связь</router-link>
       </nav>
 
       <!-- Hamburger button (mobile only) -->
@@ -43,9 +43,9 @@ function isActive(path) {
     <!-- Mobile dropdown -->
     <div v-show="isOpen" class="tw:md:hidden tw:border-t tw:border-gray-200 tw:bg-white">
       <nav class="tw:max-w-6xl tw:mx-auto tw:px-6 tw:py-3 tw:flex tw:flex-col tw:gap-2 tw:text-sm">
-        <router-link to="/ceramic/materials" class="skew-btn skew-btn--nav tw:self-start">Материалы</router-link>
-        <router-link to="/ceramic/search" class="skew-btn skew-btn--nav tw:self-start">Поиск по материалам</router-link>
-        <router-link to="/ceramic/feedback" class="skew-btn skew-btn--nav tw:self-start">Обратная связь</router-link>
+        <router-link to="/materials" class="skew-btn skew-btn--nav tw:self-start">Материалы</router-link>
+        <router-link to="/search" class="skew-btn skew-btn--nav tw:self-start">Поиск по материалам</router-link>
+        <router-link to="/feedback" class="skew-btn skew-btn--nav tw:self-start">Обратная связь</router-link>
       </nav>
     </div>
   </header>

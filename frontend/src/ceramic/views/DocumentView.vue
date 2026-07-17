@@ -76,7 +76,7 @@ function copyTranscript(pageNumber, text) {
   <div v-if="doc">
     <div class="tw:border-b tw:border-gray-100">
       <div class="tw:max-w-6xl tw:mx-auto tw:px-4 tw:py-2 tw:text-sm tw:text-gray-500 tw:flex tw:items-center tw:gap-2 tw:flex-wrap">
-        <router-link to="/ceramic/materials" class="tw:hover:text-clay-500 tw:transition-colors">Материалы</router-link>
+        <router-link to="/materials" class="tw:hover:text-clay-500 tw:transition-colors">Материалы</router-link>
         <span>›</span>
         <span class="tw:text-ink-800">{{ doc.title }}</span>
       </div>
@@ -141,7 +141,7 @@ function copyTranscript(pageNumber, text) {
               <p class="tw:text-xs tw:text-gray-400 tw:uppercase tw:tracking-wide tw:mb-2">Ключевые слова</p>
               <div class="tw:flex tw:flex-wrap tw:gap-1.5">
                 <router-link v-for="kw in doc.keywords.split(',').map((k) => k.trim()).filter(Boolean)" :key="kw"
-                   :to="{ path: '/ceramic/search', query: { q: kw } }"
+                   :to="{ path: '/search', query: { q: kw } }"
                    class="tw:text-xs tw:bg-clay-50 tw:text-clay-600 tw:border tw:border-clay-200 tw:rounded-full tw:px-2.5 tw:py-0.5 tw:hover:bg-clay-100 tw:transition-colors">
                   {{ kw }}
                 </router-link>
@@ -194,7 +194,7 @@ function copyTranscript(pageNumber, text) {
           <div v-if="related.length" class="tw:mt-10">
             <h2 class="tw:font-serif tw:text-lg tw:font-bold tw:text-ink-900 tw:mb-4">Другие документы объекта</h2>
             <div class="tw:grid tw:grid-cols-2 tw:sm:grid-cols-3 tw:gap-3">
-              <router-link v-for="r in related" :key="r.id" :to="`/ceramic/document/${r.id}`"
+              <router-link v-for="r in related" :key="r.id" :to="`/document/${r.id}`"
                  class="tw:group tw:flex tw:items-center tw:gap-3 tw:bg-white tw:border tw:border-clay-100 tw:rounded-xl tw:p-3 tw:hover:border-clay-300 tw:hover:shadow-sm tw:transition-all">
                 <div v-if="r.thumb_url" class="tw:shrink-0 tw:w-10 tw:h-14 tw:rounded tw:overflow-hidden tw:bg-clay-50 tw:flex tw:items-center tw:justify-center">
                   <img :src="r.thumb_url" class="tw:w-full tw:h-full tw:object-cover">

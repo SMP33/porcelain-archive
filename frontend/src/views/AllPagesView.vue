@@ -3,31 +3,31 @@
 // для ручной проверки после слияния проектов. Удалить, когда будет не нужна.
 
 const porcelainPages = [
-  { path: '/', title: 'Документы (список)' },
-  { path: '/branches', title: 'Наборы изменений', note: 'требует входа' },
-  { path: '/tasks', title: 'Задачи', note: 'требует входа' },
-  { path: '/users', title: 'Пользователи', note: 'требует входа' },
-  { path: '/server-log', title: 'Лог сервера', note: 'требует входа, роль admin' },
-  { path: '/document/1', title: 'Документ (пример, id=1)' },
+  { path: '/edit', title: 'Документы (список)' },
+  { path: '/edit/branches', title: 'Наборы изменений', note: 'требует входа' },
+  { path: '/edit/tasks', title: 'Задачи', note: 'требует входа' },
+  { path: '/edit/users', title: 'Пользователи', note: 'требует входа' },
+  { path: '/edit/server-log', title: 'Лог сервера', note: 'требует входа, роль admin' },
+  { path: '/edit/document/1', title: 'Документ (пример, id=1)' },
   { path: '/edit/1', title: 'Редактирование набора изменений (пример, id=1)' },
-  { path: '/login', title: 'Вход' },
-  { path: '/access-denied', title: 'Доступ запрещён' },
+  { path: '/edit/login', title: 'Вход' },
+  { path: '/edit/access-denied', title: 'Доступ запрещён' },
 ]
 
 const ceramicPublicPages = [
-  { path: '/ceramic', title: 'Главная' },
-  { path: '/ceramic/materials', title: 'Материалы (список документов)' },
-  { path: '/ceramic/document/1', title: 'Документ (пример, id=1)' },
-  { path: '/ceramic/search', title: 'Поиск' },
-  { path: '/ceramic/about', title: 'О проекте' },
-  { path: '/ceramic/feedback', title: 'Обратная связь' },
+  { path: '/', title: 'Главная' },
+  { path: '/materials', title: 'Материалы (список документов)' },
+  { path: '/document/1', title: 'Документ (пример, id=1)' },
+  { path: '/search', title: 'Поиск' },
+  { path: '/about', title: 'О проекте' },
+  { path: '/feedback', title: 'Обратная связь' },
 ]
 
 const ceramicAdminPages = [
-  { path: '/ceramic/admin/login', title: 'Вход в админку' },
-  { path: '/ceramic/admin', title: 'Админка (редирект)', note: 'требует входа' },
-  { path: '/ceramic/admin/feedback', title: 'Обратная связь (админка)', note: 'требует входа, роль admin' },
-  { path: '/ceramic/admin/users', title: 'Пользователи (админка)', note: 'требует входа, роль admin' },
+  { path: '/admin/login', title: 'Вход в админку' },
+  { path: '/admin', title: 'Админка (редирект)', note: 'требует входа' },
+  { path: '/admin/feedback', title: 'Обратная связь (админка)', note: 'требует входа, роль admin' },
+  { path: '/admin/users', title: 'Пользователи (админка)', note: 'требует входа, роль admin' },
 ]
 </script>
 

@@ -5,7 +5,7 @@
   <div>
     <div class="tw:border-b tw:border-gray-100">
       <div class="tw:max-w-6xl tw:mx-auto tw:px-4 tw:py-2 tw:text-sm tw:text-gray-500 tw:flex tw:items-center tw:gap-2">
-        <router-link to="/ceramic" class="tw:hover:text-clay-500 tw:transition-colors">Каталог</router-link>
+        <router-link to="/" class="tw:hover:text-clay-500 tw:transition-colors">Каталог</router-link>
         <span>›</span>
         <span class="tw:text-ink-800">О проекте</span>
       </div>
@@ -33,9 +33,9 @@
 
           <h2 class="tw:font-serif tw:text-xl tw:font-semibold tw:text-ink-900 tw:mt-8 tw:mb-3">Как пользоваться архивом</h2>
           <ul class="tw:list-disc tw:list-inside tw:space-y-2">
-            <li>Перейдите в <router-link to="/ceramic/materials" class="tw:text-clay-500 tw:hover:underline">Материалы</router-link> и выберите нужный документ</li>
+            <li>Перейдите в <router-link to="/materials" class="tw:text-clay-500 tw:hover:underline">Материалы</router-link> и выберите нужный документ</li>
             <li>Просматривайте страницы документа в виде галереи</li>
-            <li>Используйте <router-link to="/ceramic/search" class="tw:text-clay-500 tw:hover:underline">Поиск</router-link> для поиска по названию, автору или типу документа</li>
+            <li>Используйте <router-link to="/search" class="tw:text-clay-500 tw:hover:underline">Поиск</router-link> для поиска по названию, автору или типу документа</li>
             <li>Нажмите на документ, чтобы открыть все его страницы</li>
             <li>Кликните на страницу для просмотра в полном размере</li>
           </ul>
@@ -43,7 +43,7 @@
           <h2 class="tw:font-serif tw:text-xl tw:font-semibold tw:text-ink-900 tw:mt-8 tw:mb-3">Участие в проекте</h2>
           <p>
             Если у вас есть документы, фотографии или сведения о керамических заводах —
-            свяжитесь с нами через форму <router-link to="/ceramic/feedback" class="tw:text-clay-500 tw:hover:underline">Обратной связи</router-link>.
+            свяжитесь с нами через форму <router-link to="/feedback" class="tw:text-clay-500 tw:hover:underline">Обратной связи</router-link>.
             Мы будем рады пополнить архив новыми материалами.
           </p>
 

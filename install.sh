@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 # Установка python/npm-зависимостей проекта (venv из requirements.txt,
 # npm-пакеты для сборки frontend), плюс создание пустого шаблона config.ini
-# в ~/.config/porcelain-archive (тот же путь, что модуль porcelain_archive
-# использует как запасной по умолчанию) и установка ARCHIVE_CONFIG_INI_PATH
-# для текущего пользователя.
+# в /usr/share/porcelain-archive (тот же путь, что модуль porcelain_archive
+# использует по умолчанию на Linux). Создание файла требует sudo, так как
+# каталог системный.
 #
-# Скрипт полностью работает без sudo и не ставит системные пакеты (git,
-# git-lfs, python3-venv, Node.js/npm, PostgreSQL) - только проверяет их
-# наличие и подсказывает команду, если чего-то не хватает. Полный список
-# и точные команды установки - в README.md.
+# Скрипт не ставит системные пакеты (git, git-lfs, python3-venv, Node.js/npm,
+# PostgreSQL) - только проверяет их наличие и подсказывает команду, если
+# чего-то не хватает. Полный список и точные команды установки - в README.md.
 #
 # Список python-пакетов (requirements.txt) собран по фактическим import'ам
 # в каждом .py файле проекта (модули стандартной библиотеки и локальный
@@ -93,16 +92,16 @@ echo "node $(node --version), npm $(npm --version) найдены."
 # Установка npm-зависимостей и сборка frontend - в start.sh, он
 # выполняется при каждом запуске и подхватывает актуальные исходники.
 
-echo "== Шаблон config.ini =="
-CONFIG_DIR="$HOME/.config/porcelain-archive"
+echo "== Шаблон config.ini (требует sudo) =="
+CONFIG_DIR="/usr/share/porcelain-archive"
 CONFIG_PATH="$CONFIG_DIR/config.ini"
 
-mkdir -p "$CONFIG_DIR"
+sudo mkdir -p "$CONFIG_DIR"
 
 if [ -f "$CONFIG_PATH" ]; then
     echo "$CONFIG_PATH уже существует, не трогаю."
 else
-    cat > "$CONFIG_PATH" <<'EOF'
+    sudo tee "$CONFIG_PATH" > /dev/null <<'EOF'
 [Common]
 root =
 
@@ -119,18 +118,7 @@ repos_branch_root =
 cache_path =
 log_path =
 EOF
+    # владелец - текущий пользователь, чтобы заполнять config.ini можно было без sudo
+    sudo chown "$(id -u):$(id -g)" "$CONFIG_PATH"
     echo "Создан пустой шаблон $CONFIG_PATH - заполните значения перед запуском."
 fi
-
-echo "== Переменная окружения ARCHIVE_CONFIG_INI_PATH =="
-ENV_LINE="export ARCHIVE_CONFIG_INI_PATH=\"$CONFIG_PATH\""
-PROFILE_FILE="$HOME/.bashrc"
-
-touch "$PROFILE_FILE"
-# убираем прежнюю настройку этой переменной, если была - не плодим дубли
-sed -i '/^export ARCHIVE_CONFIG_INI_PATH=/d' "$PROFILE_FILE"
-echo "$ENV_LINE" >> "$PROFILE_FILE"
-echo "Добавлено в $PROFILE_FILE: $ENV_LINE"
-
-export ARCHIVE_CONFIG_INI_PATH="$CONFIG_PATH"
-echo "В текущей сессии уже действует. Для новых сессий выполните: source $PROFILE_FILE"
