@@ -11,6 +11,9 @@
     >
     <div v-if="textFile" class="tw:text-xs tw:text-gray-400 tw:mt-1">{{ textFile.name }} · {{ formatSize(textFile.size) }}</div>
 
+    <label class="tw:block tw:text-sm tw:font-medium tw:text-gray-700 tw:mb-1 tw:mt-3">Качество распознавания</label>
+    <AppListbox v-model="ocrQuality" :options="ocrQualityOptions" />
+
     <PageNumberField
       v-model="textPosition"
       label="Страница, с которой применяется текст"
@@ -47,6 +50,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import http from '../../api/http'
 import PageNumberField from '../PageNumberField.vue'
+import AppListbox from '../AppListbox.vue'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
 
@@ -58,6 +62,11 @@ const props = defineProps({
 const emit = defineEmits(['submitted'])
 
 const textFile = ref(null)
+const ocrQualityOptions = [
+  { value: 'high', title: 'Высокое' },
+  { value: 'low', title: 'Низкое' },
+]
+const ocrQuality = ref('high')
 const textPosition = ref(props.pageCount ? 1 : 0)
 const settingText = ref(false)
 const setTextError = ref('')
@@ -128,6 +137,7 @@ const handleSetText = async () => {
     const formData = new FormData()
     formData.append('file', textFile.value)
     formData.append('position', String(textPosition.value))
+    formData.append('ocr_quality', ocrQuality.value)
     await http.post(`/api/documents/branches/${props.branchId}/text`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })

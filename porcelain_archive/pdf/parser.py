@@ -205,7 +205,6 @@ def extract_sequence(pdf_path, images_dir=None):
             pages_out.append({
                 "width": round(page_layout.width, 1),
                 "height": round(page_h, 1),
-                "images": image_paths,
                 "blocks": blocks_out,
             })
 

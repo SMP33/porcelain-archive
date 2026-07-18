@@ -51,13 +51,14 @@ class Database:
 
     async def init(self) -> None:
         """
-        Открывает пул соединений и выполняет create_tables.sql.
+        Открывает пул соединений и выполняет create_tables.sql, patch_tables.sql,
+        create_triggers.sql и fill_initial_data.sql.
         Должна вызываться из async-контекста (lifespan FastAPI при старте сервера).
         """
         await self._pool.open()
 
         async with self._pool.connection() as conn:
-            files = ['create_tables.sql', 'create_triggers.sql', 'fill_initial_data.sql']
+            files = ['create_tables.sql', 'patch_tables.sql', 'create_triggers.sql', 'fill_initial_data.sql']
             
             sql_script=''
             for file in files:

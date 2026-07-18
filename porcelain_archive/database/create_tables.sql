@@ -10,9 +10,6 @@ CREATE    TABLE IF NOT EXISTS member (
           created_time TIMESTAMP -- Время создания учётной записи
           );
 
--- На случай существующей БД, созданной до появления этого поля.
-ALTER TABLE member ADD COLUMN IF NOT EXISTS created_time TIMESTAMP;
-
 -- Сессии пользователей
 CREATE    TABLE IF NOT EXISTS session (
           user_id BIGINT NOT NULL REFERENCES member (id) ON DELETE CASCADE, -- Пользователь
@@ -42,7 +39,7 @@ CREATE    TABLE IF NOT EXISTS branch (
           initial_commit TEXT, -- Коммит на момент создания ветки
           last_commit TEXT, -- Коммит последнего обновления кеша страниц
           status TEXT NOT NULL DEFAULT 'in_work' -- Статус набора изменений
-          CHECK (status IN ('in_work','in_review', 'in_accept', 'accepted', 'rejected'))
+          CHECK (status IN ('in_work','to_review', 'in_review', 'in_accept', 'accepted', 'rejected'))
           );
 
 -- Страницы документа
@@ -80,18 +77,32 @@ CREATE    TABLE IF NOT EXISTS message (
           create_time TIMESTAMP -- Время создания
           );
 
--- На случай существующей БД, созданной до появления этих полей.
-ALTER TABLE message ADD COLUMN IF NOT EXISTS id BIGSERIAL;
-ALTER TABLE message ADD COLUMN IF NOT EXISTS is_read INTEGER DEFAULT 0;
-ALTER TABLE message ADD COLUMN IF NOT EXISTS create_time TIMESTAMP;
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'message_pkey') THEN
-        ALTER TABLE message ADD PRIMARY KEY (id);
-    END IF;
-END $$;
-
 -- Отметка "важное" для сообщений (например, обратной связи - message.receiver_type = 'feedback').
 -- Присутствие строки = отмечено важным.
 CREATE    TABLE IF NOT EXISTS important_feedback (
           message_id BIGINT PRIMARY KEY REFERENCES message (id) ON DELETE CASCADE -- Сообщение
+          );
+
+-- Указатели
+CREATE    TABLE IF NOT EXISTS property (
+          id BIGSERIAL PRIMARY KEY, -- Уникальный id
+          tag TEXT NOT NULL, -- Имя
+          name TEXT NOT NULL, -- Отображаемое имя
+          description TEXT, -- Описание
+          is_list INTEGER DEFAULT 0, -- Список или одно значение
+          is_editable INTEGER DEFAULT 1, -- Доступно ли для редактирования
+          is_visible INTEGER DEFAULT 0 -- Виден ли обычным пользователям
+          );
+
+-- Доступные значения указателей
+CREATE    TABLE IF NOT EXISTS property_enum (
+          property_id BIGINT REFERENCES property (id) ON DELETE SET NULL, -- Указатель
+          value TEXT -- Значение
+          );
+
+-- Фактические значения указателей
+CREATE    TABLE IF NOT EXISTS document_property (
+          document_id BIGINT REFERENCES document (id) ON DELETE SET NULL, -- Документ
+          property_id BIGINT REFERENCES property (id) ON DELETE SET NULL, -- Указатель
+          value TEXT -- Значение
           );

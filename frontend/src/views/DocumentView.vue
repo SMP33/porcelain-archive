@@ -183,13 +183,15 @@ const galleryRef = ref(null)
 
 const branchStatusLabels = {
   in_work: 'В работе',
+  to_review: 'Отправлено на проверку',
   in_review: 'Проверяется',
   in_accept: 'Завершение правок',
   accepted: 'Принято',
   rejected: 'Отклонено',
 }
 const branchStatusClasses = {
-  in_work: 'tw:bg-blue-100 tw:text-blue-700',
+  in_work: 'tw:bg-gray-100 tw:text-gray-700',
+  to_review: 'tw:bg-blue-100 tw:text-blue-700',
   in_review: 'tw:bg-purple-100 tw:text-purple-700',
   in_accept: 'tw:bg-teal-100 tw:text-teal-700',
   accepted: 'tw:bg-green-100 tw:text-green-700',

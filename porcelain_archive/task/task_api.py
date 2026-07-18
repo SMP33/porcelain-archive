@@ -89,7 +89,10 @@ async def read_server_log(
 async def task_updates_ws(websocket: WebSocket) -> None:
     """
     Пушит уведомления об изменениях таблицы task (LISTEN/NOTIFY канал
-    task_changed), чтобы страница списка задач могла обновляться сама.
+    task_changed) и статуса набора изменений (канал branch_changed), чтобы
+    страница списка задач и страница редактирования набора изменений могли
+    обновляться сами - в том числе у других пользователей, у которых открыта
+    та же страница.
     """
     token = websocket.cookies.get("session_token")
     user = await user_service.get_user_by_token(token) if token else None
@@ -102,8 +105,12 @@ async def task_updates_ws(websocket: WebSocket) -> None:
     conn = await psycopg.AsyncConnection.connect(db.conninfo, autocommit=True)
     try:
         await conn.execute("LISTEN task_changed")
+        await conn.execute("LISTEN branch_changed")
         async for notify in conn.notifies():
-            await websocket.send_json({"task_id": notify.payload})
+            if notify.channel == "branch_changed":
+                await websocket.send_json({"branch_id": notify.payload})
+            else:
+                await websocket.send_json({"task_id": notify.payload})
     except WebSocketDisconnect:
         pass
     finally:

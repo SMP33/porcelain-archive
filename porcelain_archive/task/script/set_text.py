@@ -18,6 +18,7 @@ try:
 
     position = info.data["position"]
     pdf_path = info.data["pdf_path"]
+    ocr_quality = info.data["ocr_quality"]
     tmpdir = str(Path(pdf_path).parent)
 
     branch_id = info.data["branch_id"]
@@ -38,6 +39,7 @@ try:
 
     for offset, page in enumerate(pages):
         target_pos = position + offset
+        page["ocr_quality"] = ocr_quality
         json_path = Path(f"{doc_path}/{target_pos}.json")
         json_path.write_text(json.dumps(page, ensure_ascii=False), encoding="utf-8")
         run_git(branch_path, "add", "--sparse", f"./doc/{target_pos}.json")

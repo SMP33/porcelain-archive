@@ -3,52 +3,112 @@
     <AppToolbar />
     <main class="tw:md:pl-[232px]">
       <div class="tw:border-b tw:border-gray-200 tw:bg-white tw:px-8 tw:py-4">
-        <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">Редактирование набора изменений</h1>
-      </div>
-      <div class="tw:px-8 tw:py-6 tw:space-y-4">
-        <div v-if="!loading && branch" class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:p-6">
-          <div class="tw:flex tw:items-center tw:justify-between tw:mb-1 tw:gap-4">
-            <span class="tw:font-serif tw:font-semibold tw:text-ink-900">{{ branch.documentName }}</span>
-            <AppListbox
-              v-if="hasRole('moderator')"
-              :model-value="branch.status"
-              :options="statusListboxOptions"
-              :loading="statusLoading"
-              :disabled="isStatusSelectLocked"
-              @update:model-value="requestSetStatus"
-            />
-            <span v-else class="tw:inline-block tw:px-2 tw:py-0.5 tw:rounded-full tw:text-xs tw:font-medium" :class="statusBadgeClass(branch.status)">
+        <div class="tw:flex tw:items-center tw:justify-between tw:gap-4 tw:flex-wrap">
+          <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">
+            <template v-if="branch">
+              <router-link :to="`/edit/document/${branch.documentId}`" class="tw:hover:text-clay-500 tw:transition-colors">{{ branch.documentName }}</router-link>
+              <span class="tw:text-gray-300 tw:mx-2">/</span>
+              <span>Набор изменений № {{ branch.id }}</span>
+            </template>
+            <template v-else>Редактирование набора изменений</template>
+          </h1>
+
+          <div v-if="branch" ref="statusMenuRoot" class="tw:relative tw:inline-block">
+            <button
+              type="button"
+              :disabled="!hasStatusMenuActions"
+              class="tw:inline-flex tw:items-center tw:gap-1 tw:px-2 tw:py-0.5 tw:rounded-full tw:text-xs tw:font-medium tw:transition-colors tw:disabled:cursor-default"
+              :class="statusBadgeClass(branch.status)"
+              @click="statusMenuOpen = !statusMenuOpen"
+            >
               {{ statusLabels[branch.status] || branch.status }}
-            </span>
-          </div>
-          <div class="tw:text-sm tw:text-gray-400 tw:mb-4">№ {{ branch.id }}</div>
-
-          <p class="tw:text-sm tw:text-gray-600">Это страница редактирования набора изменений с ID: <strong>{{ branch.id }}</strong>.</p>
-          <p class="tw:text-sm tw:text-gray-600 tw:mt-1">Страниц в наборе изменений: <strong>{{ pageCount }}</strong></p>
-
-          <div class="tw:flex tw:items-center tw:gap-3 tw:mt-5">
-            <router-link to="/edit" class="tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors">Назад к списку</router-link>
-            <button
-              v-if="isAuthor && branch.status === 'in_work'"
-              type="button"
-              :disabled="statusActionLoading"
-              class="tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
-              @click="handleSubmitForReview"
-            >
-              Отправить на проверку
+              <i v-if="hasStatusMenuActions" class="mdi mdi-chevron-down" />
             </button>
-            <button
-              v-if="isAuthor && branch.status === 'in_review'"
-              type="button"
-              :disabled="statusActionLoading"
-              class="tw:px-5 tw:py-2 tw:bg-ink-900 tw:hover:bg-ink-800 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
-              @click="handleReturnToWork"
+            <div
+              v-if="statusMenuOpen && hasStatusMenuActions"
+              class="tw:absolute tw:right-0 tw:z-20 tw:mt-1 tw:min-w-[200px] tw:bg-white tw:rounded-lg tw:border tw:border-gray-200 tw:shadow-lg tw:py-1"
             >
-              Вернуть в работу
-            </button>
+              <template v-if="hasRole('moderator')">
+                <button
+                  v-if="branch.status === 'to_review' || branch.status === 'in_review'"
+                  type="button"
+                  class="tw:block tw:w-full tw:text-left tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50 tw:transition-colors"
+                  :style="{ color: statusColors.in_work }"
+                  @click="statusMenuOpen = false; requestSetStatus('in_work')"
+                >
+                  Вернуть в работу
+                </button>
+                <button
+                  v-if="branch.status === 'in_work'"
+                  type="button"
+                  class="tw:block tw:w-full tw:text-left tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50 tw:transition-colors"
+                  :style="{ color: statusColors.to_review }"
+                  @click="statusMenuOpen = false; requestSetStatus('to_review')"
+                >
+                  Отправить на проверку
+                </button>
+                <button
+                  v-if="branch.status === 'to_review'"
+                  type="button"
+                  class="tw:block tw:w-full tw:text-left tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50 tw:transition-colors"
+                  :style="{ color: statusColors.in_review }"
+                  @click="statusMenuOpen = false; requestSetStatus('in_review')"
+                >
+                  Взять на проверку
+                </button>
+                <button
+                  v-if="branch.status === 'in_review'"
+                  type="button"
+                  class="tw:block tw:w-full tw:text-left tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50 tw:transition-colors"
+                  :style="{ color: statusColors.in_accept }"
+                  @click="statusMenuOpen = false; requestSetStatus('in_accept')"
+                >
+                  Принять правки
+                </button>
+                <button
+                  v-if="!STATUS_SELECT_LOCKED_STATUSES.includes(branch.status)"
+                  type="button"
+                  class="tw:block tw:w-full tw:text-left tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-red-50 tw:transition-colors"
+                  :style="{ color: statusColors.rejected }"
+                  @click="statusMenuOpen = false; requestSetStatus('rejected')"
+                >
+                  Отклонить
+                </button>
+              </template>
+              <template v-else>
+                <button
+                  v-if="branch.status === 'in_work'"
+                  type="button"
+                  class="tw:block tw:w-full tw:text-left tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50 tw:transition-colors"
+                  :style="{ color: statusColors.to_review }"
+                  @click="statusMenuOpen = false; handleSubmitForReview()"
+                >
+                  Отправить на проверку
+                </button>
+                <button
+                  v-if="branch.status === 'to_review'"
+                  type="button"
+                  class="tw:block tw:w-full tw:text-left tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50 tw:transition-colors"
+                  :style="{ color: statusColors.in_work }"
+                  @click="statusMenuOpen = false; handleReturnToWork()"
+                >
+                  Вернуть в работу
+                </button>
+                <button
+                  v-if="branch.status === 'in_work'"
+                  type="button"
+                  class="tw:block tw:w-full tw:text-left tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-red-50 tw:transition-colors"
+                  :style="{ color: statusColors.rejected }"
+                  @click="statusMenuOpen = false; requestDeleteBranch()"
+                >
+                  Удалить
+                </button>
+              </template>
+            </div>
           </div>
         </div>
-
+      </div>
+      <div class="tw:px-8 tw:py-6 tw:space-y-4">
         <AppModal v-model="confirmStatusDialog" max-width="tw:max-w-md" :persistent="true" :show-close="false">
           <h2 class="tw:font-serif tw:font-bold tw:text-lg tw:text-ink-900 tw:mb-4">Подтверждение изменения статуса</h2>
           <p class="tw:text-sm tw:text-gray-600">
@@ -64,6 +124,24 @@
               @click="confirmSetStatus"
             >
               {{ statusLoading ? 'Сохранение…' : 'Подтвердить' }}
+            </button>
+          </div>
+        </AppModal>
+
+        <AppModal v-model="confirmDeleteDialog" max-width="tw:max-w-md" :persistent="true" :show-close="false">
+          <h2 class="tw:font-serif tw:font-bold tw:text-lg tw:text-ink-900 tw:mb-4">Удаление набора изменений</h2>
+          <p class="tw:text-sm tw:text-gray-600">
+            Удалить набор изменений № {{ branch && branch.id }}? Он перейдёт в статус «Отклонено», редактирование станет недоступно.
+          </p>
+          <div class="tw:flex tw:items-center tw:justify-end tw:gap-2 tw:mt-6">
+            <button type="button" class="tw:px-5 tw:py-2 tw:text-sm tw:text-gray-500 tw:hover:text-gray-700 tw:transition-colors" @click="cancelDeleteBranch">Отмена</button>
+            <button
+              type="button"
+              :disabled="!deleteReady"
+              class="tw:px-5 tw:py-2 tw:bg-red-600 tw:hover:bg-red-500 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
+              @click="confirmDeleteBranch"
+            >
+              {{ deleteLoading ? 'Удаление…' : 'Удалить' }}
             </button>
           </div>
         </AppModal>
@@ -160,7 +238,7 @@
             <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:p-6">
               <h2 class="tw:font-serif tw:font-semibold tw:text-ink-900 tw:mb-4">Страницы</h2>
               <div v-if="!pageCount" class="tw:text-sm tw:text-gray-400">Страниц пока нет</div>
-              <div v-else class="pages-scroll-area">
+              <div v-else ref="pagesScrollAreaRef" class="pages-scroll-area">
                 <div class="tw:grid tw:grid-cols-2 tw:sm:grid-cols-3 tw:md:grid-cols-4 tw:lg:grid-cols-6 tw:gap-3">
                   <div v-for="pos in pageCount" :id="'page-tile-' + pos" :key="pos" class="tw:relative">
                     <div v-if="activeInsertGap === 0 && pos === 1" class="insert-gap-marker insert-gap-marker--left" />
@@ -179,8 +257,9 @@
             </div>
           </div>
 
-          <div class="tw:w-full tw:md:w-64 tw:shrink-0">
+          <div class="tw:w-full tw:md:w-64 tw:shrink-0 tw:space-y-4">
             <BranchTasksPanel ref="branchTasksRef" :branch-id="branch.id" />
+            <BranchCommentsPanel ref="branchCommentsRef" :branch-id="branch.id" />
           </div>
         </div>
 
@@ -205,7 +284,6 @@ import http from '../api/http'
 import { useAuth } from '../composables/useAuth'
 import AppToolbar from '../components/AppToolbar.vue'
 import AppModal from '../components/AppModal.vue'
-import AppListbox from '../components/AppListbox.vue'
 import PageGalleryViewer from '../components/PageGalleryViewer.vue'
 import AddPagesPanel from '../components/edit/AddPagesPanel.vue'
 import RemovePagesPanel from '../components/edit/RemovePagesPanel.vue'
@@ -213,6 +291,7 @@ import SetTextPanel from '../components/edit/SetTextPanel.vue'
 import ResetTextPanel from '../components/edit/ResetTextPanel.vue'
 import ViewChangesPanel from '../components/edit/ViewChangesPanel.vue'
 import BranchTasksPanel from '../components/edit/BranchTasksPanel.vue'
+import BranchCommentsPanel from '../components/edit/BranchCommentsPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -220,20 +299,23 @@ const { user, hasRole } = useAuth()
 
 const statusLabels = {
   in_work: 'В работе',
+  to_review: 'Отправлено на проверку',
   in_review: 'Проверяется',
   in_accept: 'Завершение правок',
   accepted: 'Принято',
   rejected: 'Отклонено',
 }
 const statusColors = {
-  in_work: '#2563eb',
+  in_work: '#6b7280',
+  to_review: '#2563eb',
   in_review: '#9333ea',
   in_accept: '#0d9488',
   accepted: '#16a34a',
   rejected: '#dc2626',
 }
 const statusBadgeClasses = {
-  in_work: 'tw:bg-blue-100 tw:text-blue-700',
+  in_work: 'tw:bg-gray-100 tw:text-gray-700',
+  to_review: 'tw:bg-blue-100 tw:text-blue-700',
   in_review: 'tw:bg-purple-100 tw:text-purple-700',
   in_accept: 'tw:bg-teal-100 tw:text-teal-700',
   accepted: 'tw:bg-green-100 tw:text-green-700',
@@ -242,15 +324,6 @@ const statusBadgeClasses = {
 function statusBadgeClass(status) {
   return statusBadgeClasses[status] || 'tw:bg-gray-100 tw:text-gray-600'
 }
-const statusOptions = Object.entries(statusLabels).map(([value, title]) => ({ value, title }))
-// В выпадающем списке статус "Принято" скрыт (достигается через отдельный флоу
-// приёмки, а не прямым выбором), но должен корректно отображаться, если он уже текущий.
-const statusListboxOptions = statusOptions.map((o) => ({
-  ...o,
-  color: statusColors[o.value],
-  hidden: o.value === 'accepted',
-}))
-
 const branch = ref(null)
 const loading = ref(true)
 const error = ref(null)
@@ -267,26 +340,33 @@ watch(activeView, (value) => {
   localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, value)
 })
 
-const LOCKED_STATUSES = ['in_review', 'accepted', 'rejected', 'in_accept']
+const LOCKED_STATUSES = ['to_review', 'in_review', 'accepted', 'rejected', 'in_accept']
 // Статусы, при которых комбобокс смены статуса недоступен даже модератору -
-// в отличие от LOCKED_STATUSES, "in_review" сюда не входит: именно на этой
-// стадии модератору и нужно менять статус (принять/отклонить/вернуть в работу).
+// в отличие от LOCKED_STATUSES, "to_review" и "in_review" сюда не входят: именно
+// на этих стадиях модератору и нужно менять статус (взять в проверку, принять,
+// отклонить, вернуть в работу).
 const STATUS_SELECT_LOCKED_STATUSES = ['accepted', 'rejected', 'in_accept']
 
 const statusLoading = ref(false)
-const statusActionLoading = ref(false)
 const confirmStatusDialog = ref(false)
 const pendingStatus = ref(null)
 const confirmReady = ref(false)
-const CONFIRM_DELAY_MS = 2000
+const CONFIRM_DELAY_MS = 1000
 let confirmReadyTimer = null
 
+const deleteLoading = ref(false)
+const confirmDeleteDialog = ref(false)
+const deleteReady = ref(false)
+let deleteReadyTimer = null
+
 const branchTasksRef = ref(null)
+const branchCommentsRef = ref(null)
 const galleryRef = ref(null)
 const addPagesRef = ref(null)
 const removePagesRef = ref(null)
 const setTextRef = ref(null)
 const resetTextRef = ref(null)
+const pagesScrollAreaRef = ref(null)
 
 const highlightClasses = {
   red: 'tw:border-2 tw:border-red-400 tw:bg-red-50',
@@ -331,17 +411,52 @@ const scrollTargetPos = computed(() => {
   return activeHighlightRange.value?.start ?? null
 })
 
+// Скроллим только контейнер плиток (pagesScrollAreaRef.scrollTop) - el.scrollIntoView()
+// затрагивает и скролл всей страницы, чего быть не должно.
 watch(scrollTargetPos, (pos) => {
   if (pos == null) return
   nextTick(() => {
+    const container = pagesScrollAreaRef.value
     const el = window.document.getElementById('page-tile-' + pos)
-    if (el) el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    if (!container || !el) return
+    const containerRect = container.getBoundingClientRect()
+    const elRect = el.getBoundingClientRect()
+    if (elRect.top < containerRect.top) {
+      container.scrollTop -= containerRect.top - elRect.top
+    } else if (elRect.bottom > containerRect.bottom) {
+      container.scrollTop += elRect.bottom - containerRect.bottom
+    }
   })
 })
 
 const isAuthor = computed(() => !!(user.value && branch.value && user.value.id === branch.value.authorId))
 const isLocked = computed(() => !!(branch.value && LOCKED_STATUSES.includes(branch.value.status)))
-const isStatusSelectLocked = computed(() => !!(branch.value && STATUS_SELECT_LOCKED_STATUSES.includes(branch.value.status)))
+
+// Меню действий над статусом в шапке страницы - у модератора набор действий
+// (произвольная смена статуса вперёд/назад, отклонение), у обычного автора -
+// только "Отправить на проверку" / "Вернуть в работу" / "Удалить".
+const statusMenuOpen = ref(false)
+const statusMenuRoot = ref(null)
+const hasUserActions = computed(() => !!(isAuthor.value && branch.value && (branch.value.status === 'in_work' || branch.value.status === 'to_review')))
+const hasStatusMenuActions = computed(() => {
+  if (!branch.value) return false
+  if (hasRole('moderator')) return !STATUS_SELECT_LOCKED_STATUSES.includes(branch.value.status)
+  return hasUserActions.value
+})
+
+function onStatusMenuDocClick(e) {
+  if (statusMenuRoot.value && !statusMenuRoot.value.contains(e.target)) {
+    statusMenuOpen.value = false
+  }
+}
+
+watch(statusMenuOpen, (isOpen) => {
+  if (isOpen) {
+    document.addEventListener('click', onStatusMenuDocClick, true)
+  } else {
+    document.removeEventListener('click', onStatusMenuDocClick, true)
+  }
+})
 
 watch(isLocked, (locked) => {
   if (locked && activeView.value !== 'view_changes') {
@@ -400,26 +515,22 @@ const loadAllowedExtensions = async () => {
 }
 
 const handleSubmitForReview = async () => {
-  statusActionLoading.value = true
   try {
     await http.post(`/api/documents/branches/${branch.value.id}/submit_for_review`, {})
-    branch.value.status = 'in_review'
+    branch.value.status = 'to_review'
+    branchCommentsRef.value.reload()
   } catch (err) {
     console.error('Ошибка при отправке на проверку:', err)
-  } finally {
-    statusActionLoading.value = false
   }
 }
 
 const handleReturnToWork = async () => {
-  statusActionLoading.value = true
   try {
     await http.post(`/api/documents/branches/${branch.value.id}/return_to_work`, {})
     branch.value.status = 'in_work'
+    branchCommentsRef.value.reload()
   } catch (err) {
     console.error('Ошибка при возврате в работу:', err)
-  } finally {
-    statusActionLoading.value = false
   }
 }
 
@@ -448,6 +559,7 @@ const confirmSetStatus = async () => {
     await http.post(`/api/documents/branches/${branch.value.id}/status`, { status: newStatus })
     branch.value.status = newStatus
     branchTasksRef.value.reload()
+    branchCommentsRef.value.reload()
   } catch (err) {
     console.error('Ошибка при изменении статуса:', err)
   } finally {
@@ -458,17 +570,51 @@ const confirmSetStatus = async () => {
   }
 }
 
+const requestDeleteBranch = () => {
+  confirmDeleteDialog.value = true
+  deleteReady.value = false
+  clearTimeout(deleteReadyTimer)
+  deleteReadyTimer = setTimeout(() => {
+    deleteReady.value = true
+  }, CONFIRM_DELAY_MS)
+}
+
+const cancelDeleteBranch = () => {
+  clearTimeout(deleteReadyTimer)
+  confirmDeleteDialog.value = false
+  deleteReady.value = false
+}
+
+const confirmDeleteBranch = async () => {
+  deleteLoading.value = true
+  try {
+    await http.post(`/api/documents/branches/${branch.value.id}/delete`, {})
+    branch.value.status = 'rejected'
+    branchTasksRef.value.reload()
+    branchCommentsRef.value.reload()
+  } catch (err) {
+    console.error('Ошибка при удалении набора изменений:', err)
+  } finally {
+    deleteLoading.value = false
+    confirmDeleteDialog.value = false
+    deleteReady.value = false
+  }
+}
+
 const onPagesChanged = async () => {
   await loadPageCount()
   branchTasksRef.value.reload()
 }
 
+// Тот же WS отдаёт и события задач, и изменения статуса набора изменений -
+// на любое сообщение просто перезагружаем текущую ветку и задачи, не разбирая payload.
 const connectTaskUpdates = () => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   ws = new WebSocket(`${protocol}//${window.location.host}/api/tasks/ws`)
 
   ws.onmessage = async () => {
     branchTasksRef.value.reload()
+    branchCommentsRef.value.reload()
     loadPageCount()
     loadBranch(branch.value.id)
   }
@@ -495,6 +641,8 @@ onUnmounted(() => {
     ws.close()
   }
   clearTimeout(confirmReadyTimer)
+  clearTimeout(deleteReadyTimer)
+  document.removeEventListener('click', onStatusMenuDocClick, true)
 })
 </script>
 

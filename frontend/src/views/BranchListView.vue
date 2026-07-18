@@ -7,6 +7,23 @@
       </div>
       <div class="tw:px-8 tw:py-6">
         <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:overflow-hidden">
+          <div class="tw:px-4 tw:py-3 tw:border-b tw:border-gray-200 tw:flex tw:flex-wrap tw:items-center tw:gap-3">
+            <span class="tw:text-sm tw:text-gray-500">Статус</span>
+            <label
+              v-for="opt in statusFilterOptions"
+              :key="opt.value"
+              class="tw:flex tw:items-center tw:gap-1 tw:text-xs tw:cursor-pointer tw:select-none"
+              :style="{ color: opt.color }"
+            >
+              <input
+                type="checkbox"
+                :checked="selectedStatuses.includes(opt.value)"
+                :style="{ accentColor: opt.color }"
+                @change="toggleStatus(opt.value)"
+              >
+              {{ opt.title }}
+            </label>
+          </div>
           <div class="tw:overflow-x-auto">
             <table class="tw:w-full tw:text-sm">
               <thead class="tw:bg-gray-50 tw:border-b tw:border-gray-200">
@@ -64,7 +81,7 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import http from '../api/http'
 import AppToolbar from '../components/AppToolbar.vue'
@@ -75,13 +92,15 @@ const router = useRouter()
 
 const statusLabels = {
   in_work: 'В работе',
+  to_review: 'Отправлено на проверку',
   in_review: 'Проверяется',
   in_accept: 'Завершение правок',
   accepted: 'Принято',
   rejected: 'Отклонено',
 }
 const statusClasses = {
-  in_work: 'tw:bg-blue-100 tw:text-blue-700',
+  in_work: 'tw:bg-gray-100 tw:text-gray-700',
+  to_review: 'tw:bg-blue-100 tw:text-blue-700',
   in_review: 'tw:bg-purple-100 tw:text-purple-700',
   in_accept: 'tw:bg-teal-100 tw:text-teal-700',
   accepted: 'tw:bg-green-100 tw:text-green-700',
@@ -90,13 +109,35 @@ const statusClasses = {
 function statusClass(status) {
   return statusClasses[status] || 'tw:bg-gray-100 tw:text-gray-600'
 }
+const statusColors = {
+  in_work: '#6b7280',
+  to_review: '#2563eb',
+  in_review: '#9333ea',
+  in_accept: '#0d9488',
+  accepted: '#16a34a',
+  rejected: '#dc2626',
+}
+
+const statusFilterOptions = Object.entries(statusLabels).map(([value, title]) => ({ value, title, color: statusColors[value] }))
+const selectedStatuses = ref(['in_work'])
 
 const { page, itemsPerPage, items, total, loading, pageCount, reload, goToPage, setItemsPerPage } = usePagedTable(
   async ({ offset, limit }) => {
-    const response = await http.get('/api/documents/branches/', { params: { offset, limit } })
+    const params = new URLSearchParams()
+    params.set('offset', offset)
+    params.set('limit', limit)
+    selectedStatuses.value.forEach((s) => params.append('status', s))
+    const response = await http.get('/api/documents/branches/', { params })
     return { items: response.data.items, total: response.data.total }
   },
 )
+
+function toggleStatus(value) {
+  const idx = selectedStatuses.value.indexOf(value)
+  if (idx === -1) selectedStatuses.value.push(value)
+  else selectedStatuses.value.splice(idx, 1)
+  goToPage(1)
+}
 
 function openBranch(item) {
   router.push(`/edit/${item.id}`)

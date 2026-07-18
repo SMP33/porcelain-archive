@@ -12,3 +12,7 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO member (name, display_name, email, hash, role)
 VALUES ('admin', 'Администратор', NULL, '$2b$12$71UKwGlo5Wyb13g7yfIEue/tJ2R76ywV56hre.UU6jv7FM9ur4bvq', 'admin')
 ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO member (name, display_name, email, hash, role)
+VALUES ('admin', 'Администратор', NULL, '$2b$12$71UKwGlo5Wyb13g7yfIEue/tJ2R76ywV56hre.UU6jv7FM9ur4bvq', 'admin')
+ON CONFLICT (name) DO NOTHING;

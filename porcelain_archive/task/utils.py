@@ -357,6 +357,12 @@ def set_branch_merge_result(branch_id: int, success: bool) -> None:
 
     with psycopg.connect(conninfo, cursor_factory=_LoggingCursor) as conn:
         conn.execute("UPDATE branch SET status = %s WHERE id = %s", (new_status, branch_id))
+        # Смена статуса автоматическая (по результату задачи merge_branch), автор неизвестен.
+        conn.execute(
+            "INSERT INTO message (author_id, receiver_type, receiver_id, text, is_read, create_time) "
+            "VALUES (NULL, 'branch_status', %s, %s, 0, now())",
+            (branch_id, new_status),
+        )
 
 
 def regenerate_branch_cache(repo_path: str, branch_id: int, branch: Optional[str]):

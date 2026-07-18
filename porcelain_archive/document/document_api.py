@@ -1,8 +1,8 @@
 from typing import Annotated, Dict, Any, List, Optional
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from pydantic import BaseModel
 
-from .document_service import DocumentService
+from .document_service import DocumentService, BRANCH_STATUSES, OCR_QUALITIES
 from porcelain_archive.user import OAuth2PasswordBearerWithCookie, UserService, role_at_least
 
 router = APIRouter(
@@ -39,6 +39,10 @@ class SetVisibilityRequest(BaseModel):
 
 class SetBranchStatusRequest(BaseModel):
     status: str
+
+
+class BranchCommentRequest(BaseModel):
+    text: str
 
 
 class RemovePagesRequest(BaseModel):
@@ -128,22 +132,29 @@ async def read_branches(
     token: Annotated[str, Depends(oauth2_scheme)],
     offset: int = 0,
     limit: int = 25,
+    branch_statuses: Annotated[Optional[List[str]], Query(alias="status")] = None,
 ) -> Dict[str, Any]:
     """
     Возвращает список наборов изменений с пагинацией. Требует авторизации.
     Пользователь с правом review видит все, остальные - только свои.
+    branch_statuses (повторяющийся query-параметр "status") - опциональный
+    фильтр по статусам набора изменений (любой из переданных).
     """
     user = await user_service.get_user_by_token(token)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
     if not await document_service.is_branch_list_available(user["id"]):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Список наборов изменений недоступен")
+    if branch_statuses:
+        unknown = set(branch_statuses) - BRANCH_STATUSES
+        if unknown:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Неизвестный статус: '{unknown.pop()}'")
 
     sees_all = role_at_least(user.get("role"), "moderator")
     branches = await document_service.get_branches_paginated(
-        user["id"], sees_all, offset=offset, limit=limit
+        user["id"], sees_all, offset=offset, limit=limit, statuses=branch_statuses
     )
-    total = await document_service.get_branch_count(user["id"], sees_all)
+    total = await document_service.get_branch_count(user["id"], sees_all, statuses=branch_statuses)
     return {"items": branches, "total": total}
 
 
@@ -173,7 +184,7 @@ async def submit_branch_for_review(
     token: Annotated[str, Depends(oauth2_scheme)],
 ) -> Dict[str, Any]:
     """
-    Автор отправляет набор изменений на проверку: in_work -> in_review.
+    Автор отправляет набор изменений на проверку: in_work -> to_review.
     """
     user = await user_service.get_user_by_token(token)
     if user is None:
@@ -182,11 +193,11 @@ async def submit_branch_for_review(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Только автор может отправить набор изменений на проверку")
 
     try:
-        await document_service.submit_branch_for_review(branch_id)
+        await document_service.submit_branch_for_review(branch_id, user["id"])
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
-    return {"status": "in_review"}
+    return {"status": "to_review"}
 
 
 @router.post("/branches/{branch_id}/return_to_work")
@@ -195,7 +206,8 @@ async def return_branch_to_work(
     token: Annotated[str, Depends(oauth2_scheme)],
 ) -> Dict[str, Any]:
     """
-    Автор возвращает набор изменений в работу: in_review -> in_work.
+    Автор возвращает набор изменений в работу: to_review -> in_work.
+    Из in_review автор вернуть уже не может - это делает модератор.
     """
     user = await user_service.get_user_by_token(token)
     if user is None:
@@ -204,11 +216,33 @@ async def return_branch_to_work(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Только автор может вернуть набор изменений в работу")
 
     try:
-        await document_service.return_branch_to_work(branch_id)
+        await document_service.return_branch_to_work(branch_id, user["id"])
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     return {"status": "in_work"}
+
+
+@router.post("/branches/{branch_id}/delete")
+async def delete_branch(
+    branch_id: int,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """
+    Автор удаляет набор изменений: in_work -> rejected.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not await document_service.is_branch_author(user["id"], branch_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Только автор может удалить набор изменений")
+
+    try:
+        await document_service.delete_branch_draft(branch_id, user["id"])
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    return {"status": "rejected"}
 
 
 @router.post("/branches/{branch_id}/status")
@@ -291,21 +325,27 @@ async def set_text(
     token: Annotated[str, Depends(oauth2_scheme)],
     file: UploadFile = File(...),
     position: int = Form(...),
+    ocr_quality: str = Form(...),
 ) -> Dict[str, Any]:
     """
     Загружает PDF и ставит в очередь применение его текста к страницам ветки.
     Требует авторизации и доступа к редактированию ветки.
 
     :param position: Номер страницы, с которой начинается применение текста.
+    :param ocr_quality: Качество распознавания ('high' или 'low').
     """
     user = await user_service.get_user_by_token(token)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
     if not await document_service.is_branch_editable(user["id"], branch_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Редактирование ветки недоступно")
+    if ocr_quality not in OCR_QUALITIES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Неизвестное качество распознавания: '{ocr_quality}'")
 
     try:
-        return await document_service.set_text(branch_id=branch_id, file=file, position=position, user_id=user["id"])
+        return await document_service.set_text(
+            branch_id=branch_id, file=file, position=position, ocr_quality=ocr_quality, user_id=user["id"]
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -350,6 +390,48 @@ async def get_page_count(
 
     count = await document_service.get_branch_page_count(branch_id)
     return {"count": count}
+
+
+@router.get("/branches/{branch_id}/comments")
+async def get_branch_comments(
+    branch_id: int,
+    request: Request,
+) -> Dict[str, Any]:
+    """
+    Возвращает комментарии ветки: автоматические записи об изменении статуса
+    и текстовые комментарии пользователей. Master-ветка доступна всем, кому
+    доступен документ, остальные ветки - только автору/ревьюеру.
+    """
+    user_id = await _get_current_user_id(request)
+    if not await document_service.is_branch_viewable(user_id, branch_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра ветки")
+
+    comments = await document_service.get_branch_comments(branch_id)
+    return {"items": comments}
+
+
+@router.post("/branches/{branch_id}/comments")
+async def create_branch_comment(
+    branch_id: int,
+    payload: BranchCommentRequest,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """
+    Добавляет свободный текстовый комментарий к ветке. Требует авторизации
+    и доступа к просмотру ветки.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not await document_service.is_branch_viewable(user["id"], branch_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра ветки")
+
+    text = payload.text.strip()
+    if not text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Комментарий не может быть пустым")
+
+    await document_service.add_branch_comment(branch_id, text, user["id"])
+    return {"ok": True}
 
 
 @router.get("/branches/{branch_id}/pages_hash")

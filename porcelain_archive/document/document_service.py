@@ -32,7 +32,17 @@ ALLOWED_PAGE_EXTENSIONS = {
     ".heif",
 }
 
-BRANCH_STATUSES = {"in_work", "in_review", "in_accept", "accepted", "rejected"}
+BRANCH_STATUSES = {"in_work", "to_review", "in_review", "in_accept", "accepted", "rejected"}
+
+OCR_QUALITIES = {"high", "low"}
+
+# Изменения статуса набора изменений логируются как сообщения (комментарии к
+# ветке) в общей таблице message - receiver_id хранит id ветки, text - новый статус.
+BRANCH_STATUS_RECEIVER_TYPE = "branch_status"
+
+# Свободный текстовый комментарий пользователя к ветке - та же таблица message,
+# receiver_id хранит id ветки, text - текст комментария.
+BRANCH_COMMENT_RECEIVER_TYPE = "branch_comment"
 
 repos_root = str()
 repos_branch_root = str()
@@ -230,9 +240,10 @@ class DocumentService:
     async def is_branch_editable(self, user_id: Optional[int], branch_id: int) -> bool:
         """
         Проверяет, можно ли сейчас вносить изменения в ветку: помимо прав
-        (is_edit_available) ветка должна быть в статусе in_work - во время
-        проверки (in_review) и после (in_accept/accepted/rejected) редактирование
-        запрещено, хотя просмотр (is_branch_viewable) остаётся доступен.
+        (is_edit_available) ветка должна быть в статусе in_work - после отправки
+        на проверку (to_review), во время проверки (in_review) и после
+        (in_accept/accepted/rejected) редактирование запрещено, хотя просмотр
+        (is_branch_viewable) остаётся доступен.
         """
         if not await self.is_edit_available(user_id, branch_id):
             return False
@@ -250,28 +261,37 @@ class DocumentService:
         """
         return user_id is not None
 
-    async def get_branch_count(self, user_id: Optional[int], sees_all: bool) -> int:
+    async def get_branch_count(
+        self, user_id: Optional[int], sees_all: bool, statuses: Optional[List[str]] = None
+    ) -> int:
         """
         Возвращает количество наборов изменений, видимых пользователю.
         sees_all (роль moderator+) видит все, иначе - только свои.
+        statuses - опциональный фильтр по статусам набора изменений (любой из списка).
         """
-        if sees_all:
-            rows = await db.execute_read(
-                "SELECT COUNT(*) FROM branch WHERE name != 'master'"
-            )
-        else:
-            rows = await db.execute_read(
-                "SELECT COUNT(*) FROM branch WHERE name != 'master' AND author_id = %s",
-                (user_id,),
-            )
+        query = "SELECT COUNT(*) FROM branch WHERE name != 'master'"
+        params: List[Any] = []
+        if not sees_all:
+            query += " AND author_id = %s"
+            params.append(user_id)
+        if statuses:
+            query += " AND status = ANY(%s)"
+            params.append(statuses)
+        rows = await db.execute_read(query, tuple(params))
         return rows[0][0]
 
     async def get_branches_paginated(
-        self, user_id: Optional[int], sees_all: bool, offset: int = 0, limit: int = 25
+        self,
+        user_id: Optional[int],
+        sees_all: bool,
+        offset: int = 0,
+        limit: int = 25,
+        statuses: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Возвращает срез списка наборов изменений, видимых пользователю.
         sees_all (роль moderator+) видит все, иначе - только свои.
+        statuses - опциональный фильтр по статусам набора изменений (любой из списка).
         """
         query = """
             SELECT b.id, b.document_id, d.name, b.author_id, a.display_name, b.created_time, b.last_change_time, b.status
@@ -284,6 +304,9 @@ class DocumentService:
         if not sees_all:
             query += " AND b.author_id = %s"
             params.append(user_id)
+        if statuses:
+            query += " AND b.status = ANY(%s)"
+            params.append(statuses)
         query += " ORDER BY b.id DESC LIMIT %s OFFSET %s"
         params.extend([limit, offset])
 
@@ -343,23 +366,47 @@ class DocumentService:
 
         return rows[0][0] == user_id
 
-    async def submit_branch_for_review(self, branch_id: int) -> None:
-        """Переводит набор изменений из 'в работе' в 'на проверке'."""
+    async def _log_branch_status_change(self, branch_id: int, new_status: str, user_id: Optional[int]) -> None:
+        """Записывает изменение статуса ветки как сообщение (комментарий) к ней."""
+        await db.execute_write(
+            "INSERT INTO message (author_id, receiver_type, receiver_id, text, is_read, create_time) "
+            "VALUES (%s, %s, %s, %s, 0, now())",
+            (user_id, BRANCH_STATUS_RECEIVER_TYPE, branch_id, new_status),
+        )
+
+    async def submit_branch_for_review(self, branch_id: int, user_id: int) -> None:
+        """Переводит набор изменений из 'в работе' в 'отправлено на проверку'."""
         rows_affected = await db.execute_write(
-            "UPDATE branch SET status = 'in_review' WHERE id = %s AND status = 'in_work'",
+            "UPDATE branch SET status = 'to_review' WHERE id = %s AND status = 'in_work'",
             (branch_id,),
         )
         if rows_affected == 0:
             raise ValueError("Набор изменений не в статусе 'в работе'")
+        await self._log_branch_status_change(branch_id, "to_review", user_id)
 
-    async def return_branch_to_work(self, branch_id: int) -> None:
-        """Переводит набор изменений из 'на проверке' обратно в 'в работе'."""
+    async def return_branch_to_work(self, branch_id: int, user_id: int) -> None:
+        """
+        Переводит набор изменений из 'отправлено на проверку' обратно в 'в работе'.
+        После того как модератор вручную перевёл ветку в 'проверяется', автор уже
+        не может вернуть её сам - это тоже делает модератор через смену статуса.
+        """
         rows_affected = await db.execute_write(
-            "UPDATE branch SET status = 'in_work' WHERE id = %s AND status = 'in_review'",
+            "UPDATE branch SET status = 'in_work' WHERE id = %s AND status = 'to_review'",
             (branch_id,),
         )
         if rows_affected == 0:
-            raise ValueError("Набор изменений не в статусе 'на проверке'")
+            raise ValueError("Набор изменений не в статусе 'отправлено на проверку'")
+        await self._log_branch_status_change(branch_id, "in_work", user_id)
+
+    async def delete_branch_draft(self, branch_id: int, user_id: int) -> None:
+        """Автор удаляет набор изменений в работе: in_work -> rejected."""
+        rows_affected = await db.execute_write(
+            "UPDATE branch SET status = 'rejected' WHERE id = %s AND status = 'in_work'",
+            (branch_id,),
+        )
+        if rows_affected == 0:
+            raise ValueError("Набор изменений не в статусе 'в работе'")
+        await self._log_branch_status_change(branch_id, "rejected", user_id)
 
     async def set_branch_status(self, branch_id: int, new_status: str, user_id: int) -> None:
         """
@@ -383,6 +430,7 @@ class DocumentService:
         )
         if rows_affected == 0:
             raise ValueError("Ветка не найдена")
+        await self._log_branch_status_change(branch_id, new_status, user_id)
 
     async def _start_merge(self, branch_id: int, user_id: int) -> None:
         """
@@ -416,6 +464,8 @@ class DocumentService:
                 "INSERT INTO task (type, author_id, data) VALUES ('merge_branch', %s, %s) RETURNING id",
                 (user_id, Jsonb(data)),
             )
+
+        await self._log_branch_status_change(branch_id, "in_accept", user_id)
 
     async def is_branch_viewable(self, user_id: Optional[int], branch_id: int) -> bool:
         """
@@ -511,7 +561,9 @@ class DocumentService:
 
         return {}
 
-    async def set_text(self, branch_id: int, file: UploadFile, position: int, user_id: int) -> Dict[str, Any]:
+    async def set_text(
+        self, branch_id: int, file: UploadFile, position: int, ocr_quality: str, user_id: int
+    ) -> Dict[str, Any]:
         """
         Загружает PDF и ставит в очередь применение его текста к страницам
         ветки, начиная с position.
@@ -519,11 +571,15 @@ class DocumentService:
         :param branch_id: Ветка, к которой применяется текст.
         :param file: Загруженный PDF-файл.
         :param position: Номер страницы, с которой начинается применение текста.
+        :param ocr_quality: Качество распознавания ('high' или 'low').
         :param user_id: Пользователь, запустивший задачу.
         """
         page_count = await self.get_branch_page_count(branch_id)
         if not (1 <= int(position) <= page_count):
             raise ValueError(f"position должен быть в диапазоне от 1 до {page_count}")
+
+        if ocr_quality not in OCR_QUALITIES:
+            raise ValueError(f"Неизвестное качество распознавания: '{ocr_quality}'")
 
         extension = Path(file.filename).suffix.lower()
         if extension != ".pdf":
@@ -543,6 +599,7 @@ class DocumentService:
                 "branch_name": "b-" + str(branch_id),
                 "position": position,
                 "pdf_path": pdf_path,
+                "ocr_quality": ocr_quality,
             }
             await conn.execute(
                 "INSERT INTO task (type, author_id, data) VALUES ('set_text', %s, %s) RETURNING id",
@@ -643,6 +700,41 @@ class DocumentService:
             return 0
 
         return int(rows[0][0])
+
+    async def get_branch_comments(self, branch_id: int) -> List[Dict[str, Any]]:
+        """
+        Возвращает комментарии ветки: автоматические записи об изменении
+        статуса (receiver_type=branch_status, text - новый статус) и
+        свободные текстовые комментарии (receiver_type=branch_comment).
+        """
+        rows = await db.execute_read(
+            """
+            SELECT m.id, m.receiver_type, m.text, m.create_time, mem.display_name, mem.name
+            FROM message m
+            LEFT JOIN member mem ON mem.id = m.author_id
+            WHERE m.receiver_type IN (%s, %s) AND m.receiver_id = %s
+            ORDER BY m.create_time ASC, m.id ASC
+            """,
+            (BRANCH_STATUS_RECEIVER_TYPE, BRANCH_COMMENT_RECEIVER_TYPE, branch_id),
+        )
+        return [
+            {
+                "id": msg_id,
+                "type": receiver_type,
+                "text": text,
+                "created_at": create_time,
+                "author_display_name": display_name or name,
+            }
+            for msg_id, receiver_type, text, create_time, display_name, name in rows
+        ]
+
+    async def add_branch_comment(self, branch_id: int, text: str, user_id: int) -> None:
+        """Добавляет свободный текстовый комментарий к ветке."""
+        await db.execute_write(
+            "INSERT INTO message (author_id, receiver_type, receiver_id, text, is_read, create_time) "
+            "VALUES (%s, %s, %s, %s, 0, now())",
+            (user_id, BRANCH_COMMENT_RECEIVER_TYPE, branch_id, text),
+        )
 
     async def get_branch_last_commit(self, branch_id: int) -> Optional[str]:
         """
