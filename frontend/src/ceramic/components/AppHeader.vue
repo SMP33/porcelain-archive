@@ -26,6 +26,7 @@ function isActive(path) {
       <!-- Desktop nav -->
       <nav class="tw:hidden tw:md:flex tw:items-center tw:gap-2">
         <router-link to="/materials" class="skew-btn skew-btn--nav" :class="{ active: isActive('/materials') }">Материалы</router-link>
+        <router-link to="/edit" class="skew-btn skew-btn--nav" :class="{ active: isActive('/edit') }">Принять участие</router-link>
         <router-link to="/search" class="skew-btn skew-btn--nav" :class="{ active: isActive('/search') }">Поиск по материалам</router-link>
         <router-link to="/feedback" class="skew-btn skew-btn--nav" :class="{ active: isActive('/feedback') }">Обратная связь</router-link>
       </nav>
@@ -44,6 +45,7 @@ function isActive(path) {
     <div v-show="isOpen" class="tw:md:hidden tw:border-t tw:border-gray-200 tw:bg-white">
       <nav class="tw:max-w-6xl tw:mx-auto tw:px-6 tw:py-3 tw:flex tw:flex-col tw:gap-2 tw:text-sm">
         <router-link to="/materials" class="skew-btn skew-btn--nav tw:self-start">Материалы</router-link>
+        <router-link to="/edit" class="skew-btn skew-btn--nav tw:self-start">Принять участие</router-link>
         <router-link to="/search" class="skew-btn skew-btn--nav tw:self-start">Поиск по материалам</router-link>
         <router-link to="/feedback" class="skew-btn skew-btn--nav tw:self-start">Обратная связь</router-link>
       </nav>
