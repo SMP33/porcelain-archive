@@ -2,9 +2,12 @@ import asyncio
 import os
 from typing import Any, Dict, List, Optional, Sequence
 
+from psycopg.types.json import Jsonb
+
 from porcelain_archive.database import db
 from porcelain_archive.config import config
 from porcelain_archive import logging_setup
+from porcelain_archive.user import role_at_least
 
 
 class TaskService:
@@ -65,12 +68,25 @@ class TaskService:
         )
         return [self._row_to_task(row) for row in rows]
 
-    async def is_task_list_available(self, user_id: Optional[int]) -> bool:
+    async def is_task_list_available(self, role: Optional[str]) -> bool:
         """
         Проверяет, доступен ли список задач указанному пользователю.
-        Список задач виден только авторизованным пользователям.
+        Список задач виден начиная с роли moderator.
         """
-        return user_id is not None
+        return role_at_least(role, "moderator")
+
+    async def create_backup_task(self, user_id: Optional[int] = None) -> int:
+        """
+        Создаёт задачу бэкапа базы данных и возвращает её id.
+        user_id отсутствует для задач, запущенных планировщиком сервера.
+        """
+        async with db.transaction() as conn:
+            cursor = await conn.execute(
+                "INSERT INTO task (type, author_id, data) VALUES ('create_backup', %s, %s) RETURNING id",
+                (user_id, Jsonb({})),
+            )
+            row = await cursor.fetchone()
+            return row[0]
 
     async def get_task_log(self, task_id: int) -> str:
         """

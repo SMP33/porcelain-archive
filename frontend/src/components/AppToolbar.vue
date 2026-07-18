@@ -13,14 +13,15 @@ const navItems = computed(() => {
   const items = [
     { to: '/edit', title: 'Документы', icon: 'mdi mdi-file-document-multiple-outline' },
     { to: '/edit/branches', title: 'Наборы изменений', icon: 'mdi mdi-source-branch' },
-    { to: '/edit/tasks', title: 'Задачи', icon: 'mdi mdi-format-list-checks' },
     { to: '/edit/users', title: 'Пользователи', icon: 'mdi mdi-account-group-outline' },
   ]
   if (hasRole('moderator')) {
+    items.push({ to: '/edit/tasks', title: 'Задачи', icon: 'mdi mdi-format-list-checks' })
     items.push({ to: '/edit/properties', title: 'Указатели', icon: 'mdi mdi-tag-multiple-outline' })
   }
   if (hasRole('admin')) {
     items.push({ to: '/edit/server-log', title: 'Лог сервера', icon: 'mdi mdi-text-box-search-outline' })
+    items.push({ to: '/edit/admin', title: 'Администрирование', icon: 'mdi mdi-shield-crown-outline' })
   }
   return items
 })
@@ -98,7 +99,7 @@ function onLogoutClick() {
           v-if="accountMenuOpen"
           class="tw:absolute tw:bottom-full tw:left-2 tw:mb-1 tw:w-48 tw:bg-white tw:rounded-lg tw:shadow-lg tw:border tw:border-gray-200 tw:py-1 tw:text-ink-900"
         >
-          <router-link to="/edit/tasks" class="tw:block tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50" @click="accountMenuOpen = false">Список задач</router-link>
+          <router-link v-if="hasRole('moderator')" to="/edit/tasks" class="tw:block tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50" @click="accountMenuOpen = false">Список задач</router-link>
           <button type="button" class="tw:block tw:w-full tw:text-left tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50" @click="openResetPassword">Сменить пароль</button>
           <button type="button" class="tw:block tw:w-full tw:text-left tw:px-3 tw:py-2 tw:text-sm tw:hover:bg-gray-50" @click="openSetDisplayName">Изменить ФИО</button>
           <div class="tw:my-1 tw:border-t tw:border-gray-100" />

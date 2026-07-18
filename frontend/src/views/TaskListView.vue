@@ -76,10 +76,15 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import http from '../api/http'
+import { useAuth } from '../composables/useAuth'
 import AppToolbar from '../components/AppToolbar.vue'
 import AppPager from '../components/AppPager.vue'
 import { usePagedTable } from '../composables/usePagedTable'
+
+const router = useRouter()
+const { hasRole } = useAuth()
 
 const { page, itemsPerPage, items, total, loading, pageCount, reload, goToPage, setItemsPerPage } = usePagedTable(
   async ({ offset, limit }) => {
@@ -108,9 +113,11 @@ const TASK_TYPE_LABELS = {
   create_branch: 'Начать правки',
   insert_files: 'Добавить страницы',
   remove_files: 'Удалить страницы',
+  text_from_image: 'Распознать текст',
   set_text: 'Задать текст',
   reset_text: 'Убрать текст',
   merge_branch: 'Завершить правки',
+  create_backup: 'Бэкап базы данных',
 }
 const taskTypeLabel = (type) => TASK_TYPE_LABELS[type] || type
 
@@ -119,9 +126,11 @@ const TASK_TYPE_ICONS = {
   create_branch: 'mdi-source-branch-plus',
   insert_files: 'mdi-file-plus',
   remove_files: 'mdi-file-remove',
+  text_from_image: 'mdi-text-recognition',
   set_text: 'mdi-file-pdf-box',
   reset_text: 'mdi-text-box-remove',
   merge_branch: 'mdi-source-merge',
+  create_backup: 'mdi-database-arrow-down-outline',
 }
 const taskTypeIcon = (type) => TASK_TYPE_ICONS[type] || 'mdi-cog'
 
@@ -204,6 +213,10 @@ function connectTaskUpdates() {
 }
 
 onMounted(() => {
+  if (!hasRole('moderator')) {
+    router.push('/edit/access-denied')
+    return
+  }
   loadItemsAndAutoSelect()
   connectTaskUpdates()
 })

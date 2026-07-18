@@ -5,9 +5,10 @@
 const porcelainPages = [
   { path: '/edit', title: 'Документы (список)' },
   { path: '/edit/branches', title: 'Наборы изменений', note: 'требует входа' },
-  { path: '/edit/tasks', title: 'Задачи', note: 'требует входа' },
+  { path: '/edit/tasks', title: 'Задачи', note: 'требует входа, роль moderator' },
   { path: '/edit/users', title: 'Пользователи', note: 'требует входа' },
   { path: '/edit/server-log', title: 'Лог сервера', note: 'требует входа, роль admin' },
+  { path: '/edit/admin', title: 'Администрирование', note: 'требует входа, роль admin' },
   { path: '/edit/document/1', title: 'Документ (пример, id=1)' },
   { path: '/edit/1', title: 'Редактирование набора изменений (пример, id=1)' },
   { path: '/edit/login', title: 'Вход' },

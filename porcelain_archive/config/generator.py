@@ -6,11 +6,18 @@ import sys
 OUTPUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.py")
 
 
-def _is_numeric_field(key: str) -> bool:
+def _field_type(key: str) -> str:
     # Тип определяется по имени ключа, а не по значению - иначе секрет,
     # случайно состоящий из цифр (например, пароль "123"), станет числом.
     key = key.lower()
-    return key == "port" or key.endswith("_port")
+    if key == "port" or key.endswith("_port"):
+        return "int"
+    if key.endswith("_hr"):
+        return "float"
+    return "str"
+
+
+_GETTER_BY_TYPE = {"int": "getint", "float": "getfloat", "str": "get"}
 
 
 def generate(ini_path: str) -> str:
@@ -26,8 +33,7 @@ def generate(ini_path: str) -> str:
 
         lines.append(f"class {class_name}:")
         for key in parser.options(section_name):
-            value_type = "int" if _is_numeric_field(key) else "str"
-            lines.append(f"    {key}: {value_type}")
+            lines.append(f"    {key}: {_field_type(key)}")
         lines.append("")
         lines.append("")
 
@@ -44,7 +50,7 @@ def generate(ini_path: str) -> str:
         attr = section_name.lower()
         lines.append(f"        self.{attr} = {class_name}()")
         for key in parser.options(section_name):
-            getter = "getint" if _is_numeric_field(key) else "get"
+            getter = _GETTER_BY_TYPE[_field_type(key)]
             lines.append(f"        self.{attr}.{key} = parser.{getter}({section_name!r}, {key!r})")
         lines.append("")
     lines.append("")

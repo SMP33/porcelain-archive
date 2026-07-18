@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+import traceback
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, status
@@ -12,6 +13,7 @@ import subprocess
 
 from .document import document_api
 from .task import task_api
+from .task.task_service import TaskService
 from .user import user_api
 from .property import property_api
 from .database import db
@@ -31,6 +33,18 @@ if sys.platform == "win32":
 FRONTEND_DIST_DIR = os.path.join(config.common.root, "frontend", "dist")
 FRONTEND_ASSETS_DIR = os.path.join(FRONTEND_DIST_DIR, "assets")
 
+task_service = TaskService()
+
+
+async def _run_backup_scheduler() -> None:
+    """Раз в config.common.backup_period_hr часов создаёт задачу бэкапа."""
+    while True:
+        await asyncio.sleep(config.common.backup_period_hr * 3600)
+        try:
+            await task_service.create_backup_task()
+        except Exception:
+            traceback.print_exc()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -43,9 +57,12 @@ async def lifespan(app: FastAPI):
         cwd=config.common.root,
     )
 
+    backup_scheduler_task = asyncio.create_task(_run_backup_scheduler())
+
     try:
         yield
     finally:
+        backup_scheduler_task.cancel()
         process.terminate()
         try:
             await asyncio.wait_for(asyncio.to_thread(process.wait), timeout=5)

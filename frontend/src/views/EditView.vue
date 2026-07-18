@@ -170,6 +170,15 @@
               v-if="!isLocked"
               type="button"
               class="tw:flex tw:items-center tw:gap-2 tw:w-full tw:px-3 tw:py-2 tw:rounded-lg tw:text-sm tw:text-left tw:transition-colors"
+              :class="activeView === 'recognize_text' ? 'tw:bg-clay-50 tw:text-clay-700' : 'tw:text-gray-600 tw:hover:bg-gray-50'"
+              @click="activeView = 'recognize_text'"
+            >
+              <i class="mdi mdi-text-recognition" /> Распознать текст
+            </button>
+            <button
+              v-if="!isLocked"
+              type="button"
+              class="tw:flex tw:items-center tw:gap-2 tw:w-full tw:px-3 tw:py-2 tw:rounded-lg tw:text-sm tw:text-left tw:transition-colors"
               :class="activeView === 'set_text' ? 'tw:bg-clay-50 tw:text-clay-700' : 'tw:text-gray-600 tw:hover:bg-gray-50'"
               @click="activeView = 'set_text'"
             >
@@ -210,6 +219,14 @@
               :branch-id="branch.id"
               :page-count="pageCount"
               @removed="onPagesChanged"
+            />
+
+            <RecognizeTextPanel
+              v-if="!isLocked && activeView === 'recognize_text'"
+              ref="recognizeTextRef"
+              :branch-id="branch.id"
+              :page-count="pageCount"
+              @submitted="branchTasksRef.reload()"
             />
 
             <SetTextPanel
@@ -287,6 +304,7 @@ import AppModal from '../components/AppModal.vue'
 import PageGalleryViewer from '../components/PageGalleryViewer.vue'
 import AddPagesPanel from '../components/edit/AddPagesPanel.vue'
 import RemovePagesPanel from '../components/edit/RemovePagesPanel.vue'
+import RecognizeTextPanel from '../components/edit/RecognizeTextPanel.vue'
 import SetTextPanel from '../components/edit/SetTextPanel.vue'
 import ResetTextPanel from '../components/edit/ResetTextPanel.vue'
 import ViewChangesPanel from '../components/edit/ViewChangesPanel.vue'
@@ -332,7 +350,7 @@ const pageCount = ref(0)
 const allowedExtensions = ref([])
 
 const ACTIVE_VIEW_STORAGE_KEY = 'editView.activeView'
-const VALID_VIEWS = ['add', 'remove', 'set_text', 'reset_text', 'view_changes']
+const VALID_VIEWS = ['add', 'remove', 'recognize_text', 'set_text', 'reset_text', 'view_changes']
 const storedActiveView = localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY)
 const activeView = ref(VALID_VIEWS.includes(storedActiveView) ? storedActiveView : 'add')
 
@@ -364,6 +382,7 @@ const branchCommentsRef = ref(null)
 const galleryRef = ref(null)
 const addPagesRef = ref(null)
 const removePagesRef = ref(null)
+const recognizeTextRef = ref(null)
 const setTextRef = ref(null)
 const resetTextRef = ref(null)
 const pagesScrollAreaRef = ref(null)
@@ -372,17 +391,20 @@ const highlightClasses = {
   red: 'tw:border-2 tw:border-red-400 tw:bg-red-50',
   blue: 'tw:border-2 tw:border-blue-400 tw:bg-blue-50',
   yellow: 'tw:border-2 tw:border-yellow-400 tw:bg-yellow-50',
+  green: 'tw:border-2 tw:border-green-400 tw:bg-green-50',
 }
 
 // Диапазон страниц для подсветки плиток - берётся из активной вкладки задачи.
 const activeHighlightRange = computed(() => {
   if (activeView.value === 'remove') return removePagesRef.value?.highlightRange ?? null
+  if (activeView.value === 'recognize_text') return recognizeTextRef.value?.highlightRange ?? null
   if (activeView.value === 'set_text') return setTextRef.value?.highlightRange ?? null
   if (activeView.value === 'reset_text') return resetTextRef.value?.highlightRange ?? null
   return null
 })
 const activeHighlightColor = computed(() => {
   if (activeView.value === 'remove') return 'red'
+  if (activeView.value === 'recognize_text') return 'green'
   if (activeView.value === 'set_text') return 'blue'
   if (activeView.value === 'reset_text') return 'yellow'
   return null
@@ -407,6 +429,7 @@ const scrollTargetPos = computed(() => {
     return gap == null ? null : Math.max(gap, 1)
   }
   if (activeView.value === 'remove') return removePagesRef.value?.scrollTargetPos ?? activeHighlightRange.value?.start ?? null
+  if (activeView.value === 'recognize_text') return recognizeTextRef.value?.scrollTargetPos ?? activeHighlightRange.value?.start ?? null
   if (activeView.value === 'reset_text') return resetTextRef.value?.scrollTargetPos ?? activeHighlightRange.value?.start ?? null
   return activeHighlightRange.value?.start ?? null
 })

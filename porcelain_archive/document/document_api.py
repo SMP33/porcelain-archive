@@ -64,6 +64,11 @@ class ResetTextRequest(BaseModel):
     end: int
 
 
+class RecognizeTextRequest(BaseModel):
+    start: int
+    end: int
+
+
 @router.get("/")
 async def read_documents(request: Request, offset: int = 0, limit: int = 25) -> Dict[str, Any]:
     """
@@ -380,6 +385,31 @@ async def reset_text(
 
     try:
         return await document_service.reset_text(branch_id=branch_id, start=payload.start, end=payload.end, user_id=user["id"])
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@router.post("/branches/{branch_id}/text/recognize")
+async def recognize_text(
+    branch_id: int,
+    payload: RecognizeTextRequest,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """
+    Ставит в очередь распознавание текста (OCR) на изображениях страниц ветки.
+    Требует авторизации и доступа к редактированию ветки.
+
+    :param payload.start: Первая страница диапазона.
+    :param payload.end: Последняя страница диапазона.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not await document_service.is_branch_editable(user["id"], branch_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Редактирование ветки недоступно")
+
+    try:
+        return await document_service.recognize_text(branch_id=branch_id, start=payload.start, end=payload.end, user_id=user["id"])
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 

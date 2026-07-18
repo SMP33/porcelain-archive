@@ -708,6 +708,33 @@ class DocumentService:
 
         return {}
 
+    async def recognize_text(self, branch_id: int, start: int, end: int, user_id: int) -> Dict[str, Any]:
+        """
+        Ставит в очередь распознавание текста (OCR) на изображениях страниц [start, end] (включительно).
+
+        :param branch_id: Ветка, для страниц которой распознаётся текст.
+        :param start: Первая страница диапазона.
+        :param end: Последняя страница диапазона.
+        :param user_id: Пользователь, запустивший задачу.
+        """
+        page_count = await self.get_branch_page_count(branch_id)
+        if not (1 <= int(start) <= int(end) <= page_count):
+            raise ValueError(f"Диапазон должен быть в пределах от 1 до {page_count}")
+
+        async with db.transaction() as conn:
+            data = {
+                "branch_id": branch_id,
+                "branch_name": "b-" + str(branch_id),
+                "start": start,
+                "end": end,
+            }
+            await conn.execute(
+                "INSERT INTO task (type, author_id, data) VALUES ('text_from_image', %s, %s) RETURNING id",
+                (user_id, Jsonb(data)),
+            )
+
+        return {}
+
     async def get_branch_count_by_document(self, document_id: int) -> int:
         """
         Возвращает количество наборов изменений документа (кроме master).

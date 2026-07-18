@@ -19,6 +19,7 @@ pillow==12.3.0            # porcelain_archive/pdf/parser.py, porcelain_archive/t
 pdfminer.six==20260107    # porcelain_archive/pdf/parser.py
 colorama==0.4.6           # porcelain_archive/pdf/parser.py (CLI-вывод)
 python-docx==1.2.0        # abbyy_docx_extractor.py (сам скрипт всё равно требует Windows COM)
+paramiko==3.5.1            # porcelain_archive/task/script/create_backup.py (SFTP-заливка бэкапа)
 
 # ceramic (porcelain_archive/ceramic/*) - слияние с ceramic-factories-archive
 boto3==1.43.49            # porcelain_archive/ceramic/storage/storage.py (S3-хранилище, опционально при ceramic_storage_backend=local)

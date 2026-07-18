@@ -4,6 +4,7 @@ import os
 
 class CommonConfig:
     root: str
+    backup_period_hr: float
 
 
 class DatabaseConfig:
@@ -21,6 +22,13 @@ class FilesConfig:
     log_path: str
     ceramic_storage_backend: str
     ceramic_local_root: str
+
+
+class StoragesshConfig:
+    host: str
+    user: str
+    password: str
+    path: str
 
 
 class Ceramics3Config:
@@ -41,6 +49,7 @@ class Config:
     common: CommonConfig
     database: DatabaseConfig
     files: FilesConfig
+    storagessh: StoragesshConfig
     ceramics3: Ceramics3Config
     ceramicsite: CeramicsiteConfig
 
@@ -51,6 +60,7 @@ class Config:
 
         self.common = CommonConfig()
         self.common.root = parser.get('Common', 'root')
+        self.common.backup_period_hr = parser.getfloat('Common', 'backup_period_hr')
 
         self.database = DatabaseConfig()
         self.database.host = parser.get('Database', 'host')
@@ -66,6 +76,12 @@ class Config:
         self.files.log_path = parser.get('Files', 'log_path')
         self.files.ceramic_storage_backend = parser.get('Files', 'ceramic_storage_backend')
         self.files.ceramic_local_root = parser.get('Files', 'ceramic_local_root')
+
+        self.storagessh = StoragesshConfig()
+        self.storagessh.host = parser.get('StorageSSH', 'host')
+        self.storagessh.user = parser.get('StorageSSH', 'user')
+        self.storagessh.password = parser.get('StorageSSH', 'password')
+        self.storagessh.path = parser.get('StorageSSH', 'path')
 
         self.ceramics3 = Ceramics3Config()
         self.ceramics3.endpoint_url = parser.get('CeramicS3', 'endpoint_url')

@@ -119,7 +119,7 @@ const statusColors = {
 }
 
 const statusFilterOptions = Object.entries(statusLabels).map(([value, title]) => ({ value, title, color: statusColors[value] }))
-const selectedStatuses = ref(['in_work'])
+const selectedStatuses = ref([])
 
 const { page, itemsPerPage, items, total, loading, pageCount, reload, goToPage, setItemsPerPage } = usePagedTable(
   async ({ offset, limit }) => {

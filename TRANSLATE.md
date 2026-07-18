@@ -11,9 +11,11 @@ create_repos - Создать документ
 create_branch - Начать правки
 insert_files - Добавить страницы
 remove_fies - Удалить страницы
+text_from_image - Распознать текст
 set_text - Задать текст
 reset_text - Убрать текст
 merge_branch - Завершить правки
+create_backup - Создать бэкап
 
 # Статусы задач
 new - Создается

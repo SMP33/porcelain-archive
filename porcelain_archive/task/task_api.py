@@ -23,12 +23,12 @@ async def read_tasks(
     limit: int = 25,
 ) -> Dict[str, Any]:
     """
-    Возвращает список задач с пагинацией и общее количество. Требует авторизации.
+    Возвращает список задач с пагинацией и общее количество. Требует роли moderator.
     """
     user = await user_service.get_user_by_token(token)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
-    if not await task_service.is_task_list_available(user["id"]):
+    if not await task_service.is_task_list_available(user.get("role")):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Список задач недоступен")
 
     tasks = await task_service.get_tasks_paginated(offset=offset, limit=limit)
@@ -66,6 +66,23 @@ async def read_task_log(
 
     log = await task_service.get_task_log(task_id)
     return {"log": log}
+
+
+@router.post("/backup")
+async def create_backup(
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """
+    Запускает задачу бэкапа базы данных с отправкой на резервный сервер. Требует роли admin.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not role_at_least(user.get("role"), "admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для запуска бэкапа")
+
+    task_id = await task_service.create_backup_task(user["id"])
+    return {"task_id": task_id}
 
 
 @router.get("/server-log")
