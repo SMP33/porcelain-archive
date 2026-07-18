@@ -39,7 +39,9 @@ CREATE    TABLE IF NOT EXISTS branch (
           initial_commit TEXT, -- Коммит на момент создания ветки
           last_commit TEXT, -- Коммит последнего обновления кеша страниц
           status TEXT NOT NULL DEFAULT 'in_work' -- Статус набора изменений
-          CHECK (status IN ('in_work','to_review', 'in_review', 'in_accept', 'accepted', 'rejected'))
+          CHECK (
+          status IN ('in_work', 'to_review', 'in_review', 'in_accept', 'accepted', 'rejected')
+          )
           );
 
 -- Страницы документа
@@ -72,7 +74,7 @@ CREATE    TABLE IF NOT EXISTS message (
           author_id BIGINT REFERENCES member (id) ON DELETE SET NULL, -- Автор (NULL - аноним)
           receiver_type TEXT, -- Тип получателя
           receiver_id BIGSERIAL, -- ID получателя
-          text TEXT, -- Текст сообщения
+          TEXT TEXT, -- Текст сообщения
           is_read INTEGER DEFAULT 0, -- Прочитано ли сообщение
           create_time TIMESTAMP -- Время создания
           );
@@ -86,23 +88,26 @@ CREATE    TABLE IF NOT EXISTS important_feedback (
 -- Указатели
 CREATE    TABLE IF NOT EXISTS property (
           id BIGSERIAL PRIMARY KEY, -- Уникальный id
-          tag TEXT NOT NULL, -- Имя
-          name TEXT NOT NULL, -- Отображаемое имя
+          tag TEXT NOT NULL UNIQUE, -- Имя
+          title TEXT NOT NULL UNIQUE, -- Отображаемое имя
           description TEXT, -- Описание
           is_list INTEGER DEFAULT 0, -- Список или одно значение
           is_editable INTEGER DEFAULT 1, -- Доступно ли для редактирования
-          is_visible INTEGER DEFAULT 0 -- Виден ли обычным пользователям
+          is_visible INTEGER DEFAULT 0, -- Виден ли обычным пользователям
+          is_system INTEGER DEFAULT 0, -- Системный параметр
+          view_order INTEGER DEFAULT 0 -- Порядок отображения
           );
 
 -- Доступные значения указателей
 CREATE    TABLE IF NOT EXISTS property_enum (
+          id BIGSERIAL PRIMARY KEY, -- Уникальный id
           property_id BIGINT REFERENCES property (id) ON DELETE SET NULL, -- Указатель
-          value TEXT -- Значение
+          value TEXT, -- Значение
+          is_pointer INTEGER DEFAULT 1 -- Считается ли значение указателем
           );
 
 -- Фактические значения указателей
 CREATE    TABLE IF NOT EXISTS document_property (
           document_id BIGINT REFERENCES document (id) ON DELETE SET NULL, -- Документ
-          property_id BIGINT REFERENCES property (id) ON DELETE SET NULL, -- Указатель
-          value TEXT -- Значение
+          property_enum_id BIGINT REFERENCES property_enum (id) ON DELETE SET NULL -- Значение указателя
           );

@@ -13,6 +13,7 @@ import subprocess
 from .document import document_api
 from .task import task_api
 from .user import user_api
+from .property import property_api
 from .database import db
 from .config import config
 
@@ -69,6 +70,7 @@ app.middleware("http")(ceramic_security_middleware)
 app.include_router(document_api.router)
 app.include_router(task_api.router)
 app.include_router(user_api.router)
+app.include_router(property_api.router)
 
 app.include_router(ceramic_search_api.router)
 app.include_router(ceramic_user_api.router)

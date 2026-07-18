@@ -37,6 +37,15 @@ class SetVisibilityRequest(BaseModel):
     is_visible: bool
 
 
+class DocumentPropertyEntry(BaseModel):
+    property_id: int
+    values: List[str]
+
+
+class SetDocumentPropertiesRequest(BaseModel):
+    properties: List[DocumentPropertyEntry]
+
+
 class SetBranchStatusRequest(BaseModel):
     status: str
 
@@ -499,6 +508,47 @@ async def read_document_branches(
     branches = await document_service.get_branches_by_document_paginated(document_id, offset=offset, limit=limit)
     total = await document_service.get_branch_count_by_document(document_id)
     return {"items": branches, "total": total}
+
+
+@router.get("/{document_id}/properties")
+async def read_document_properties(
+    document_id: int,
+    request: Request,
+) -> Dict[str, Any]:
+    """
+    Возвращает указатели документа (document_property). Доступность как у
+    самого документа, видимые значения фильтруются внутри сервиса по роли.
+    """
+    user_id = await _get_current_user_id(request)
+    if not await document_service.is_document_available(user_id, document_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Документ не найден")
+
+    properties = await document_service.get_document_properties(document_id, user_id)
+    return {"items": properties}
+
+
+@router.put("/{document_id}/properties")
+async def set_document_properties(
+    document_id: int,
+    payload: SetDocumentPropertiesRequest,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """
+    Полностью заменяет набор указателей документа переданным (пакетное
+    сохранение вкладки "Указатели"). Требует роли moderator+.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not role_at_least(user.get("role"), "moderator"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для изменения указателей документа")
+
+    entries = [{"property_id": e.property_id, "values": e.values} for e in payload.properties]
+    try:
+        await document_service.set_document_properties(document_id, entries)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return {"ok": True}
 
 
 @router.get("/branches/{branch_id}/pages/{page_index}/image")

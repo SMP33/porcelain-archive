@@ -16,6 +16,9 @@ const navItems = computed(() => {
     { to: '/edit/tasks', title: 'Задачи', icon: 'mdi mdi-format-list-checks' },
     { to: '/edit/users', title: 'Пользователи', icon: 'mdi mdi-account-group-outline' },
   ]
+  if (hasRole('moderator')) {
+    items.push({ to: '/edit/properties', title: 'Указатели', icon: 'mdi mdi-tag-multiple-outline' })
+  }
   if (hasRole('admin')) {
     items.push({ to: '/edit/server-log', title: 'Лог сервера', icon: 'mdi mdi-text-box-search-outline' })
   }

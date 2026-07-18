@@ -38,3 +38,9 @@ admin - Администратор
 # Качество распознавания (set_text)
 high - Высокое
 low - Низкое
+
+# Указатели (property, property_enum, document_property)
+property - Указатель
+is_list - Список значений
+is_editable - Доступен для редактирования
+is_visible - Виден пользователям

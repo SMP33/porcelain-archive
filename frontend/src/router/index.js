@@ -46,6 +46,7 @@ const routes = [
   { path: '/edit/tasks', name: 'task-list', component: () => import('../views/TaskListView.vue'), meta: { requiresAuth: true } },
   { path: '/edit/users', name: 'user-list', component: () => import('../views/UserListView.vue'), meta: { requiresAuth: true } },
   { path: '/edit/server-log', name: 'server-log', component: () => import('../views/ServerLogView.vue'), meta: { requiresAuth: true } },
+  { path: '/edit/properties', name: 'properties', component: () => import('../views/PropertiesView.vue'), meta: { requiresAuth: true } },
   { path: '/edit/document/:documentId', name: 'document', component: () => import('../views/DocumentView.vue'), props: true },
   { path: '/edit/:branchId', name: 'edit', component: () => import('../views/EditView.vue'), props: true },
   { path: '/edit/access-denied', name: 'access-denied', component: () => import('../views/AccessDeniedView.vue') },
