@@ -24,4 +24,4 @@ paramiko==3.5.1            # porcelain_archive/task/script/create_backup.py (SFT
 # ceramic (porcelain_archive/ceramic/*) - слияние с ceramic-factories-archive
 boto3==1.43.49            # porcelain_archive/ceramic/storage/storage.py (S3-хранилище, опционально при ceramic_storage_backend=local)
 pymupdf==1.28.0           # porcelain_archive/ceramic/pdf/render.py (рендер страниц PDF в изображения)
-pytesseract==0.3.13       # porcelain_archive/ceramic/pdf/render.py (OCR, требует системный Tesseract: apt install tesseract-ocr tesseract-ocr-rus)
+pytesseract==0.3.13       # porcelain_archive/ceramic/pdf/render.py, porcelain_archive/task/script/text_from_image.py (OCR, требует системный Tesseract: apt install tesseract-ocr tesseract-ocr-rus)

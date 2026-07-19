@@ -65,6 +65,7 @@ const textFile = ref(null)
 const ocrQualityOptions = [
   { value: 'high', title: 'Высокое' },
   { value: 'low', title: 'Низкое' },
+  { value: 'worst', title: 'Очень низкое' },
 ]
 const ocrQuality = ref('high')
 const textPosition = ref(props.pageCount ? 1 : 0)

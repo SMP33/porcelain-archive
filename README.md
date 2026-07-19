@@ -8,10 +8,12 @@
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y git git-lfs python3-venv python3-pip postgresql postgresql-contrib
+sudo apt-get install -y git git-lfs python3-venv python3-pip postgresql postgresql-contrib tesseract-ocr tesseract-ocr-rus
 curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
 sudo apt-get install -y nodejs
 ```
+
+`tesseract-ocr`/`tesseract-ocr-rus` нужны для распознавания текста на изображениях страниц (`porcelain_archive/task/script/text_from_image.py`) - `pytesseract` из `requirements.txt` лишь обёртка над системным бинарником.
 
 PostgreSQL нужно настроить отдельно (создать БД и пользователя) - хост/порт/имя БД/логин/пароль потом указываются в `config.ini` (раздел `[Database]`).
 

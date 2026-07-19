@@ -18,12 +18,21 @@ from porcelain_archive.config import config
 from porcelain_archive.task import TaskInfo
 from porcelain_archive.task.utils import *
 
-OCR_LANG = "rus"
-OCR_TESS_CONFIG = "--oem 1 --psm 11"
+if shutil.which("tesseract") is None:
+    raise RuntimeError(
+        "Tesseract OCR не найден в PATH. Установите его в системе "
+        "(Ubuntu: apt install tesseract-ocr tesseract-ocr-rus; "
+        "Windows: https://github.com/UB-Mannheim/tesseract/wiki) и убедитесь, "
+        "что каталог с tesseract.exe добавлен в PATH."
+    )
 
-# Порог средней уверенности Tesseract (0-100), начиная с которого
-# итоговое качество распознавания страницы считается "high", иначе "low".
-OCR_QUALITY_CONFIDENCE_THRESHOLD = 70
+OCR_LANG = "rus"
+OCR_TESS_CONFIG = "--oem 1 --psm 3"
+
+# Пороги средней уверенности Tesseract (0-100) для итогового ocr_quality страницы:
+# >= HIGH - "high", >= LOW - "low", иначе - "worst".
+OCR_QUALITY_HIGH_THRESHOLD = 75
+OCR_QUALITY_LOW_THRESHOLD = 40
 
 # Конец блока - перенос слова по строке (2+ строчные буквы и дефис на конце).
 _HYPHEN_END_RE = re.compile(r"[а-яё]{2,}-$")
@@ -132,7 +141,7 @@ def _merge_consecutive_blocks(blocks_out: list[dict], should_merge, merge) -> li
 
 def recognize_page(image_path: Path) -> dict:
     """Распознаёт текст изображения, возвращает страницу с блоками (текст, bbox в px, rect в %,
-    confidence) и итоговым ocr_quality ('high'/'low'), выведенным из средней уверенности Tesseract."""
+    confidence) и итоговым ocr_quality ('high'/'low'/'worst'), выведенным из средней уверенности Tesseract."""
     with Image.open(image_path) as img:
         width, height = img.size
         data = pytesseract.image_to_data(
@@ -199,7 +208,12 @@ def recognize_page(image_path: Path) -> dict:
     blocks_out = _merge_paragraph_blocks(blocks_out, width, height)
 
     avg_confidence = sum(page_confs) / len(page_confs) if page_confs else 0
-    ocr_quality = "high" if avg_confidence >= OCR_QUALITY_CONFIDENCE_THRESHOLD else "low"
+    if avg_confidence >= OCR_QUALITY_HIGH_THRESHOLD:
+        ocr_quality = "high"
+    elif avg_confidence >= OCR_QUALITY_LOW_THRESHOLD:
+        ocr_quality = "low"
+    else:
+        ocr_quality = "worst"
 
     return {"width": width, "height": height, "blocks": blocks_out, "ocr_quality": ocr_quality}
 

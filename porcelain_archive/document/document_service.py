@@ -34,7 +34,7 @@ ALLOWED_PAGE_EXTENSIONS = {
 
 BRANCH_STATUSES = {"in_work", "to_review", "in_review", "in_accept", "accepted", "rejected"}
 
-OCR_QUALITIES = {"high", "low"}
+OCR_QUALITIES = {"high", "low", "worst"}
 
 # Изменения статуса набора изменений логируются как сообщения (комментарии к
 # ветке) в общей таблице message - receiver_id хранит id ветки, text - новый статус.
@@ -43,6 +43,10 @@ BRANCH_STATUS_RECEIVER_TYPE = "branch_status"
 # Свободный текстовый комментарий пользователя к ветке - та же таблица message,
 # receiver_id хранит id ветки, text - текст комментария.
 BRANCH_COMMENT_RECEIVER_TYPE = "branch_comment"
+
+# Создание задачи ветки логируется как сообщение (комментарий) к ней - та же
+# таблица message, receiver_id хранит id ветки, text - id задачи.
+BRANCH_TASK_RECEIVER_TYPE = "branch_task"
 
 repos_root = str()
 repos_branch_root = str()
@@ -262,10 +266,12 @@ class DocumentService:
                     "branch_id": branch_id,
                     "branch_name": branch_name,
                 }
-                await conn.execute(
+                cursor = await conn.execute(
                     "INSERT INTO task (type, author_id, data) VALUES ('create_branch', %s, %s) RETURNING id",
                     (user_id, Jsonb(data)),
                 )
+                task_id = (await cursor.fetchone())[0]
+                await self._log_branch_task(conn, branch_id, task_id, user_id)
 
             return branch_id
 
@@ -447,6 +453,15 @@ class DocumentService:
             (user_id, BRANCH_STATUS_RECEIVER_TYPE, branch_id, new_status),
         )
 
+    @staticmethod
+    async def _log_branch_task(conn: Any, branch_id: int, task_id: int, user_id: Optional[int]) -> None:
+        """Записывает создание задачи ветки как сообщение (комментарий) к ней."""
+        await conn.execute(
+            "INSERT INTO message (author_id, receiver_type, receiver_id, text, is_read, create_time) "
+            "VALUES (%s, %s, %s, %s, 0, now())",
+            (user_id, BRANCH_TASK_RECEIVER_TYPE, branch_id, str(task_id)),
+        )
+
     async def submit_branch_for_review(self, branch_id: int, user_id: int) -> None:
         """Переводит набор изменений из 'в работе' в 'отправлено на проверку'."""
         rows_affected = await db.execute_write(
@@ -533,10 +548,12 @@ class DocumentService:
                 "branch_name": branch_name,
                 "document_id": document_id,
             }
-            await conn.execute(
+            cursor = await conn.execute(
                 "INSERT INTO task (type, author_id, data) VALUES ('merge_branch', %s, %s) RETURNING id",
                 (user_id, Jsonb(data)),
             )
+            task_id = (await cursor.fetchone())[0]
+            await self._log_branch_task(conn, branch_id, task_id, user_id)
 
         await self._log_branch_status_change(branch_id, "in_accept", user_id)
 
@@ -600,10 +617,12 @@ class DocumentService:
                 "position": position,
                 "tmpdir": tmpdir,
             }
-            await conn.execute(
+            cursor = await conn.execute(
                 "INSERT INTO task (type, author_id, data) VALUES ('insert_files', %s, %s) RETURNING id",
                 (user_id, Jsonb(data)),
             )
+            task_id = (await cursor.fetchone())[0]
+            await self._log_branch_task(conn, branch_id, task_id, user_id)
 
         return {}
 
@@ -627,10 +646,12 @@ class DocumentService:
                 "position": start,
                 "file_remove_count": end - start + 1,
             }
-            await conn.execute(
+            cursor = await conn.execute(
                 "INSERT INTO task (type, author_id, data) VALUES ('remove_files', %s, %s) RETURNING id",
                 (user_id, Jsonb(data)),
             )
+            task_id = (await cursor.fetchone())[0]
+            await self._log_branch_task(conn, branch_id, task_id, user_id)
 
         return {}
 
@@ -644,7 +665,7 @@ class DocumentService:
         :param branch_id: Ветка, к которой применяется текст.
         :param file: Загруженный PDF-файл.
         :param position: Номер страницы, с которой начинается применение текста.
-        :param ocr_quality: Качество распознавания ('high' или 'low').
+        :param ocr_quality: Качество распознавания ('high', 'low' или 'worst').
         :param user_id: Пользователь, запустивший задачу.
         """
         page_count = await self.get_branch_page_count(branch_id)
@@ -674,10 +695,12 @@ class DocumentService:
                 "pdf_path": pdf_path,
                 "ocr_quality": ocr_quality,
             }
-            await conn.execute(
+            cursor = await conn.execute(
                 "INSERT INTO task (type, author_id, data) VALUES ('set_text', %s, %s) RETURNING id",
                 (user_id, Jsonb(data)),
             )
+            task_id = (await cursor.fetchone())[0]
+            await self._log_branch_task(conn, branch_id, task_id, user_id)
 
         return {}
 
@@ -701,10 +724,12 @@ class DocumentService:
                 "start": start,
                 "end": end,
             }
-            await conn.execute(
+            cursor = await conn.execute(
                 "INSERT INTO task (type, author_id, data) VALUES ('reset_text', %s, %s) RETURNING id",
                 (user_id, Jsonb(data)),
             )
+            task_id = (await cursor.fetchone())[0]
+            await self._log_branch_task(conn, branch_id, task_id, user_id)
 
         return {}
 
@@ -728,10 +753,12 @@ class DocumentService:
                 "start": start,
                 "end": end,
             }
-            await conn.execute(
+            cursor = await conn.execute(
                 "INSERT INTO task (type, author_id, data) VALUES ('text_from_image', %s, %s) RETURNING id",
                 (user_id, Jsonb(data)),
             )
+            task_id = (await cursor.fetchone())[0]
+            await self._log_branch_task(conn, branch_id, task_id, user_id)
 
         return {}
 
@@ -804,18 +831,21 @@ class DocumentService:
     async def get_branch_comments(self, branch_id: int) -> List[Dict[str, Any]]:
         """
         Возвращает комментарии ветки: автоматические записи об изменении
-        статуса (receiver_type=branch_status, text - новый статус) и
-        свободные текстовые комментарии (receiver_type=branch_comment).
+        статуса (receiver_type=branch_status, text - новый статус),
+        свободные текстовые комментарии (receiver_type=branch_comment) и
+        записи о создании задач ветки (receiver_type=branch_task, text - id
+        задачи; type и status задачи подтягиваются join'ом на task).
         """
         rows = await db.execute_read(
             """
-            SELECT m.id, m.receiver_type, m.text, m.create_time, mem.display_name, mem.name
+            SELECT m.id, m.receiver_type, m.text, m.create_time, mem.display_name, mem.name, t.type, t.status
             FROM message m
             LEFT JOIN member mem ON mem.id = m.author_id
-            WHERE m.receiver_type IN (%s, %s) AND m.receiver_id = %s
+            LEFT JOIN task t ON m.receiver_type = %s AND t.id::text = m.text
+            WHERE m.receiver_type IN (%s, %s, %s) AND m.receiver_id = %s
             ORDER BY m.create_time ASC, m.id ASC
             """,
-            (BRANCH_STATUS_RECEIVER_TYPE, BRANCH_COMMENT_RECEIVER_TYPE, branch_id),
+            (BRANCH_TASK_RECEIVER_TYPE, BRANCH_STATUS_RECEIVER_TYPE, BRANCH_COMMENT_RECEIVER_TYPE, BRANCH_TASK_RECEIVER_TYPE, branch_id),
         )
         return [
             {
@@ -824,8 +854,10 @@ class DocumentService:
                 "text": text,
                 "created_at": create_time,
                 "author_display_name": display_name or name,
+                "task_type": task_type,
+                "task_status": task_status,
             }
-            for msg_id, receiver_type, text, create_time, display_name, name in rows
+            for msg_id, receiver_type, text, create_time, display_name, name, task_type, task_status in rows
         ]
 
     async def add_branch_comment(self, branch_id: int, text: str, user_id: int) -> None:

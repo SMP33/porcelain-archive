@@ -6,14 +6,20 @@
     </div>
     <div v-if="commentsLoading" class="tw:text-sm tw:text-gray-400">Загрузка…</div>
     <div v-else-if="!comments.length" class="tw:text-sm tw:text-gray-400 tw:mb-2">Комментариев пока нет</div>
-    <ul v-else class="tw:space-y-2 tw:max-h-[600px] tw:overflow-y-auto tw:mb-4">
+    <ul v-else ref="commentsListRef" class="tw:space-y-2 tw:max-h-[600px] tw:overflow-y-auto tw:mb-4">
       <li v-for="comment in comments" :key="comment.id" class="tw:text-sm tw:text-gray-700">
         <template v-if="comment.type === 'branch_status'">
-          {{ comment.author_display_name || 'Система' }}: Изменил статус на
+          {{ comment.author_display_name || 'Система' }}:<br>
+          Изменил статус на
           <strong :style="{ color: statusColors[comment.text] || 'inherit' }">{{ statusLabels[comment.text] || comment.text }}</strong>
         </template>
+        <template v-else-if="comment.type === 'branch_task'">
+          {{ comment.author_display_name || 'Система' }}:<br>
+          <em :style="{ color: taskStatusColors[comment.task_status] || 'inherit' }">{{ taskTypeLabels[comment.task_type] || comment.task_type }}</em>
+        </template>
         <template v-else>
-          {{ comment.author_display_name || 'Система' }}: {{ comment.text }}
+          {{ comment.author_display_name || 'Система' }}:<br>
+          {{ comment.text }}
         </template>
       </li>
     </ul>
@@ -53,7 +59,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, nextTick, onMounted } from 'vue'
 import http from '../../api/http'
 import AppModal from '../AppModal.vue'
 
@@ -78,20 +84,48 @@ const statusColors = {
   rejected: '#dc2626',
 }
 
+const taskTypeLabels = {
+  create_repos: 'Создать документ',
+  create_branch: 'Начать правки',
+  insert_files: 'Добавить страницы',
+  remove_files: 'Удалить страницы',
+  text_from_image: 'Распознать текст',
+  set_text: 'Задать текст',
+  reset_text: 'Убрать текст',
+  merge_branch: 'Завершить правки',
+}
+const taskStatusColors = {
+  new: '#9ca3af',
+  queued: '#9ca3af',
+  running: '#2563eb',
+  success: '#16a34a',
+  error: '#dc2626',
+}
+
 const comments = ref([])
 const commentsLoading = ref(true)
 const commentsError = ref('')
+const commentsListRef = ref(null)
 
 const addDialogOpen = ref(false)
 const newCommentText = ref('')
 const submitting = ref(false)
 const submitError = ref('')
 
+const scrollToBottom = () => {
+  nextTick(() => {
+    const el = commentsListRef.value
+    if (el) el.scrollTop = el.scrollHeight
+  })
+}
+
 const reload = async () => {
   commentsError.value = ''
   try {
     const response = await http.get(`/api/documents/branches/${props.branchId}/comments`)
+    const hasNewComments = response.data.items.length > comments.value.length
     comments.value = response.data.items
+    if (hasNewComments) scrollToBottom()
   } catch (err) {
     const status = err.response ? err.response.status : null
     commentsError.value = status

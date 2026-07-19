@@ -40,6 +40,7 @@ admin - Администратор
 # Качество распознавания (set_text)
 high - Высокое
 low - Низкое
+worst - Очень низкое
 
 # Указатели (property, property_enum, document_property)
 property - Указатель

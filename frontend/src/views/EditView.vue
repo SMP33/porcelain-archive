@@ -226,7 +226,7 @@
               ref="recognizeTextRef"
               :branch-id="branch.id"
               :page-count="pageCount"
-              @submitted="branchTasksRef.reload()"
+              @submitted="branchCommentsRef.reload()"
             />
 
             <SetTextPanel
@@ -234,7 +234,7 @@
               ref="setTextRef"
               :branch-id="branch.id"
               :page-count="pageCount"
-              @submitted="branchTasksRef.reload()"
+              @submitted="branchCommentsRef.reload()"
             />
 
             <ResetTextPanel
@@ -242,7 +242,7 @@
               ref="resetTextRef"
               :branch-id="branch.id"
               :page-count="pageCount"
-              @submitted="branchTasksRef.reload()"
+              @submitted="branchCommentsRef.reload()"
             />
 
             <ViewChangesPanel
@@ -264,7 +264,7 @@
                       :class="isPageHighlighted(pos) ? highlightClasses[activeHighlightColor] : 'tw:border-gray-200 tw:hover:border-clay-300'"
                       @click="galleryRef.show(pos)"
                     >
-                      <img :src="galleryRef && galleryRef.previewImageUrl(pos)" class="tw:w-full tw:h-[120px] tw:object-cover">
+                      <img :src="pageTilePreviewUrl(pos)" class="tw:w-full tw:h-[120px] tw:object-cover">
                       <div class="tw:text-xs tw:text-gray-500 tw:text-center tw:p-1">{{ pos }}</div>
                     </div>
                     <div v-if="activeInsertGap === pos" class="insert-gap-marker insert-gap-marker--right" />
@@ -275,7 +275,6 @@
           </div>
 
           <div class="tw:w-full tw:md:w-64 tw:shrink-0 tw:space-y-4">
-            <BranchTasksPanel ref="branchTasksRef" :branch-id="branch.id" />
             <BranchCommentsPanel ref="branchCommentsRef" :branch-id="branch.id" />
           </div>
         </div>
@@ -285,6 +284,7 @@
           ref="galleryRef"
           :branch-id="branch.id"
           :page-count="pageCount"
+          :commit="branch.lastCommit"
         />
 
         <div v-if="loading" class="tw:text-sm tw:text-gray-400">Загрузка…</div>
@@ -308,7 +308,6 @@ import RecognizeTextPanel from '../components/edit/RecognizeTextPanel.vue'
 import SetTextPanel from '../components/edit/SetTextPanel.vue'
 import ResetTextPanel from '../components/edit/ResetTextPanel.vue'
 import ViewChangesPanel from '../components/edit/ViewChangesPanel.vue'
-import BranchTasksPanel from '../components/edit/BranchTasksPanel.vue'
 import BranchCommentsPanel from '../components/edit/BranchCommentsPanel.vue'
 
 const route = useRoute()
@@ -377,7 +376,6 @@ const confirmDeleteDialog = ref(false)
 const deleteReady = ref(false)
 let deleteReadyTimer = null
 
-const branchTasksRef = ref(null)
 const branchCommentsRef = ref(null)
 const galleryRef = ref(null)
 const addPagesRef = ref(null)
@@ -412,6 +410,13 @@ const activeHighlightColor = computed(() => {
 const isPageHighlighted = (pos) => {
   const range = activeHighlightRange.value
   return !!range && pos >= range.start && pos <= range.end
+}
+
+// commit в query - чтобы браузер не отдавал закешированное изображение той же
+// позиции, оставшееся от предыдущего состояния страниц ветки.
+const pageTilePreviewUrl = (pos) => {
+  const commitQuery = branch.value.lastCommit ? `?commit=${encodeURIComponent(branch.value.lastCommit)}` : ''
+  return `/api/documents/branches/${branch.value.id}/pages/${pos}/image/preview${commitQuery}`
 }
 
 // Позиция вставки (0 - перед первой страницей) - подсвечивает границу между
@@ -581,7 +586,6 @@ const confirmSetStatus = async () => {
   try {
     await http.post(`/api/documents/branches/${branch.value.id}/status`, { status: newStatus })
     branch.value.status = newStatus
-    branchTasksRef.value.reload()
     branchCommentsRef.value.reload()
   } catch (err) {
     console.error('Ошибка при изменении статуса:', err)
@@ -613,7 +617,6 @@ const confirmDeleteBranch = async () => {
   try {
     await http.post(`/api/documents/branches/${branch.value.id}/delete`, {})
     branch.value.status = 'rejected'
-    branchTasksRef.value.reload()
     branchCommentsRef.value.reload()
   } catch (err) {
     console.error('Ошибка при удалении набора изменений:', err)
@@ -626,17 +629,16 @@ const confirmDeleteBranch = async () => {
 
 const onPagesChanged = async () => {
   await loadPageCount()
-  branchTasksRef.value.reload()
+  branchCommentsRef.value.reload()
 }
 
 // Тот же WS отдаёт и события задач, и изменения статуса набора изменений -
-// на любое сообщение просто перезагружаем текущую ветку и задачи, не разбирая payload.
+// на любое сообщение просто перезагружаем текущую ветку и комментарии, не разбирая payload.
 const connectTaskUpdates = () => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   ws = new WebSocket(`${protocol}//${window.location.host}/api/tasks/ws`)
 
   ws.onmessage = async () => {
-    branchTasksRef.value.reload()
     branchCommentsRef.value.reload()
     loadPageCount()
     loadBranch(branch.value.id)

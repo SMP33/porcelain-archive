@@ -53,6 +53,21 @@ if [ -z "$(git config --global user.email 2>/dev/null || true)" ]; then
     echo "git config --global user.email не был задан, установлено значение по умолчанию: archive-bot@localhost"
 fi
 
+echo "== Проверка Tesseract OCR =="
+# Нужен для porcelain_archive/task/script/text_from_image.py (распознавание
+# текста на изображениях страниц) - pytesseract сам по себе только обёртка
+# над системным бинарником tesseract, языковой пакет rus ставится отдельно.
+if ! command -v tesseract >/dev/null 2>&1; then
+    echo "tesseract не установлен. Установите его вручную (требует sudo):" >&2
+    echo "  sudo apt-get install -y tesseract-ocr tesseract-ocr-rus" >&2
+    exit 1
+fi
+if ! tesseract --list-langs 2>&1 | grep -qx "rus"; then
+    echo "Языковой пакет tesseract-ocr-rus не установлен. Установите его вручную (требует sudo):" >&2
+    echo "  sudo apt-get install -y tesseract-ocr-rus" >&2
+    exit 1
+fi
+
 echo "== Проверка python3 и модуля venv =="
 if ! command -v python3 >/dev/null 2>&1; then
     echo "python3 не установлен. Установите его вручную (требует sudo):" >&2
@@ -79,7 +94,7 @@ echo "== Установка python-зависимостей из requirements.tx
 .venv/bin/pip install -r requirements.txt
 
 echo "== Готово =="
-.venv/bin/pip list --format=columns | grep -iE "fastapi|uvicorn|websockets|multipart|pydantic|psycopg|aiofiles|bcrypt|pillow|pdfminer|colorama|docx" || true
+.venv/bin/pip list --format=columns | grep -iE "fastapi|uvicorn|websockets|multipart|pydantic|psycopg|aiofiles|bcrypt|pillow|pdfminer|colorama|docx|pytesseract" || true
 
 echo "== Проверка Node.js/npm =="
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then

@@ -346,7 +346,7 @@ async def set_text(
     Требует авторизации и доступа к редактированию ветки.
 
     :param position: Номер страницы, с которой начинается применение текста.
-    :param ocr_quality: Качество распознавания ('high' или 'low').
+    :param ocr_quality: Качество распознавания ('high', 'low' или 'worst').
     """
     user = await user_service.get_user_by_token(token)
     if user is None:

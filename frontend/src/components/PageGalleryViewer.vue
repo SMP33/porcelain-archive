@@ -18,6 +18,15 @@
         <i class="mdi mdi-chevron-right tw:text-xl" />
       </button>
 
+      <div v-if="pageOcrQuality" class="tw:mb-2">
+        <span
+          class="tw:inline-flex tw:items-center tw:gap-1 tw:px-2 tw:py-0.5 tw:rounded-full tw:text-xs tw:font-medium"
+          :class="ocrQualityBadgeClass"
+        >
+          Качество распознавания: {{ ocrQualityLabel }}
+        </span>
+      </div>
+
       <div class="tw:grid tw:grid-cols-1" :class="showTextColumn ? 'tw:md:grid-cols-12 tw:gap-4' : ''">
         <div :class="showTextColumn ? 'tw:md:col-span-7' : ''">
           <div class="page-image-wrap">
@@ -85,6 +94,7 @@ import AppModal from './AppModal.vue'
 const props = defineProps({
   branchId: { type: [Number, String], required: true },
   pageCount: { type: Number, required: true },
+  commit: { type: String, default: null },
 })
 
 const dialog = ref(false)
@@ -93,10 +103,20 @@ const currentPos = ref(1)
 const spans = ref([])
 const textLoading = ref(false)
 const hoveredSpanIndex = ref(null)
+const pageOcrQuality = ref(null)
 
 const hasPrev = computed(() => currentPos.value > 1)
 const hasNext = computed(() => currentPos.value < props.pageCount)
 const showTextColumn = computed(() => textLoading.value || spans.value.length > 0)
+
+const OCR_QUALITY_LABELS = { high: 'Высокое', low: 'Низкое', worst: 'Очень низкое' }
+const ocrQualityLabel = computed(() => OCR_QUALITY_LABELS[pageOcrQuality.value] || pageOcrQuality.value)
+const OCR_QUALITY_BADGE_CLASSES = {
+  high: 'tw:bg-green-100 tw:text-green-700',
+  low: 'tw:bg-yellow-100 tw:text-yellow-800',
+  worst: 'tw:bg-red-100 tw:text-red-700',
+}
+const ocrQualityBadgeClass = computed(() => OCR_QUALITY_BADGE_CLASSES[pageOcrQuality.value] || 'tw:bg-gray-100 tw:text-gray-700')
 
 // Переводит вертикальную прокрутку колесом мыши в горизонтальную прокрутку ленты миниатюр.
 const onThumbStripWheel = (event) => {
@@ -104,8 +124,11 @@ const onThumbStripWheel = (event) => {
   event.currentTarget.scrollLeft += event.deltaY
 }
 
-const previewImageUrl = (pos) => `/api/documents/branches/${props.branchId}/pages/${pos}/image/preview`
-const fullImageUrl = (pos) => `/api/documents/branches/${props.branchId}/pages/${pos}/image`
+// commit в query - чтобы браузер не отдавал закешированное изображение
+// с прежним содержимым той же позиции после изменения страниц ветки.
+const commitQuery = () => (props.commit ? `?commit=${encodeURIComponent(props.commit)}` : '')
+const previewImageUrl = (pos) => `/api/documents/branches/${props.branchId}/pages/${pos}/image/preview${commitQuery()}`
+const fullImageUrl = (pos) => `/api/documents/branches/${props.branchId}/pages/${pos}/image${commitQuery()}`
 
 const spanHighlightStyle = (span) => ({
   left: span.rect.x + '%',
@@ -117,12 +140,16 @@ const spanHighlightStyle = (span) => ({
 const loadText = async (pos) => {
   spans.value = []
   hoveredSpanIndex.value = null
+  pageOcrQuality.value = null
   textLoading.value = true
   try {
     const response = await http.get(`/api/documents/branches/${props.branchId}/pages/${pos}/text`)
     const page = response.data.text
     if (page && page.blocks) {
       spans.value = page.blocks
+    }
+    if (page && page.ocr_quality) {
+      pageOcrQuality.value = page.ocr_quality
     }
   } catch (error) {
     console.error('Ошибка при получении текста страницы:', error)
