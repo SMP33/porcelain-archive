@@ -109,7 +109,7 @@ const hasPrev = computed(() => currentPos.value > 1)
 const hasNext = computed(() => currentPos.value < props.pageCount)
 const showTextColumn = computed(() => textLoading.value || spans.value.length > 0)
 
-const OCR_QUALITY_LABELS = { high: 'Высокое', low: 'Низкое', worst: 'Очень низкое' }
+const OCR_QUALITY_LABELS = { high: 'Высокое', low: 'Среднее', worst: 'Низкое' }
 const ocrQualityLabel = computed(() => OCR_QUALITY_LABELS[pageOcrQuality.value] || pageOcrQuality.value)
 const OCR_QUALITY_BADGE_CLASSES = {
   high: 'tw:bg-green-100 tw:text-green-700',
