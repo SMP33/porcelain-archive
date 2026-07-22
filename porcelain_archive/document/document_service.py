@@ -136,6 +136,16 @@ class DocumentService:
         )
         return rows_affected > 0
 
+    async def rename_document(self, document_id: int, name: str) -> bool:
+        """
+        Переименовывает документ.
+        """
+        rows_affected = await db.execute_write(
+            "UPDATE document SET name = %s WHERE id = %s",
+            (name, document_id),
+        )
+        return rows_affected > 0
+
     async def get_document_properties(self, document_id: int, user_id: Optional[int]) -> List[Dict[str, Any]]:
         """
         Возвращает указатели документа (document_property, через property_enum).

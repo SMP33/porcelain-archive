@@ -38,6 +38,10 @@ class SetVisibilityRequest(BaseModel):
     is_visible: bool
 
 
+class RenameDocumentRequest(BaseModel):
+    name: str
+
+
 class DocumentPropertyEntry(BaseModel):
     property_id: int
     values: List[str]
@@ -140,6 +144,28 @@ async def set_document_visibility(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Документ не найден")
 
     return {"is_visible": payload.is_visible}
+
+
+@router.post("/{document_id}/rename")
+async def rename_document(
+    document_id: int,
+    payload: RenameDocumentRequest,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """
+    Переименовывает документ. Требует роли moderator+.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not role_at_least(user.get("role"), "moderator"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для переименования документа")
+
+    success = await document_service.rename_document(document_id, payload.name)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Документ не найден")
+
+    return {"name": payload.name}
 
 
 @router.get("/branches/")

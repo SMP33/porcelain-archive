@@ -36,6 +36,26 @@
         <div v-if="!loading && document && (!hasRole('moderator') || activeTab === 'document')" class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:p-6">
           <div class="tw:text-sm tw:text-gray-500 tw:mb-4">Автор: {{ document.author }} | Создан: {{ document.created_at }}</div>
 
+          <div v-if="hasRole('moderator')" class="tw:mb-4">
+            <label class="tw:block tw:text-xs tw:font-medium tw:text-gray-500 tw:mb-1">Название документа</label>
+            <div class="tw:flex tw:items-center tw:gap-2 tw:max-w-md">
+              <input
+                v-model="renameForm"
+                type="text"
+                class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300"
+              >
+              <button
+                type="button"
+                :disabled="renaming || !renameForm.trim() || renameForm.trim() === document.name"
+                class="tw:px-3 tw:py-2 tw:text-sm tw:font-medium tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:rounded-lg tw:transition-colors tw:disabled:opacity-50 tw:shrink-0"
+                @click="handleRenameDocument"
+              >
+                {{ renaming ? '…' : 'Сохранить' }}
+              </button>
+            </div>
+            <div v-if="renameError" class="tw:text-sm tw:text-red-600 tw:mt-1">{{ renameError }}</div>
+          </div>
+
           <div v-if="hasRole('moderator')" class="tw:flex tw:items-center tw:mb-4">
             <button
               type="button"
@@ -329,6 +349,10 @@ const downloadError = ref('')
 
 const visibilityLoading = ref(false)
 
+const renameForm = ref('')
+const renaming = ref(false)
+const renameError = ref('')
+
 const activeTab = ref('document')
 
 const masterBranchId = ref(null)
@@ -593,6 +617,7 @@ const loadDocument = async (id) => {
   try {
     const response = await http.get(`/api/documents/${id}`)
     document.value = response.data
+    renameForm.value = document.value.name
   } catch (err) {
     const status = err.response ? err.response.status : null
     if (status === 401) {
@@ -650,6 +675,22 @@ const handleToggleVisibility = async (isVisible) => {
     console.error('Ошибка при изменении видимости документа:', err)
   } finally {
     visibilityLoading.value = false
+  }
+}
+
+const handleRenameDocument = async () => {
+  const name = renameForm.value.trim()
+  renaming.value = true
+  renameError.value = ''
+  try {
+    await http.post(`/api/documents/${document.value.id}/rename`, { name })
+    document.value.name = name
+    renameForm.value = name
+  } catch (err) {
+    renameError.value = (err.response && err.response.data && err.response.data.detail) || 'Не удалось переименовать документ.'
+    console.error('Ошибка при переименовании документа:', err)
+  } finally {
+    renaming.value = false
   }
 }
 
