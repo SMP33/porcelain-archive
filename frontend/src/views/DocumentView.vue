@@ -81,9 +81,35 @@
             >
               {{ creatingBranch ? 'Создание…' : 'Редактировать документ' }}
             </button>
+            <div ref="downloadMenuRoot" class="tw:relative">
+              <button
+                type="button"
+                :disabled="downloading"
+                class="tw:flex tw:items-center tw:gap-1 tw:px-5 tw:py-2 tw:bg-white tw:hover:bg-gray-50 tw:border tw:border-gray-300 tw:text-ink-900 tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
+                @click="downloadMenuOpen = !downloadMenuOpen"
+              >
+                {{ downloading ? 'Подготовка архива…' : 'Скачать' }}
+                <i class="mdi mdi-chevron-down" />
+              </button>
+              <div
+                v-if="downloadMenuOpen"
+                class="tw:absolute tw:z-20 tw:left-0 tw:top-full tw:mt-1 tw:min-w-[220px] tw:bg-white tw:border tw:border-gray-200 tw:rounded-lg tw:shadow-lg tw:overflow-hidden"
+              >
+                <button
+                  type="button"
+                  class="tw:w-full tw:text-left tw:px-4 tw:py-2 tw:text-sm tw:text-gray-700 tw:hover:bg-gray-50 tw:transition-colors"
+                  @click="handleDownloadImagesZip"
+                >
+                  Исходные изображения - Архив
+                </button>
+              </div>
+            </div>
           </div>
           <div v-if="editError" class="tw:text-sm tw:text-red-600 tw:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:px-3 tw:py-2 tw:mt-3">
             {{ editError }}
+          </div>
+          <div v-if="downloadError" class="tw:text-sm tw:text-red-600 tw:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:px-3 tw:py-2 tw:mt-3">
+            {{ downloadError }}
           </div>
         </div>
 
@@ -296,6 +322,11 @@ const error = ref(null)
 const creatingBranch = ref(false)
 const editError = ref('')
 
+const downloadMenuOpen = ref(false)
+const downloadMenuRoot = ref(null)
+const downloading = ref(false)
+const downloadError = ref('')
+
 const visibilityLoading = ref(false)
 
 const activeTab = ref('document')
@@ -411,6 +442,67 @@ watch(addPropertyMenuOpen, (isOpen) => {
     window.document.removeEventListener('click', onAddPropertyMenuDocClick, true)
   }
 })
+
+function onDownloadMenuDocClick(e) {
+  if (downloadMenuRoot.value && !downloadMenuRoot.value.contains(e.target)) {
+    downloadMenuOpen.value = false
+  }
+}
+
+watch(downloadMenuOpen, (isOpen) => {
+  if (isOpen) {
+    window.document.addEventListener('click', onDownloadMenuDocClick, true)
+  } else {
+    window.document.removeEventListener('click', onDownloadMenuDocClick, true)
+  }
+})
+
+const DOWNLOAD_POLL_INTERVAL_MS = 3000
+
+// Извлекает имя файла из заголовка Content-Disposition (attachment; filename="...").
+function filenameFromContentDisposition(header, fallback) {
+  const match = /filename="?([^";]+)"?/.exec(header || '')
+  return match ? match[1] : fallback
+}
+
+async function handleDownloadImagesZip() {
+  downloadMenuOpen.value = false
+  downloadError.value = ''
+  downloading.value = true
+  try {
+    for (;;) {
+      const response = await http.get(`/api/documents/download/${document.value.id}`, {
+        responseType: 'blob',
+        validateStatus: () => true,
+      })
+
+      if (response.status === 200) {
+        const url = URL.createObjectURL(response.data)
+        const link = window.document.createElement('a')
+        link.href = url
+        link.download = filenameFromContentDisposition(
+          response.headers['content-disposition'],
+          `document_${document.value.id}_images.zip`,
+        )
+        link.click()
+        URL.revokeObjectURL(url)
+        return
+      }
+
+      if (response.status !== 202) {
+        downloadError.value = 'Не удалось подготовить архив.'
+        return
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, DOWNLOAD_POLL_INTERVAL_MS))
+    }
+  } catch (err) {
+    downloadError.value = 'Не удалось скачать архив.'
+    console.error('Ошибка при скачивании архива изображений:', err)
+  } finally {
+    downloading.value = false
+  }
+}
 
 async function loadAllProperties() {
   if (allProperties.value.length) return
@@ -568,7 +660,7 @@ const handleEditDocument = async () => {
     const response = await http.post(`/api/documents/${document.value.id}/create_branch`, {})
     router.push(`/edit/${response.data.branch_id}`)
   } catch (err) {
-    editError.value = 'Не удалось создать набор изменений для редактирования.'
+    editError.value = (err.response && err.response.data && err.response.data.detail) || 'Не удалось создать набор изменений для редактирования.'
     console.error('Ошибка при создании ветки:', err)
   } finally {
     creatingBranch.value = false
@@ -586,5 +678,6 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.document.removeEventListener('click', onAddPropertyMenuDocClick, true)
+  window.document.removeEventListener('click', onDownloadMenuDocClick, true)
 })
 </script>

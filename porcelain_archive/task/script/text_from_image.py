@@ -31,7 +31,7 @@ OCR_TESS_CONFIG = "--oem 1 --psm 3"
 
 # Пороги средней уверенности Tesseract (0-100) для итогового ocr_quality страницы:
 # >= HIGH - "high", >= LOW - "low", иначе - "worst".
-OCR_QUALITY_HIGH_THRESHOLD = 75
+OCR_QUALITY_HIGH_THRESHOLD = 90
 OCR_QUALITY_LOW_THRESHOLD = 40
 
 # Конец блока - перенос слова по строке (2+ строчные буквы и дефис на конце).

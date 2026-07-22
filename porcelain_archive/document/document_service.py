@@ -32,6 +32,10 @@ ALLOWED_PAGE_EXTENSIONS = {
     ".heif",
 }
 
+# PDF допускается отдельно от ALLOWED_PAGE_EXTENSIONS: только один файл за раз,
+# без смешивания с обычными картинками (разбивается на страницы фоновой задачей).
+PDF_EXTENSION = ".pdf"
+
 BRANCH_STATUSES = {"in_work", "to_review", "in_review", "in_accept", "accepted", "rejected"}
 
 OCR_QUALITIES = {"high", "low", "worst"}
@@ -246,6 +250,14 @@ class DocumentService:
             )
             if await cursor.fetchone() is None:
                 raise ValueError("Документ не найден")
+
+            cursor = await conn.execute(
+                "SELECT id FROM branch WHERE document_id = %s AND name != 'master' "
+                "AND status NOT IN ('accepted', 'rejected')",
+                (document_id,),
+            )
+            if await cursor.fetchone() is not None:
+                raise ValueError("У документа уже есть активный набор изменений")
 
             cursor = await conn.execute(
                 "INSERT INTO branch (document_id, author_id, name, created_time) VALUES (%s, %s, %s, NOW()) RETURNING id",
@@ -593,22 +605,33 @@ class DocumentService:
         if not (0 <= int(position) <= page_count):
             raise ValueError(f"position должен быть в диапазоне от 0 до {page_count}")
 
-        for file in files:
-            extension = Path(file.filename).suffix.lower()
-            if extension not in ALLOWED_PAGE_EXTENSIONS:
-                raise ValueError(f"Недопустимый формат файла: '{extension}'")
+        extensions = [Path(file.filename).suffix.lower() for file in files]
+        pdf_count = sum(1 for extension in extensions if extension == PDF_EXTENSION)
+        if pdf_count > 0:
+            if pdf_count > 1 or len(files) > 1:
+                raise ValueError("PDF можно загрузить только одним файлом, без других файлов")
+        else:
+            for extension in extensions:
+                if extension not in ALLOWED_PAGE_EXTENSIONS:
+                    raise ValueError(f"Недопустимый формат файла: '{extension}'")
 
         tmpdir = tempfile.mkdtemp()
         print(f"Временная папка: {tmpdir}")
 
-        page_num = position
-        for file in files:
-            page_num += 1
-            extension = Path(file.filename).suffix.lower()
-            dest_file_path = f"{tmpdir}/{page_num}{extension}"
+        if pdf_count > 0:
+            dest_file_path = f"{tmpdir}/source.pdf"
             async with aiofiles.open(dest_file_path, "wb") as out_file:
-                while chunk := await file.read(1024 * 1024):
+                while chunk := await files[0].read(1024 * 1024):
                     await out_file.write(chunk)
+        else:
+            page_num = position
+            for file in files:
+                page_num += 1
+                extension = Path(file.filename).suffix.lower()
+                dest_file_path = f"{tmpdir}/{page_num}{extension}"
+                async with aiofiles.open(dest_file_path, "wb") as out_file:
+                    while chunk := await file.read(1024 * 1024):
+                        await out_file.write(chunk)
 
         async with db.transaction() as conn:
             data = {
@@ -880,6 +903,40 @@ class DocumentService:
 
         return rows[0][0]
 
+    async def get_or_build_document_zip(self, document_id: int, user_id: Optional[int]) -> Optional[bytes]:
+        """
+        Возвращает содержимое zip-архива изображений документа (текущий коммит
+        master) из кеша, если он уже собран. Если нет - запускает задачу
+        download_img_zip (если для этого коммита ещё нет активной) и возвращает
+        None - вызывающий код должен опросить метод повторно позже.
+        """
+        master_branch_id = await self.get_master_branch_id(document_id)
+        if master_branch_id is None:
+            raise ValueError("У документа нет основной ветки")
+
+        commit = await self.get_branch_last_commit(master_branch_id)
+        if commit is None:
+            raise ValueError("У документа ещё нет ни одной версии")
+
+        zip_path = Path(config.files.cache_path) / "download_img_zip" / f"{commit}.zip"
+        if zip_path.exists():
+            return zip_path.read_bytes()
+
+        async with db.transaction() as conn:
+            cursor = await conn.execute(
+                "SELECT id FROM task WHERE type = 'download_img_zip' "
+                "AND status IN ('new', 'queued', 'running') AND data->>'commit' = %s",
+                (commit,),
+            )
+            if not await cursor.fetchone():
+                data = {"document_id": document_id, "commit": commit}
+                await conn.execute(
+                    "INSERT INTO task (type, author_id, data) VALUES ('download_img_zip', %s, %s)",
+                    (user_id, Jsonb(data)),
+                )
+
+        return None
+
     async def get_pages_hash(self, commit: Optional[str]) -> List[Dict[str, Optional[str]]]:
         """
         Возвращает image_hash и text_hash всех страниц указанного коммита, упорядоченных по номеру страницы.
@@ -897,7 +954,7 @@ class DocumentService:
         """
         Возвращает список расширений файлов, допустимых для страниц документа.
         """
-        return sorted(ALLOWED_PAGE_EXTENSIONS)
+        return sorted(ALLOWED_PAGE_EXTENSIONS | {PDF_EXTENSION})
 
     async def _get_page_image_hash(self, commit: Optional[str], page_index: int) -> Optional[str]:
         """

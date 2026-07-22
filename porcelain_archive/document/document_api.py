@@ -1,5 +1,6 @@
 from typing import Annotated, Dict, Any, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from .document_service import DocumentService, BRANCH_STATUSES, OCR_QUALITIES
@@ -113,8 +114,8 @@ async def create_branch(
 
     try:
         branch_id = await document_service.create_branch(user_id=user["id"], document_id=document_id)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Документ не найден")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     return {"branch_id": branch_id}
 
@@ -517,6 +518,35 @@ async def get_master_branch_id(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ветка master не найдена")
 
     return {"branch_id": branch_id}
+
+
+@router.get("/download/{document_id}")
+async def download_document_zip(
+    document_id: int,
+    request: Request,
+) -> Response:
+    """
+    Возвращает zip-архив исходных изображений документа (текущий коммит master).
+    Если архив ещё не собран - запускает его формирование в фоне и отвечает 202;
+    вызывающая сторона должна повторить запрос позже.
+    """
+    user_id = await _get_current_user_id(request)
+    if not await document_service.is_document_available(user_id, document_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Документ не найден")
+
+    try:
+        zip_bytes = await document_service.get_or_build_document_zip(document_id, user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    if zip_bytes is None:
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content={"status": "processing"})
+
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="document_{document_id}_images.zip"'},
+    )
 
 
 @router.get("/{document_id}/branches")

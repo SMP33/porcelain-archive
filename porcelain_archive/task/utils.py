@@ -9,6 +9,7 @@ from PIL import Image
 import io
 import tempfile
 
+import fitz
 import psycopg
 from psycopg.types.json import Jsonb
 
@@ -84,6 +85,27 @@ def validate_image(path) -> None:
         raise BrokenImageError(f"Файл '{path}' не является корректным изображением: {exc}") from exc
 
 
+PROGRESS_LOG_STEP = 50
+
+
+def log_progress(current: int, total: int, message: str) -> None:
+    """Логирует прогресс каждые PROGRESS_LOG_STEP шагов и на последнем шаге."""
+    if current % PROGRESS_LOG_STEP == 0 or current == total:
+        log(f"{message}: {current}/{total}")
+
+
+def render_pdf_to_images(pdf_path: Path, output_dir: Path, start_num: int) -> int:
+    """Рендерит каждую страницу PDF в PNG {start_num + i + 1}.png в output_dir. Возвращает число страниц."""
+    with fitz.open(pdf_path) as pdf:
+        total = pdf.page_count
+        log(f"Рендеринг PDF в изображения: начало, страниц: {total}")
+        for i, page in enumerate(pdf):
+            pixmap = page.get_pixmap(dpi=200)
+            pixmap.save(str(output_dir / f"{start_num + i + 1}.png"))
+            log(f"Рендеринг PDF в изображения: {i + 1}/{total}")
+        return total
+
+
 def natural_sort_key(name: str):
     """Ключ естественной сортировки: числовые куски сравниваются как числа."""
     return [
@@ -111,15 +133,15 @@ def shift_folder_files_up(
 ) -> None:
     """Сдвигает файлы folder/ ветки с номером больше position вверх на count."""
     files = list_position_files(branch_path, branch_name, folder)
-    files.reverse()
 
+    renames = []
     for file in files:
         old_position = int(file.stem)
         if position < old_position:
             new_name = f"{old_position + count}{file.suffix}"
-            git_mv_no_checkout(
-                branch_path, f"{folder}/{file.name}", f"{folder}/{new_name}"
-            )
+            renames.append((f"{folder}/{file.name}", f"{folder}/{new_name}"))
+
+    git_mv_no_checkout(branch_path, renames)
 
 
 def remove_and_shift_folder_files(
@@ -133,15 +155,17 @@ def remove_and_shift_folder_files(
     """Удаляет файлы folder/ ветки с номером в [remove_from, remove_to] и сдвигает файлы с номером больше remove_to вниз на shift."""
     files = list_position_files(branch_path, branch_name, folder)
 
+    remove_paths = []
+    renames = []
     for file in files:
         old_position = int(file.stem)
         if remove_from <= old_position <= remove_to:
-            run_git(branch_path, "rm", "--cached", "--sparse", f"{folder}/{file.name}")
+            remove_paths.append(f"{folder}/{file.name}")
         elif old_position > remove_to:
             new_name = f"{old_position - shift}{file.suffix}"
-            git_mv_no_checkout(
-                branch_path, f"{folder}/{file.name}", f"{folder}/{new_name}"
-            )
+            renames.append((f"{folder}/{file.name}", f"{folder}/{new_name}"))
+
+    git_mv_no_checkout(branch_path, renames, extra_remove_paths=remove_paths)
 
 
 def run_git(repo_path: str, *args: str) -> subprocess.CompletedProcess:
@@ -161,40 +185,70 @@ def run_git(repo_path: str, *args: str) -> subprocess.CompletedProcess:
     return result
 
 
-def git_mv_no_checkout(repo_path: str, old_path: str, new_path: str) -> None:
+GIT_ARGS_CHUNK_SIZE = 200  # ограничивает длину командной строки git на один вызов
+
+
+def _chunked(items: list, size: int):
+    for i in range(0, len(items), size):
+        yield items[i:i + size]
+
+
+def git_mv_no_checkout(
+    repo_path: str, renames: list[tuple[str, str]], extra_remove_paths: list[str] = None
+) -> None:
     """
-    Переименовывает файл на уровне git-индекса, без материализации
-    файла в рабочей директории (актуально для sparse-checkout,
-    когда исходный файл физически отсутствует на диске).
+    Переименовывает набор файлов на уровне git-индекса за проход, без
+    материализации файлов в рабочей директории (актуально для sparse-checkout,
+    когда исходные файлы физически отсутствуют на диске). extra_remove_paths -
+    дополнительные пути, которые нужно только убрать из индекса (без переименования).
 
     :param repo_path: путь к репозиторию или worktree
-    :param old_path: текущий путь файла в дереве репозитория
-    :param new_path: новый путь файла
+    :param renames: список пар (старый путь, новый путь)
+    :param extra_remove_paths: пути, удаляемые из индекса без переименования
     """
-    # 1. Получаем режим доступа и hash blob'а старого файла из HEAD
-    result = run_git(repo_path, "ls-tree", "HEAD", "--", old_path)
+    extra_remove_paths = extra_remove_paths or []
+    if not renames and not extra_remove_paths:
+        return
 
-    if not result.stdout.strip():
-        raise FileNotFoundError(
-            f"Файл '{old_path}' не найден в HEAD репозитория {repo_path}"
-        )
+    log(f"Переименование в индексе: {len(renames)} файл(ов), удаление: {len(extra_remove_paths)} файл(ов)")
 
-    # Формат строки: "<mode> <type> <hash>\t<path>"
-    mode, _obj_type, blob_hash = result.stdout.split(maxsplit=3)[:3]
+    old_paths = [old_path for old_path, _ in renames]
+    blobs = {}
 
-    # 2. Добавляем blob под новым путём в индекс (без чтения файла с диска)
-    run_git(
-        repo_path,
-        "update-index",
-        "--add",
-        "--cacheinfo",
-        f"{mode},{blob_hash},{new_path}",
-    )
+    if renames:
+        # 1. Получаем режим доступа и hash blob'ов старых файлов из HEAD
+        for chunk in _chunked(old_paths, GIT_ARGS_CHUNK_SIZE):
+            result = run_git(repo_path, "ls-tree", "HEAD", "--", *chunk)
 
-    # 3. Убираем старый путь из индекса (файл на диске не трогаем)
-    run_git(repo_path, "rm", "--cached", "--sparse", old_path)
+            # Формат строки: "<mode> <type> <hash>\t<path>"
+            for line in result.stdout.splitlines():
+                meta, path = line.split("\t", maxsplit=1)
+                mode, _obj_type, blob_hash = meta.split(maxsplit=2)
+                blobs[path] = (mode, blob_hash)
 
-    log(f"Переименовано в индексе: {old_path} -> {new_path}")
+        missing = [old_path for old_path in old_paths if old_path not in blobs]
+        if missing:
+            raise FileNotFoundError(
+                f"Файлы {missing} не найдены в HEAD репозитория {repo_path}"
+            )
+
+    # 2. Убираем старые пути из индекса. Делается до добавления новых путей: новый
+    # путь одного файла может совпадать со старым путём другого - иначе git rm
+    # --cached откажется его убирать.
+    for chunk in _chunked(old_paths + extra_remove_paths, GIT_ARGS_CHUNK_SIZE):
+        run_git(repo_path, "rm", "--cached", "--sparse", *chunk)
+
+    # 3. Добавляем blob'ы под новыми путями в индекс (без чтения файлов с диска);
+    # --cacheinfo можно повторять сколько угодно раз в одной команде
+    for chunk in _chunked(renames, GIT_ARGS_CHUNK_SIZE):
+        cacheinfo_args = []
+        for old_path, new_path in chunk:
+            mode, blob_hash = blobs[old_path]
+            cacheinfo_args += ["--cacheinfo", f"{mode},{blob_hash},{new_path}"]
+        if cacheinfo_args:
+            run_git(repo_path, "update-index", "--add", *cacheinfo_args)
+
+    log(f"Переименовано в индексе: {len(renames)} файл(ов), удалено: {len(extra_remove_paths)} файл(ов)")
 
 
 def git_sparse_checkout_files(repo_path: str, files: list[str] = None) -> None:
@@ -444,6 +498,8 @@ def regenerate_branch_cache(repo_path: str, branch_id: int, branch: Optional[str
                     Path(web_image_path).unlink(missing_ok=True)
                     Path(preview_image_path).unlink(missing_ok=True)
                     continue
+
+            log_progress(pos, page_count, "Обновление кеша страниц")
 
             queries.append(
                 (

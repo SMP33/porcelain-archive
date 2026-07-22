@@ -10,7 +10,7 @@ branch_id = info.data['branch_id']
 branch_name = info.data['branch_name']
 branch_path = config.files.repos_branch_root + f"/{branch_name}"
 
-run_git(repo_path,"worktree" ,"add", "--no-checkout", "-b", branch_name, branch_path)
+run_git(repo_path, "worktree", "add", "--no-checkout", "-b", branch_name, branch_path, "master")
 
 run_git(branch_path, "sparse-checkout", "init", "--no-cone")
 run_git(branch_path, "checkout", branch_name)

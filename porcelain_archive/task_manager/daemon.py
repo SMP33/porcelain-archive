@@ -69,6 +69,8 @@ class TaskManager:
             self._conninfo, autocommit=True
         )
         try:
+            await self._fail_unfinished_tasks()
+
             await self._conn.execute(f"LISTEN {NOTIFY_CHANNEL}")
 
             async for notify in self._conn.notifies():
@@ -99,6 +101,24 @@ class TaskManager:
         finally:
             await self._conn.close()
             await self._work_conn.close()
+
+    async def _fail_unfinished_tasks(self) -> None:
+        """
+        Помечает как error задачи, оставшиеся в статусах new/queued/running с
+        прошлого запуска. task_manager - единственный исполнитель задач, поэтому
+        в момент его старта такие задачи гарантированно осиротели (выполнявший
+        их процесс не пережил предыдущее завершение/падение task_manager).
+        """
+        async with self._work_conn.cursor() as cur:
+            await cur.execute(
+                "UPDATE task SET status = 'error' "
+                "WHERE status IN ('new', 'queued', 'running') RETURNING id"
+            )
+            rows = await cur.fetchall()
+
+        if rows:
+            ids = ", ".join(str(row[0]) for row in rows)
+            print(f"НЕЗАВЕРШЁННЫЕ ЗАДАЧИ ПОМЕЧЕНЫ КАК ERROR: {ids}")
 
     async def _process_queue(self) -> None:
         """Обрабатывает задачи по дной"""

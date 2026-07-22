@@ -24,7 +24,10 @@
 
     <div v-if="sortedPageFiles.length" class="tw:grid tw:grid-cols-4 tw:sm:grid-cols-6 tw:gap-2 tw:mt-3">
       <div v-for="entry in sortedPageFiles" :key="entry.name" class="tw:relative tw:border tw:border-gray-200 tw:rounded tw:overflow-hidden">
-        <img :src="entry.url" class="tw:w-full tw:h-[70px] tw:object-cover">
+        <img v-if="!entry.isPdf" :src="entry.url" class="tw:w-full tw:h-[70px] tw:object-cover">
+        <div v-else class="tw:w-full tw:h-[70px] tw:flex tw:items-center tw:justify-center tw:bg-gray-50">
+          <i class="mdi mdi-file-pdf-box tw:text-3xl tw:text-red-400" />
+        </div>
         <button
           type="button"
           class="tw:absolute tw:top-0.5 tw:right-0.5 tw:w-5 tw:h-5 tw:flex tw:items-center tw:justify-center tw:bg-gray-800/70 tw:hover:bg-gray-800 tw:text-white tw:rounded-full tw:transition-colors"
@@ -45,6 +48,9 @@
     />
     <div v-if="uploadError" class="tw:text-sm tw:text-red-600 tw:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:px-3 tw:py-2 tw:mt-3">
       {{ uploadError }}
+    </div>
+    <div v-if="pdfConflict" class="tw:text-sm tw:text-red-600 tw:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:px-3 tw:py-2 tw:mt-3">
+      PDF можно загрузить только один файл, без других файлов
     </div>
     <div v-if="rejectedFiles.length" class="tw:text-sm tw:text-amber-700 tw:bg-amber-50 tw:border tw:border-amber-200 tw:rounded-lg tw:px-3 tw:py-2 tw:mt-3">
       Не приняты (недопустимый формат): {{ rejectedFiles.join(', ') }}
@@ -108,8 +114,17 @@ const removeFile = (file) => {
   pageFiles.value = pageFiles.value.filter((f) => f !== file)
 }
 
+const isPdfFile = (file) => file.name.toLowerCase().endsWith('.pdf')
+
+// PDF нельзя сочетать с другими файлами и нельзя загружать больше одного PDF за раз
+const pdfConflict = computed(() => {
+  const pdfCount = pageFiles.value.filter(isPdfFile).length
+  return pdfCount > 0 && (pdfCount > 1 || pageFiles.value.length > 1)
+})
+
 const canUploadPages = computed(() => {
   if (!pageFiles.value.length) return false
+  if (pdfConflict.value) return false
   if (position.value === '' || position.value === null) return false
   return Number.isInteger(position.value) && position.value >= 0 && position.value <= props.pageCount
 })
@@ -128,11 +143,14 @@ defineExpose({ insertGapPosition })
 const sortedPageFiles = computed(() => {
   return [...pageFiles.value]
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
-    .map((file) => ({ file, name: file.name, url: URL.createObjectURL(file) }))
+    .map((file) => {
+      const isPdf = isPdfFile(file)
+      return { file, name: file.name, isPdf, url: isPdf ? '' : URL.createObjectURL(file) }
+    })
 })
 
 watch(sortedPageFiles, (_entries, previousEntries) => {
-  previousEntries?.forEach((entry) => URL.revokeObjectURL(entry.url))
+  previousEntries?.forEach((entry) => entry.url && URL.revokeObjectURL(entry.url))
 })
 
 const handleUploadPages = async () => {
