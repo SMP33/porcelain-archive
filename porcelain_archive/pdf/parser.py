@@ -17,13 +17,10 @@ docx, координаты есть у всего текста без исклю
 они уже посчитаны через page_height - y.
 """
 
-import io
 import itertools
-import os
 import sys
-from PIL import Image
 from pdfminer.converter import PDFPageAggregator
-from pdfminer.layout import LAParams, LTImage, LTTextContainer, LTChar, LTPage
+from pdfminer.layout import LAParams, LTTextContainer, LTChar, LTPage
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.pdfpage import PDFPage
 from pdfminer.utils import open_filename
@@ -98,69 +95,23 @@ def _bbox_to_pct_rect(x0, y0, x1, y1, page_w, page_h):
     }
 
 
-def _iter_images(element):
-    """Рекурсивно обходит LTFigure в поисках вложенных LTImage."""
-    if isinstance(element, LTImage):
-        yield element
-        return
-    if hasattr(element, "__iter__"):
-        for child in element:
-            yield from _iter_images(child)
-
-
-def _is_background_image(page_layout, image):
-    """Проверяет, что изображение по своему bbox покрывает всю страницу —
-    то есть является её фоном. Изображения, занимающие лишь часть страницы
-    (штампы, вставки), фоном не считаются, независимо от их разрешения."""
-    px0, py0, px1, py1 = page_layout.bbox
-    ix0, iy0, ix1, iy1 = image.bbox
-    return ix0 <= px0 + 1 and iy0 <= py0 + 1 and ix1 >= px1 - 1 and iy1 >= py1 - 1
-
-
-def _iter_non_background_images(page_layout):
-    """Перебирает изображения страницы, кроме фонового."""
-    for element in page_layout:
-        for image in _iter_images(element):
-            if not _is_background_image(page_layout, image):
-                yield image
-
-
-def _save_image(image, path):
-    """Сохраняет изображение в файл без сжатия (BMP)."""
-    data = image.stream.get_data()
-    with Image.open(io.BytesIO(data)) as im:
-        im.convert("RGB").save(path, format="BMP")
-
-
-def extract_sequence(pdf_path, images_dir=None):
+def extract_sequence(pdf_path):
     """Возвращает список страниц; на каждой странице — список текстовых
-    блоков в порядке их добавления в содержимое PDF. Не фоновые изображения
-    каждой страницы сохраняются без сжатия в images_dir (по умолчанию -
-    папка рядом с pdf)."""
+    блоков в порядке их добавления в содержимое PDF."""
     pages_out = []
-
-    if images_dir is None:
-        images_dir = os.path.splitext(pdf_path)[0] + "_pages"
 
     resource_manager = PDFResourceManager()
     device = _SequencedAggregator(resource_manager, laparams=LAParams())
     interpreter = PDFPageInterpreter(resource_manager, device)
 
     with open_filename(pdf_path, "rb") as fp:
-        for page_num, page in enumerate(PDFPage.get_pages(fp), start=1):
+        for page in PDFPage.get_pages(fp):
             interpreter.process_page(page)
             page_layout = device.get_result()
             assert isinstance(page_layout, LTPage)
             page_h = page_layout.height
             page_w = page_layout.width
             blocks_out = []
-
-            image_paths = []
-            for image_num, image in enumerate(_iter_non_background_images(page_layout), start=1):
-                os.makedirs(images_dir, exist_ok=True)
-                image_path = os.path.join(images_dir, f"page_{page_num}_image_{image_num}.bmp")
-                _save_image(image, image_path)
-                image_paths.append(image_path)
 
             for element in page_layout:
                 if not isinstance(element, LTTextContainer):
