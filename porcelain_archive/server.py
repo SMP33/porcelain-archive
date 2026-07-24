@@ -22,6 +22,8 @@ from .config import config
 from .ceramic.feedback import feedback_api as ceramic_feedback_api
 from .ceramic.search import search_api as ceramic_search_api
 from .ceramic.user import user_api as ceramic_user_api
+from .ceramic.subscribe import subscribe_api as ceramic_subscribe_api
+from .ceramic.factories import factories_api as ceramic_factories_api
 from .ceramic.site_api import router as ceramic_site_router
 from .ceramic.security import security_middleware as ceramic_security_middleware
 from .ceramic.database import db as ceramic_db
@@ -92,9 +94,16 @@ app.include_router(property_api.router)
 app.include_router(ceramic_search_api.router)
 app.include_router(ceramic_user_api.router)
 app.include_router(ceramic_feedback_api.router)
+app.include_router(ceramic_subscribe_api.router)
+app.include_router(ceramic_factories_api.router)
 app.include_router(ceramic_site_router)
 
 app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS_DIR), name="frontend-assets")
+
+# Пользовательские файлы ceramic (обложки объектов) при backend=local.
+# На проде этот каталог отдаёт nginx (/files), локально - StaticFiles ниже.
+os.makedirs(config.files.ceramic_local_root, exist_ok=True)
+app.mount("/files", StaticFiles(directory=config.files.ceramic_local_root), name="ceramic-files")
 
 
 # Должен быть последним - иначе перехватит запросы, предназначенные эндпоинтам выше.
@@ -102,7 +111,7 @@ app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS_DIR), name="frontend-
 # всё остальное - index.html, дальше маршрутизацией занимается vue-router на клиенте.
 @app.get("/{full_path:path}", include_in_schema=False)
 async def read_frontend(full_path: str):
-    if full_path.startswith("api/") or full_path.startswith("assets/"):
+    if full_path.startswith("api/") or full_path.startswith("assets/") or full_path.startswith("files/"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
     dist_root = os.path.realpath(FRONTEND_DIST_DIR)
