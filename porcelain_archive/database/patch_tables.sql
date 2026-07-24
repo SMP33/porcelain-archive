@@ -58,6 +58,10 @@ END $$;
 ALTER     TABLE document_property
 ADD       COLUMN IF NOT EXISTS property_enum_id BIGINT REFERENCES property_enum (id) ON DELETE SET NULL;
 
+-- document.deleted: на случай существующей БД, созданной до появления этого поля.
+ALTER     TABLE document
+ADD       COLUMN IF NOT EXISTS deleted INTEGER DEFAULT 0;
+
 DO $$
 BEGIN
     IF EXISTS (

@@ -87,9 +87,9 @@ class DocumentService:
         Скрытые документы учитываются только для create/review.
         """
         if await self._can_see_hidden_documents(user_id):
-            rows = await db.execute_read("SELECT COUNT(*) FROM document")
+            rows = await db.execute_read("SELECT COUNT(*) FROM document WHERE deleted = 0")
         else:
-            rows = await db.execute_read("SELECT COUNT(*) FROM document WHERE is_visible = 1")
+            rows = await db.execute_read("SELECT COUNT(*) FROM document WHERE is_visible = 1 AND deleted = 0")
         return rows[0][0]
 
     async def get_documents_paginated(
@@ -104,12 +104,13 @@ class DocumentService:
         """
         if await self._can_see_hidden_documents(user_id):
             rows = await db.execute_read(
-                "SELECT id, name, meta, is_visible FROM document ORDER BY id LIMIT %s OFFSET %s",
+                "SELECT id, name, meta, is_visible FROM document WHERE deleted = 0 ORDER BY id LIMIT %s OFFSET %s",
                 (limit, offset),
             )
         else:
             rows = await db.execute_read(
-                "SELECT id, name, meta, is_visible FROM document WHERE is_visible = 1 ORDER BY id LIMIT %s OFFSET %s",
+                "SELECT id, name, meta, is_visible FROM document WHERE is_visible = 1 AND deleted = 0 "
+                "ORDER BY id LIMIT %s OFFSET %s",
                 (limit, offset),
             )
         return [self._row_to_document(row) for row in rows]
@@ -143,6 +144,16 @@ class DocumentService:
         rows_affected = await db.execute_write(
             "UPDATE document SET name = %s WHERE id = %s",
             (name, document_id),
+        )
+        return rows_affected > 0
+
+    async def delete_document(self, document_id: int) -> bool:
+        """
+        Помечает документ удалённым (deleted=1), не затрагивая связанные ветки и файлы.
+        """
+        rows_affected = await db.execute_write(
+            "UPDATE document SET deleted = 1 WHERE id = %s AND deleted = 0",
+            (document_id,),
         )
         return rows_affected > 0
 
@@ -303,14 +314,18 @@ class DocumentService:
         """
         Проверяет, доступен ли документ для просмотра указанным пользователем.
         Видимые всем документы доступны без прав, скрытые - только create/review.
+        Удалённый документ недоступен никому, включая модераторов.
         """
         rows = await db.execute_read(
-            "SELECT is_visible FROM document WHERE id = %s", (document_id,)
+            "SELECT is_visible, deleted FROM document WHERE id = %s", (document_id,)
         )
         if not rows:
             return False
 
-        if bool(rows[0][0]):
+        is_visible, deleted = rows[0]
+        if bool(deleted):
+            return False
+        if bool(is_visible):
             return True
         if user_id is None:
             return False

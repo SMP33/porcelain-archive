@@ -168,6 +168,27 @@ async def rename_document(
     return {"name": payload.name}
 
 
+@router.post("/{document_id}/delete")
+async def delete_document(
+    document_id: int,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """
+    Удаляет документ (soft delete: deleted=1). Требует роли moderator+.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not role_at_least(user.get("role"), "moderator"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для удаления документа")
+
+    success = await document_service.delete_document(document_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Документ не найден")
+
+    return {"deleted": True}
+
+
 @router.get("/branches/")
 async def read_branches(
     token: Annotated[str, Depends(oauth2_scheme)],
