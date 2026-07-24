@@ -18,6 +18,13 @@ const yearFrom = computed(() => route.query.year_from || '')
 const yearTo = computed(() => route.query.year_to || '')
 const page = computed(() => Math.max(1, parseInt(route.query.page) || 1))
 
+// Выбранные значения указателей (property_enum id) из query.pointer.
+const pointers = computed(() => {
+  const p = route.query.pointer
+  if (!p) return []
+  return (Array.isArray(p) ? p : [p]).map(Number).filter((n) => n > 0)
+})
+
 const qInput = ref(q.value)
 watch(q, (v) => (qInput.value = v))
 
@@ -26,9 +33,26 @@ const total = ref(0)
 const loading = ref(true)
 
 const facets = ref({
-  doc_types: [], authenticities: [], languages: [], keywords: [],
+  doc_types: [], authenticities: [], languages: [], keywords: [], properties: [],
   year_min: null, year_max: null,
 })
+
+// enum_id -> {value, title указателя} для подписей активных фильтров.
+const pointerLabels = computed(() => {
+  const m = {}
+  for (const p of facets.value.properties || []) {
+    for (const v of p.values) m[v.enum_id] = v.value
+  }
+  return m
+})
+
+function togglePointer(enumId) {
+  const cur = new Set(pointers.value)
+  if (cur.has(enumId)) cur.delete(enumId)
+  else cur.add(enumId)
+  const arr = [...cur]
+  router.push({ query: { ...route.query, pointer: arr.length ? arr : undefined, page: undefined } })
+}
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 
@@ -41,6 +65,7 @@ function activeFilterParams() {
   if (keyword.value) params.keyword = keyword.value
   if (yearFrom.value) params.year_from = yearFrom.value
   if (yearTo.value) params.year_to = yearTo.value
+  if (pointers.value.length) params.pointer = pointers.value
   return params
 }
 
@@ -48,7 +73,7 @@ async function loadResults() {
   loading.value = true
   try {
     const params = { ...activeFilterParams(), offset: (page.value - 1) * PAGE_SIZE, limit: PAGE_SIZE }
-    const { data } = await http.get('/api/ceramic/search', { params })
+    const { data } = await http.get('/api/ceramic/search', { params, paramsSerializer: { indexes: null } })
     results.value = data.items
     total.value = data.total
   } finally {
@@ -72,7 +97,7 @@ function reload() {
 
 onMounted(reload)
 watch(
-  () => [q.value, docType.value, authenticity.value, language.value, keyword.value, yearFrom.value, yearTo.value, page.value],
+  () => [q.value, docType.value, authenticity.value, language.value, keyword.value, yearFrom.value, yearTo.value, pointers.value.join(','), page.value],
   reload
 )
 
@@ -104,7 +129,7 @@ function goToPage(p) {
 }
 
 const hasActiveFilters = computed(
-  () => q.value || docType.value || authenticity.value || language.value || keyword.value || yearFrom.value || yearTo.value
+  () => q.value || docType.value || authenticity.value || language.value || keyword.value || yearFrom.value || yearTo.value || pointers.value.length
 )
 </script>
 
@@ -146,6 +171,10 @@ const hasActiveFilters = computed(
            class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
           {{ yearFrom || facets.year_min }}–{{ yearTo || facets.year_max }} <span class="tw:hover:text-clay-900 tw:font-bold tw:leading-none">×</span>
         </router-link>
+        <button v-for="pid in pointers" :key="pid" type="button" @click="togglePointer(pid)"
+           class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
+          {{ pointerLabels[pid] || pid }} <span class="tw:hover:text-clay-900 tw:font-bold tw:leading-none">×</span>
+        </button>
         <router-link to="/search" class="tw:text-xs tw:text-gray-400 tw:hover:text-gray-600 tw:transition-colors">Сбросить всё</router-link>
       </div>
 
@@ -229,6 +258,21 @@ const hasActiveFilters = computed(
               <span class="tw:break-words tw:min-w-0">{{ kw.id }}</span>
               <span class="tw:text-xs tw:text-gray-400 tw:shrink-0 tw:ml-1">{{ kw.count }}</span>
             </router-link>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Указатели (из админки) -->
+      <div v-for="prop in facets.properties" :key="prop.id" class="tw:mb-6">
+        <p class="tw:text-xs tw:font-semibold tw:text-gray-400 tw:uppercase tw:tracking-wider tw:mb-2">{{ prop.title }}</p>
+        <ul class="tw:space-y-0.5">
+          <li v-for="v in prop.values" :key="v.enum_id">
+            <button type="button" @click="togglePointer(v.enum_id)"
+               class="tw:w-full tw:flex tw:items-center tw:justify-between tw:px-2 tw:py-1 tw:rounded-lg tw:text-sm tw:transition-colors tw:text-left"
+               :class="pointers.includes(v.enum_id) ? 'tw:bg-clay-100 tw:text-clay-700 tw:font-medium' : 'tw:text-gray-600 tw:hover:bg-gray-100'">
+              <span class="tw:truncate">{{ v.value }}</span>
+              <span class="tw:text-xs tw:text-gray-400 tw:shrink-0 tw:ml-1">{{ v.count }}</span>
+            </button>
           </li>
         </ul>
       </div>

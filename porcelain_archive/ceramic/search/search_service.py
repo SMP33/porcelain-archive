@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import time
+from datetime import date
 from typing import Any
 
 from porcelain_archive.database import db
@@ -47,6 +48,7 @@ _EMPTY_FACETS = {
     "authenticities": [],
     "languages": [],
     "keywords": [],
+    "properties": [],
     "year_min": 1900,
     "year_max": 2100,
 }
@@ -54,8 +56,29 @@ _EMPTY_FACETS = {
 
 class SearchService:
     async def get_facets(self) -> dict:
-        # Заглушка - см. комментарий у facets_cache.
-        return _EMPTY_FACETS
+        # Фасеты «указателей» (property/property_enum): видимые указатели и их
+        # значения, реально использованные видимыми документами (с количеством).
+        rows = await db.execute_read(
+            """
+            SELECT p.id, p.title, pe.id, pe.value, COUNT(DISTINCT dp.document_id) AS cnt
+            FROM property p
+            JOIN property_enum pe ON pe.property_id = p.id
+            JOIN document_property dp ON dp.property_enum_id = pe.id
+            JOIN document d ON d.id = dp.document_id AND d.is_visible = 1
+            WHERE p.is_visible = 1
+            GROUP BY p.id, p.title, p.view_order, pe.id, pe.value
+            ORDER BY p.view_order, p.id, pe.value
+            """
+        )
+        props: dict = {}
+        order: list = []
+        for pid, ptitle, enum_id, value, cnt in rows:
+            if pid not in props:
+                props[pid] = {"id": pid, "title": ptitle, "values": []}
+                order.append(pid)
+            props[pid]["values"].append({"enum_id": enum_id, "value": value, "count": cnt})
+        properties = [props[pid] for pid in order]
+        return {**_EMPTY_FACETS, "year_max": date.today().year, "properties": properties}
 
     async def search(
         self,
@@ -69,15 +92,25 @@ class SearchService:
         year_to: int,
         offset: int,
         limit: int,
+        pointers: list[int] | None = None,
     ) -> dict:
-        # Заглушка: только поиск по названию документа (document.name, ILIKE).
-        # Фильтры factory_id/doc_type/authenticity/language/keyword/year_from/year_to
+        # Поиск по названию документа (document.name, ILIKE) + фильтр по «указателям»
+        # (property_enum через document_property). Остальные фильтры (doc_type и т.п.)
         # игнорируются - у общего с porcelain_archive document таких полей нет.
         conditions = ["is_visible = 1"]
         params: list = []
         if q.strip():
             conditions.append("name ILIKE %s")
             params.append(f"%{q.strip()}%")
+        pointer_ids = sorted({int(p) for p in (pointers or []) if int(p) > 0})
+        if pointer_ids:
+            # Документ должен иметь ВСЕ выбранные значения указателей.
+            conditions.append(
+                "(SELECT COUNT(DISTINCT dp.property_enum_id) FROM document_property dp "
+                "WHERE dp.document_id = document.id AND dp.property_enum_id = ANY(%s)) = %s"
+            )
+            params.append(pointer_ids)
+            params.append(len(pointer_ids))
         where = " AND ".join(conditions)
 
         total_rows = await db.execute_read(f"SELECT COUNT(*) FROM document WHERE {where}", params)

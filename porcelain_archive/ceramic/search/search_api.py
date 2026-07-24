@@ -18,11 +18,12 @@ async def search(
     keyword: str = "",
     year_from: int = Query(0, ge=0),
     year_to: int = Query(0, ge=0),
+    pointer: list[int] = Query(default=[]),
     offset: int = 0,
     limit: int = PER_PAGE_DEFAULT,
 ):
     return await search_service.search(
-        q, factory_id, doc_type, authenticity, language, keyword, year_from, year_to, offset, limit
+        q, factory_id, doc_type, authenticity, language, keyword, year_from, year_to, offset, limit, pointer
     )
 
 
