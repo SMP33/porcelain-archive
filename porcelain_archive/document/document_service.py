@@ -71,6 +71,7 @@ class DocumentService:
             "name": name,
             "author": meta.get("author"),
             "created_at": meta.get("created_at"),
+            "factory_id": meta.get("factory_id"),
             "is_visible": bool(is_visible),
         }
 
@@ -144,6 +145,20 @@ class DocumentService:
             "UPDATE document SET name = %s WHERE id = %s",
             (name, document_id),
         )
+        return rows_affected > 0
+
+    async def set_document_factory(self, document_id: int, factory_id: Optional[int]) -> bool:
+        """Привязывает документ к объекту (meta.factory_id) или снимает привязку (factory_id=None)."""
+        if factory_id is None:
+            rows_affected = await db.execute_write(
+                "UPDATE document SET meta = COALESCE(meta, '{}'::jsonb) - 'factory_id' WHERE id = %s",
+                (document_id,),
+            )
+        else:
+            rows_affected = await db.execute_write(
+                "UPDATE document SET meta = COALESCE(meta, '{}'::jsonb) || jsonb_build_object('factory_id', %s::bigint) WHERE id = %s",
+                (factory_id, document_id),
+            )
         return rows_affected > 0
 
     async def get_document_properties(self, document_id: int, user_id: Optional[int]) -> List[Dict[str, Any]]:

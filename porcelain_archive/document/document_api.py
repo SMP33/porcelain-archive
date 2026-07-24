@@ -42,6 +42,10 @@ class RenameDocumentRequest(BaseModel):
     name: str
 
 
+class SetFactoryRequest(BaseModel):
+    factory_id: Optional[int] = None
+
+
 class DocumentPropertyEntry(BaseModel):
     property_id: int
     values: List[str]
@@ -166,6 +170,28 @@ async def rename_document(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Документ не найден")
 
     return {"name": payload.name}
+
+
+@router.post("/{document_id}/factory")
+async def set_document_factory(
+    document_id: int,
+    payload: SetFactoryRequest,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """
+    Привязывает документ к объекту (заводу) через meta.factory_id. Требует роли moderator+.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not role_at_least(user.get("role"), "moderator"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для привязки документа к объекту")
+
+    success = await document_service.set_document_factory(document_id, payload.factory_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Документ не найден")
+
+    return {"factory_id": payload.factory_id}
 
 
 @router.get("/branches/")
