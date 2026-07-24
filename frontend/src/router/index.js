@@ -10,10 +10,13 @@ const routes = [
     children: [
       { path: '', name: 'ceramic-home', component: () => import('../ceramic/views/HomeView.vue') },
       { path: 'materials', name: 'ceramic-materials', component: () => import('../ceramic/views/MaterialsView.vue') },
+      { path: 'objects', name: 'ceramic-objects', component: () => import('../ceramic/views/ObjectsView.vue') },
+      { path: 'objects/:id', name: 'ceramic-object', component: () => import('../ceramic/views/ObjectView.vue'), props: true },
       { path: 'document/:id', name: 'ceramic-document', component: () => import('../ceramic/views/DocumentView.vue'), props: true },
       { path: 'search', name: 'ceramic-search', component: () => import('../ceramic/views/SearchView.vue') },
       { path: 'about', name: 'ceramic-about', component: () => import('../ceramic/views/AboutView.vue') },
       { path: 'feedback', name: 'ceramic-feedback', component: () => import('../ceramic/views/FeedbackView.vue') },
+      { path: 'privacy', name: 'ceramic-privacy', component: () => import('../ceramic/views/PrivacyView.vue') },
       { path: 'catalog', redirect: '/materials' },
       { path: ':pathMatch(.*)*', name: 'ceramic-not-found', component: () => import('../ceramic/views/NotFoundView.vue') },
     ],
@@ -32,6 +35,7 @@ const routes = [
       // общие с porcelain_archive (/edit, /edit/:branchId), заводы/подписчики удалены.
       { path: '', name: 'ceramic-admin-index', redirect: () => (useCeramicAuth().hasRole('admin') ? '/admin/feedback' : '/') },
       { path: 'feedback', name: 'ceramic-admin-feedback', component: () => import('../ceramic/views/admin/FeedbackView.vue'), meta: { minRole: 'admin' } },
+      { path: 'objects', name: 'ceramic-admin-objects', component: () => import('../ceramic/views/admin/ObjectsView.vue'), meta: { minRole: 'admin' } },
       { path: 'users', name: 'ceramic-admin-users', component: () => import('../ceramic/views/admin/UsersView.vue'), meta: { minRole: 'admin' } },
     ],
   },
