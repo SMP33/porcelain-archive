@@ -5,6 +5,9 @@ import time
 from collections import defaultdict
 
 from porcelain_archive.database import db as porcelain_db
+from porcelain_archive.ceramic.storage import storage
+
+_MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
 # Обратная связь хранится в общей с porcelain_archive таблице message
 # (receiver_type='feedback'). Отметка "важное" - отдельная таблица
@@ -63,10 +66,22 @@ def _parse_text(text: str) -> tuple[str | None, str | None, str]:
 
 
 class FeedbackService:
-    async def submit(self, name: str, email: str, message: str, ip: str, author_id: int | None) -> None:
+    async def submit(
+        self, name: str, email: str, message: str, ip: str, author_id: int | None,
+        file_name: str | None = None, file_bytes: bytes | None = None, file_description: str | None = None,
+    ) -> None:
         if not _feedback_allowed(ip):
             raise ValueError("rate_limited")
-        text = _compose_text(name, email, message.strip())
+        body = message.strip()
+        if file_bytes:
+            if len(file_bytes) > _MAX_ATTACHMENT_BYTES:
+                raise ValueError("file_too_large")
+            key = storage.save_file(file_bytes, file_name or "file")
+            body += f"\n\nВложение: {storage.url(key)}"
+            desc = (file_description or "").strip()
+            if desc:
+                body += f"\nОписание вложения: {desc}"
+        text = _compose_text(name, email, body)
         await porcelain_db.execute_write(
             "INSERT INTO message (author_id, receiver_type, text, is_read, create_time) VALUES (%s, %s, %s, 0, now())",
             (author_id, _FEEDBACK_RECEIVER_TYPE, text),
