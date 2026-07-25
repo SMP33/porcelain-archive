@@ -23,7 +23,8 @@ CREATE    TABLE IF NOT EXISTS document (
           id BIGSERIAL PRIMARY KEY, -- Уникальный id
           name TEXT NOT NULL, -- Имя
           meta JSONB, -- Мета информация о документе: теги, авторы, дата выхода...
-          is_visible INTEGER DEFAULT 0 -- Виден ли обычным пользователям
+          is_visible INTEGER DEFAULT 0, -- Виден ли обычным пользователям
+          deleted INTEGER DEFAULT 0 -- Удалён
           );
 
 -- Версия документа

@@ -6,6 +6,25 @@
         <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">{{ document ? document.name : 'Документ' }}</h1>
       </div>
       <div class="tw:px-8 tw:py-6 tw:space-y-4">
+        <AppModal v-model="confirmDeleteDialog" max-width="tw:max-w-md" :persistent="true" :show-close="false">
+          <h2 class="tw:font-serif tw:font-bold tw:text-lg tw:text-ink-900 tw:mb-4">Удаление документа</h2>
+          <p class="tw:text-sm tw:text-gray-600">
+            Удалить документ «{{ document && document.name }}»? Он перестанет отображаться в списке, доступ к нему будет закрыт.
+          </p>
+          <div v-if="deleteError" class="tw:text-sm tw:text-red-600 tw:mt-3">{{ deleteError }}</div>
+          <div class="tw:flex tw:items-center tw:justify-end tw:gap-2 tw:mt-6">
+            <button type="button" class="tw:px-5 tw:py-2 tw:text-sm tw:text-gray-500 tw:hover:text-gray-700 tw:transition-colors" @click="cancelDeleteDocument">Отмена</button>
+            <button
+              type="button"
+              :disabled="!deleteReady"
+              class="tw:px-5 tw:py-2 tw:bg-red-600 tw:hover:bg-red-500 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
+              @click="confirmDeleteDocument"
+            >
+              {{ deleteLoading ? 'Удаление…' : 'Удалить' }}
+            </button>
+          </div>
+        </AppModal>
+
         <div v-if="!loading && document && hasRole('moderator')" class="tw:flex tw:gap-1 tw:border-b tw:border-gray-200">
           <button
             type="button"
@@ -89,6 +108,16 @@
                 <option v-for="f in factories" :key="f.id" :value="f.id">{{ f.name }}</option>
               </select>
             </div>
+          </div>
+
+          <div v-if="hasRole('moderator')" class="tw:mb-4">
+            <button
+              type="button"
+              class="tw:px-3 tw:py-2 tw:text-sm tw:font-medium tw:text-red-600 tw:hover:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:transition-colors"
+              @click="requestDeleteDocument"
+            >
+              Удалить документ
+            </button>
           </div>
 
           <p class="tw:text-sm tw:text-gray-600">Это страница для просмотра документа с ID: <strong>{{ document.id }}</strong>.</p>
@@ -343,6 +372,7 @@ import http from '../api/http'
 import { useAuth } from '../composables/useAuth'
 import AppToolbar from '../components/AppToolbar.vue'
 import AppPager from '../components/AppPager.vue'
+import AppModal from '../components/AppModal.vue'
 import PageGalleryViewer from '../components/PageGalleryViewer.vue'
 import { usePagedTable } from '../composables/usePagedTable'
 
@@ -371,6 +401,13 @@ const renameError = ref('')
 const factories = ref([])
 const factoryId = ref(null)
 const factorySaving = ref(false)
+
+const confirmDeleteDialog = ref(false)
+const deleteReady = ref(false)
+const deleteLoading = ref(false)
+const deleteError = ref('')
+let deleteReadyTimer = null
+const CONFIRM_DELETE_DELAY_MS = 1000
 
 const activeTab = ref('document')
 
@@ -736,6 +773,35 @@ const handleRenameDocument = async () => {
   }
 }
 
+const requestDeleteDocument = () => {
+  confirmDeleteDialog.value = true
+  deleteReady.value = false
+  deleteError.value = ''
+  clearTimeout(deleteReadyTimer)
+  deleteReadyTimer = setTimeout(() => { deleteReady.value = true }, CONFIRM_DELETE_DELAY_MS)
+}
+
+const cancelDeleteDocument = () => {
+  clearTimeout(deleteReadyTimer)
+  confirmDeleteDialog.value = false
+  deleteReady.value = false
+}
+
+const confirmDeleteDocument = async () => {
+  deleteLoading.value = true
+  try {
+    await http.post(`/api/documents/${document.value.id}/delete`, {})
+    router.push('/edit')
+  } catch (err) {
+    deleteError.value = 'Не удалось удалить документ.'
+    console.error('Ошибка при удалении документа:', err)
+  } finally {
+    deleteLoading.value = false
+    confirmDeleteDialog.value = false
+    deleteReady.value = false
+  }
+}
+
 const handleEditDocument = async () => {
   creatingBranch.value = true
   editError.value = ''
@@ -765,5 +831,6 @@ onMounted(async () => {
 onUnmounted(() => {
   window.document.removeEventListener('click', onAddPropertyMenuDocClick, true)
   window.document.removeEventListener('click', onDownloadMenuDocClick, true)
+  clearTimeout(deleteReadyTimer)
 })
 </script>
