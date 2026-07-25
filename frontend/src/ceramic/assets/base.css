@@ -3,7 +3,10 @@
    porcelain_archive, а не только /ceramic (фон публичных страниц ceramic задаётся
    классом tw:bg-white на корневом элементе PublicLayout.vue). */
 
-.doc-thumb { aspect-ratio: 3/4; object-fit: cover; }
+/* Заглушка отсутствующего изображения */
+.stripe-placeholder {
+  background-image: repeating-linear-gradient(135deg, #f1f1f2 0, #f1f1f2 18px, #ffffff 18px, #ffffff 36px);
+}
 
 .skew-btn {
   position: relative;
