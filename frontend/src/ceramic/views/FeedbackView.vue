@@ -5,19 +5,41 @@ import http from '../api/http'
 const name = ref('')
 const email = ref('')
 const message = ref('')
+const fileDescription = ref('')
+const fileInput = ref(null)
+const selectedFileName = ref('')
 const sent = ref(false)
 const error = ref('')
 const sending = ref(false)
+
+function onFileChange(e) {
+  const f = e.target.files[0]
+  selectedFileName.value = f ? f.name : ''
+}
+function clearFile() {
+  selectedFileName.value = ''
+  fileDescription.value = ''
+  if (fileInput.value) fileInput.value.value = ''
+}
 
 async function onSubmit() {
   sending.value = true
   error.value = ''
   try {
-    await http.post('/api/ceramic/feedback', { name: name.value, email: email.value, message: message.value })
+    const fd = new FormData()
+    fd.append('name', name.value)
+    fd.append('email', email.value)
+    fd.append('message', message.value)
+    fd.append('file_description', fileDescription.value)
+    const f = fileInput.value?.files?.[0]
+    if (f) fd.append('file', f)
+    await http.post('/api/ceramic/feedback', fd)
     sent.value = true
   } catch (e) {
     if (e.response?.status === 429) {
       error.value = 'Слишком много сообщений. Попробуйте позже.'
+    } else if (e.response?.status === 400 && e.response?.data?.detail) {
+      error.value = e.response.data.detail
     } else {
       error.value = 'Не удалось отправить сообщение. Попробуйте позже.'
     }
@@ -31,6 +53,7 @@ function sendAnother() {
   name.value = ''
   email.value = ''
   message.value = ''
+  clearFile()
 }
 </script>
 
@@ -82,6 +105,27 @@ function sendAnother() {
           <textarea v-model="message" rows="6" required
                     class="tw:w-full tw:rounded-lg tw:border tw:border-clay-200 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300 tw:bg-white tw:resize-y"></textarea>
         </div>
+
+        <div>
+          <label class="tw:block tw:text-sm tw:font-medium tw:text-gray-700 tw:mb-1">
+            Вложение
+            <button v-if="selectedFileName" type="button" @click="clearFile"
+                    class="tw:ml-2 tw:text-xs tw:font-normal tw:text-gray-400 tw:hover:text-gray-600 tw:transition-colors">Убрать</button>
+          </label>
+          <div class="tw:rounded-lg tw:border tw:border-dashed tw:border-clay-200 tw:p-4">
+            <input ref="fileInput" type="file" @change="onFileChange" class="tw:hidden">
+            <div class="tw:flex tw:items-center tw:gap-3">
+              <button type="button" @click="fileInput.click()"
+                      class="tw:shrink-0 tw:rounded tw:border tw:border-clay-200 tw:bg-clay-50 tw:px-3 tw:py-1.5 tw:text-sm tw:text-clay-700 tw:hover:bg-clay-100 tw:transition-colors">
+                Выбрать файл
+              </button>
+              <span class="tw:text-sm tw:text-gray-500 tw:truncate tw:min-w-0">{{ selectedFileName || 'Файл не выбран' }}</span>
+            </div>
+            <input v-if="selectedFileName" v-model="fileDescription" type="text" placeholder="Короткое описание файла"
+                   class="tw:mt-3 tw:w-full tw:rounded-lg tw:border tw:border-clay-200 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300 tw:bg-white">
+          </div>
+        </div>
+
         <button type="submit" :disabled="sending"
                 class="tw:px-6 tw:py-2.5 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50">
           Отправить

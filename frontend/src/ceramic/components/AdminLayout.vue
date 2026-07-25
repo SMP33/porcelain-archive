@@ -56,6 +56,11 @@ async function onLogout() {
               {{ unreadFeedback }}
             </span>
           </router-link>
+          <router-link to="/admin/objects"
+                       class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
+                       :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-objects') }">
+            🏭 Объекты
+          </router-link>
           <router-link to="/admin/users"
                        class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
                        :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-users') }">

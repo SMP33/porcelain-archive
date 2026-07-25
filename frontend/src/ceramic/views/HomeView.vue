@@ -43,6 +43,13 @@ const searchSteps = [
   ['03', 'Запросите копию', 'Высококачественные сканы предоставляются по запросу для некоммерческого использования.'],
 ]
 
+// Кнопки правого столбца - по одной на строку с пунктами 01/02/03.
+const searchLinks = [
+  { to: '/search', title: 'Поиск по материалам →' },
+  { to: '/feedback', title: 'Связаться с нами →', subtitle: 'Помочь улучшить архив' },
+  { to: '/feedback', title: 'Предложить материалы в архив →', subtitle: 'Прикрепите документы или сведения' },
+]
+
 const teamMembers = [
   ['Имя Фамилия', 'Куратор'],
   ['Имя Фамилия', 'Куратор'],
@@ -221,7 +228,7 @@ const teamMembers = [
         <div class="tw:relative">
           <p class="tw:text-xs tw:font-semibold tw:tracking-widest tw:uppercase tw:absolute tw:-top-6 tw:text-gray-400">Проделанная работа</p>
           <h2 class="tw:font-serif tw:text-3xl tw:font-bold tw:text-ink-900 tw:mb-12">
-            Серия экспедиций на фарфорные заводы
+            Серия экспедиций на фарфоровые заводы
           </h2>
         </div>
 
@@ -314,36 +321,28 @@ const teamMembers = [
           <h2 class="tw:font-serif tw:text-3xl tw:font-bold tw:text-ink-900 tw:mb-12">Как искать материалы?</h2>
         </div>
 
-        <div class="tw:grid tw:grid-cols-2 tw:gap-16">
+        <div class="tw:grid tw:grid-cols-2 tw:gap-x-16 tw:gap-y-10 tw:items-start">
 
-          <div class="tw:flex tw:flex-col">
-            <div class="tw:space-y-10 tw:mb-10">
-              <div v-for="step in searchSteps" :key="step[0]" class="tw:flex tw:gap-5">
-                <span class="tw:text-2xl tw:font-bold tw:font-serif tw:shrink-0 tw:w-10 tw:pt-0.5" style="color: #6b1a1a;">{{ step[0] }}</span>
-                <div>
-                  <h4 class="tw:text-sm tw:font-semibold tw:text-ink-900 tw:mb-1">{{ step[1] }}</h4>
-                  <p class="tw:text-sm tw:text-gray-500 tw:leading-relaxed">{{ step[2] }}</p>
-                </div>
+          <template v-for="(step, idx) in searchSteps" :key="step[0]">
+            <div class="tw:flex tw:gap-5">
+              <span class="tw:text-2xl tw:font-bold tw:font-serif tw:shrink-0 tw:w-10 tw:pt-0.5" style="color: #6b1a1a;">{{ step[0] }}</span>
+              <div>
+                <h4 class="tw:text-sm tw:font-semibold tw:text-ink-900 tw:mb-1">{{ step[1] }}</h4>
+                <p class="tw:text-sm tw:text-gray-500 tw:leading-relaxed">{{ step[2] }}</p>
               </div>
             </div>
-          </div>
 
-          <div class="tw:flex tw:flex-col tw:space-y-10">
-            <router-link to="/search"
-               class="tw:block tw:border tw:border-gray-200 tw:rounded-lg tw:px-4 tw:py-3 tw:w-2/3 tw:hover:border-gray-300 tw:transition-colors tw:group">
+            <router-link :to="searchLinks[idx].to"
+               class="tw:self-start tw:block tw:border tw:border-gray-200 tw:rounded-lg tw:px-4 tw:py-3 tw:w-2/3 tw:hover:border-gray-300 tw:transition-colors tw:group">
               <div class="tw:text-sm tw:font-semibold tw:text-ink-900 tw:mb-0.5 tw:group-hover:text-clay-500 tw:transition-colors">
-                Поиск по материалам →
+                {{ searchLinks[idx].title }}
               </div>
-              <p class="tw:text-xs tw:text-gray-400">{{ stats.doc_count }} документов в базе</p>
+              <p class="tw:text-xs tw:text-gray-400">
+                <template v-if="idx === 0">{{ stats.doc_count }} документов в базе</template>
+                <template v-else>{{ searchLinks[idx].subtitle }}</template>
+              </p>
             </router-link>
-            <router-link to="/feedback"
-               class="tw:block tw:border tw:border-gray-200 tw:rounded-lg tw:px-4 tw:py-3 tw:w-2/3 tw:hover:border-gray-300 tw:transition-colors tw:group">
-              <div class="tw:text-sm tw:font-semibold tw:text-ink-900 tw:mb-0.5 tw:group-hover:text-clay-500 tw:transition-colors">
-                Связаться с нами →
-              </div>
-              <p class="tw:text-xs tw:text-gray-400">Помочь улучшить архив</p>
-            </router-link>
-          </div>
+          </template>
 
         </div>
 

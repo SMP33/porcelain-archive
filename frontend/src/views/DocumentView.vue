@@ -96,6 +96,21 @@
           </div>
 
           <div v-if="hasRole('moderator')" class="tw:mb-4">
+            <label class="tw:block tw:text-xs tw:font-medium tw:text-gray-500 tw:mb-1">Объект</label>
+            <div class="tw:flex tw:items-center tw:gap-2 tw:max-w-md">
+              <select
+                v-model="factoryId"
+                :disabled="factorySaving"
+                class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:bg-white tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300 tw:disabled:opacity-50"
+                @change="handleSetFactory"
+              >
+                <option :value="null">— не привязан —</option>
+                <option v-for="f in factories" :key="f.id" :value="f.id">{{ f.name }}</option>
+              </select>
+            </div>
+          </div>
+
+          <div v-if="hasRole('moderator')" class="tw:mb-4">
             <button
               type="button"
               class="tw:px-3 tw:py-2 tw:text-sm tw:font-medium tw:text-red-600 tw:hover:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:transition-colors"
@@ -383,6 +398,10 @@ const renameForm = ref('')
 const renaming = ref(false)
 const renameError = ref('')
 
+const factories = ref([])
+const factoryId = ref(null)
+const factorySaving = ref(false)
+
 const confirmDeleteDialog = ref(false)
 const deleteReady = ref(false)
 const deleteLoading = ref(false)
@@ -655,6 +674,7 @@ const loadDocument = async (id) => {
     const response = await http.get(`/api/documents/${id}`)
     document.value = response.data
     renameForm.value = document.value.name
+    factoryId.value = document.value.factory_id ?? null
   } catch (err) {
     const status = err.response ? err.response.status : null
     if (status === 401) {
@@ -712,6 +732,28 @@ const handleToggleVisibility = async (isVisible) => {
     console.error('Ошибка при изменении видимости документа:', err)
   } finally {
     visibilityLoading.value = false
+  }
+}
+
+const loadFactories = async () => {
+  try {
+    const { data } = await http.get('/api/ceramic/factories')
+    factories.value = data.items
+  } catch (err) {
+    console.error('Ошибка при загрузке объектов:', err)
+  }
+}
+
+const handleSetFactory = async () => {
+  factorySaving.value = true
+  try {
+    const fid = factoryId.value != null ? Number(factoryId.value) : null
+    await http.post(`/api/documents/${document.value.id}/factory`, { factory_id: fid })
+    document.value.factory_id = fid
+  } catch (err) {
+    console.error('Ошибка при привязке документа к объекту:', err)
+  } finally {
+    factorySaving.value = false
   }
 }
 
@@ -779,7 +821,10 @@ onMounted(async () => {
   if (document.value) {
     loadGallery()
     loadDocumentProperties()
-    if (hasRole('moderator')) reloadBranches()
+    if (hasRole('moderator')) {
+      loadFactories()
+      reloadBranches()
+    }
   }
 })
 

@@ -21,6 +21,7 @@ export function useHomeAnimations() {
   let intersectionObserver = null
   let hovering = false
   let ribbonDrawn = false
+  let ribbonTimer = null
 
   function updateOverflow() {
     const onHero = window.scrollY < 10
@@ -135,6 +136,8 @@ export function useHomeAnimations() {
       ribbonPathRef.value.style.strokeDasharray = String(len)
       ribbonPathRef.value.style.strokeDashoffset = String(len)
     }
+    // Лента рисуется по клику, но и сама проявляется через 10с после открытия.
+    ribbonTimer = setTimeout(drawRibbonOnce, 10000)
     tickShimmer(performance.now())
 
     window.addEventListener('scroll', updateSaucer, { passive: true })
@@ -160,6 +163,7 @@ export function useHomeAnimations() {
     window.removeEventListener('scroll', updateOverflow)
     window.removeEventListener('scroll', updateSaucer)
     if (rafShimmer) cancelAnimationFrame(rafShimmer)
+    if (ribbonTimer) clearTimeout(ribbonTimer)
     if (intersectionObserver) intersectionObserver.disconnect()
     document.documentElement.style.overflow = ''
     document.documentElement.style.scrollSnapType = ''

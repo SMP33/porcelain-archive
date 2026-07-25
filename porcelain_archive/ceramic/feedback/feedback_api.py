@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
 from porcelain_archive.ceramic.user import require_role
 from porcelain_archive.ceramic.user.user_api import get_current_user
@@ -11,18 +11,30 @@ router = APIRouter(tags=["feedback"])
 
 
 @router.post("/api/ceramic/feedback", status_code=201)
-async def submit_feedback(request: Request):
-    body = await request.json()
-    message = str(body.get("message", "")).strip()
+async def submit_feedback(
+    request: Request,
+    message: str = Form(...),
+    name: str = Form(""),
+    email: str = Form(""),
+    file_description: str = Form(""),
+    file: UploadFile | None = File(None),
+):
+    message = message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="Сообщение не может быть пустым")
     ip = request.client.host if request.client else "unknown"
     # Форма анонимна, но если отправитель залогинен в ceramic - привязываем автора.
     current_user = await get_current_user(request)
     author_id = current_user["id"] if current_user else None
+    file_bytes = await file.read() if file else None
     try:
-        await feedback_service.submit(str(body.get("name", "")), str(body.get("email", "")), message, ip, author_id)
-    except ValueError:
+        await feedback_service.submit(
+            name, email, message, ip, author_id,
+            file.filename if file else None, file_bytes, file_description,
+        )
+    except ValueError as exc:
+        if str(exc) == "file_too_large":
+            raise HTTPException(status_code=400, detail="Файл слишком большой (максимум 20 МБ)")
         raise HTTPException(status_code=429, detail="Слишком много попыток. Попробуйте позже.")
     return {"ok": True}
 
