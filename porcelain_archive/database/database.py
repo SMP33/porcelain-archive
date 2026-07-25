@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, List, Optional, Sequence
 
 from psycopg import AsyncConnection
+from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
 from porcelain_archive.config import config
@@ -100,6 +101,21 @@ class Database:
             cursor = await conn.execute(query, params)
             return await cursor.fetchall()
 
+    async def execute_read_dict(self, query: str, params: Optional[Sequence[Any]] = None) -> List[Any]:
+        """
+        То же, что execute_read, но строки возвращаются словарями (row["column"]).
+        Формат строк задаётся на уровне курсора - отдельный пул не нужен.
+        """
+        async with self.transaction() as conn:
+            cursor = conn.cursor(row_factory=dict_row)
+            await cursor.execute(query, params)
+            return await cursor.fetchall()
+
+    async def execute_read_one_dict(self, query: str, params: Optional[Sequence[Any]] = None) -> Optional[Any]:
+        """Первая строка результата словарём, либо None."""
+        rows = await self.execute_read_dict(query, params)
+        return rows[0] if rows else None
+
     async def execute_write(self, query: str, params: Optional[Sequence[Any]] = None) -> int:
         """
         Выполняет WRITE-запрос (INSERT/UPDATE/DELETE) в отдельном соединении из пула.
@@ -110,6 +126,13 @@ class Database:
         async with self.transaction() as conn:
             cursor = await conn.execute(query, params)
             return cursor.rowcount
+
+    async def execute_insert_returning_dict(self, query: str, params: Optional[Sequence[Any]] = None) -> Any:
+        """Выполняет INSERT ... RETURNING ... и возвращает вставленную строку словарём."""
+        async with self.transaction() as conn:
+            cursor = conn.cursor(row_factory=dict_row)
+            await cursor.execute(query, params)
+            return await cursor.fetchone()
 
     async def get_user_role(self, user_id: int) -> Optional[str]:
         """

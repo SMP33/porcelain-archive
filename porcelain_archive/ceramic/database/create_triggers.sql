@@ -1,3 +1,0 @@
--- Полнотекстовый поиск по документам больше не использует отдельную таблицу
--- documents/tsvector-триггер - документы теперь общие с porcelain_archive
--- (document/branch/page), см. create_tables.sql.

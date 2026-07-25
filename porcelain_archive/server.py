@@ -23,10 +23,10 @@ from .ceramic.feedback import feedback_api as ceramic_feedback_api
 from .ceramic.search import search_api as ceramic_search_api
 from .ceramic.user import user_api as ceramic_user_api
 from .ceramic.subscribe import subscribe_api as ceramic_subscribe_api
-from .ceramic.factories import factories_api as ceramic_factories_api
+from .ceramic.objects import objects_api as ceramic_objects_api
+from .ceramic.documents import documents_api as ceramic_documents_api
 from .ceramic.site_api import router as ceramic_site_router
 from .ceramic.security import security_middleware as ceramic_security_middleware
-from .ceramic.database import db as ceramic_db
 
 if sys.platform == "win32":
     # psycopg в async-режиме не работает с ProactorEventLoop (дефолтный на Windows).
@@ -52,7 +52,6 @@ async def _run_backup_scheduler() -> None:
 async def lifespan(app: FastAPI):
     """Открывает пул соединений с БД при старте и закрывает при остановке сервера."""
     await db.init()
-    await ceramic_db.init()
 
     process = subprocess.Popen(
         [sys.executable, "-u", "-m", "porcelain_archive.task_manager"],
@@ -71,8 +70,7 @@ async def lifespan(app: FastAPI):
         except asyncio.TimeoutError:
             process.kill()
         await db.close()
-        await ceramic_db.close()
-
+    
 
 app = FastAPI(title="Архив", lifespan=lifespan)
 
@@ -95,7 +93,8 @@ app.include_router(ceramic_search_api.router)
 app.include_router(ceramic_user_api.router)
 app.include_router(ceramic_feedback_api.router)
 app.include_router(ceramic_subscribe_api.router)
-app.include_router(ceramic_factories_api.router)
+app.include_router(ceramic_objects_api.router)
+app.include_router(ceramic_documents_api.router)
 app.include_router(ceramic_site_router)
 
 app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS_DIR), name="frontend-assets")
