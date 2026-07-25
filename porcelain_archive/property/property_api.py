@@ -20,8 +20,9 @@ class CreatePropertyRequest(BaseModel):
     tag: str
     title: str
     description: Optional[str] = None
-    is_list: bool = False
+    type: str = "string"
     is_editable: bool = True
+    is_usable: bool = True
     is_visible: bool = False
 
 
@@ -30,8 +31,8 @@ class UpdatePropertyTitleRequest(BaseModel):
 
 
 class UpdatePropertyFlagsRequest(BaseModel):
-    is_list: bool
     is_editable: bool
+    is_usable: bool
     is_visible: bool
 
 
@@ -44,6 +45,15 @@ class CreateEnumValueRequest(BaseModel):
 
 
 class UpdateEnumValueRequest(BaseModel):
+    value: str
+
+
+class SetTranslationRequest(BaseModel):
+    translated: str
+
+
+class ValidatePropertyValueRequest(BaseModel):
+    tag: str
     value: str
 
 
@@ -89,8 +99,9 @@ async def create_property(
             tag=payload.tag,
             title=payload.title,
             description=payload.description,
-            is_list=payload.is_list,
+            type=payload.type,
             is_editable=payload.is_editable,
+            is_usable=payload.is_usable,
             is_visible=payload.is_visible,
         )
     except ValueError as exc:
@@ -126,12 +137,12 @@ async def update_property_flags(
     payload: UpdatePropertyFlagsRequest,
     token: Annotated[str, Depends(oauth2_scheme)],
 ) -> Dict[str, Any]:
-    """Изменяет флаги указателя (недоступно для системных). Требует роли admin."""
+    """Изменяет флаги указателя. Требует роли admin."""
     await _require_admin(token)
 
     try:
         updated = await property_service.update_property_flags(
-            property_id, payload.is_list, payload.is_editable, payload.is_visible
+            property_id, payload.is_editable, payload.is_usable, payload.is_visible
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -150,6 +161,21 @@ async def reorder_properties(
 
     await property_service.reorder_properties(payload.ids)
     return {"ok": True}
+
+
+@router.post("/validate")
+async def validate_property_value(
+    payload: ValidatePropertyValueRequest,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """Проверяет, допустимо ли значение для указателя (tag, value). Требует роли moderator+."""
+    await _require_moderator(token)
+
+    try:
+        valid = await property_service.validate_value(payload.tag, payload.value)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return {"valid": valid}
 
 
 @router.delete("/{property_id}")
@@ -195,44 +221,111 @@ async def create_property_enum_value(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Значение не может быть пустым")
 
     try:
-        enum_id = await property_service.create_property_enum_value(property_id, value)
+        await property_service.create_property_enum_value(property_id, value)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    return {"id": enum_id}
+    return {"ok": True}
 
 
-@router.patch("/enum/{enum_id}")
+@router.patch("/{property_id}/enum/{value}")
 async def update_property_enum_value(
-    enum_id: int,
+    property_id: int,
+    value: str,
     payload: UpdateEnumValueRequest,
     token: Annotated[str, Depends(oauth2_scheme)],
 ) -> Dict[str, Any]:
     """Переименовывает допустимое значение указателя. Требует роли moderator+."""
     await _require_moderator(token)
 
-    value = payload.value.strip()
-    if not value:
+    new_value = payload.value.strip()
+    if not new_value:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Значение не может быть пустым")
 
     try:
-        await property_service.update_property_enum_value(enum_id, value)
+        updated = await property_service.update_property_enum_value(property_id, value, new_value)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Значение не найдено")
     return {"ok": True}
 
 
-@router.delete("/enum/{enum_id}")
+@router.delete("/{property_id}/enum/{value}")
 async def delete_property_enum_value(
-    enum_id: int,
+    property_id: int,
+    value: str,
     token: Annotated[str, Depends(oauth2_scheme)],
 ) -> Dict[str, Any]:
     """Удаляет допустимое значение указателя. Требует роли moderator+."""
     await _require_moderator(token)
 
     try:
-        deleted = await property_service.delete_property_enum_value(enum_id)
+        deleted = await property_service.delete_property_enum_value(property_id, value)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Значение не найдено")
+    return {"ok": True}
+
+
+@router.get("/{property_id}/values")
+async def read_property_values(
+    property_id: int,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """Возвращает все значения, когда-либо использованные для указателя. Требует роли moderator+."""
+    await _require_moderator(token)
+
+    values = await property_service.get_property_values(property_id)
+    return {"items": values}
+
+
+@router.get("/{property_id}/translate")
+async def read_property_translations(
+    property_id: int,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """Возвращает переводы значений указателя. Требует роли moderator+."""
+    await _require_moderator(token)
+
+    items = await property_service.get_property_translations(property_id)
+    return {"items": items}
+
+
+@router.put("/{property_id}/translate/{value}")
+async def set_property_translation(
+    property_id: int,
+    value: str,
+    payload: SetTranslationRequest,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """Добавляет или изменяет перевод значения указателя. Требует роли moderator+."""
+    await _require_moderator(token)
+
+    translated = payload.translated.strip()
+    if not translated:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Перевод не может быть пустым")
+
+    try:
+        await property_service.set_property_translation(property_id, value, translated)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return {"ok": True}
+
+
+@router.delete("/{property_id}/translate/{value}")
+async def delete_property_translation(
+    property_id: int,
+    value: str,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """Удаляет перевод значения указателя. Требует роли moderator+."""
+    await _require_moderator(token)
+
+    try:
+        deleted = await property_service.delete_property_translation(property_id, value)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Перевод не найден")
     return {"ok": True}

@@ -174,8 +174,11 @@ class DocumentService:
 
     async def get_document_properties(self, document_id: int, user_id: Optional[int]) -> List[Dict[str, Any]]:
         """
-        Возвращает указатели документа (document_property, через property_enum).
-        Модератору+ видны все, остальным - только указатели с property.is_visible.
+        Возвращает указатели документа (document_property напрямую по tag),
+        вместе с переводом значения. Для bool перевод не берётся из
+        property_translate, а всегда 'Да'/'Нет'; для string перевод не
+        выполняется. Модератору+ видны все, остальным - только указатели
+        с property.is_visible.
         """
         sees_all = False
         if user_id is not None:
@@ -183,20 +186,28 @@ class DocumentService:
             sees_all = role_at_least(role, "moderator")
 
         query = """
-            SELECT p.id, p.tag, p.title, pe.value
+            SELECT p.id, p.tag, p.title, p.type, dp.value,
+                   CASE
+                       WHEN p.type = 'bool' THEN CASE WHEN dp.value = 'true' THEN 'Да' ELSE 'Нет' END
+                       WHEN p.type = 'string' THEN NULL
+                       ELSE pt.translated
+                   END AS translated
             FROM document_property dp
-            JOIN property_enum pe ON pe.id = dp.property_enum_id
-            JOIN property p ON p.id = pe.property_id
+            JOIN property p ON p.tag = dp.tag
+            LEFT JOIN property_translate pt ON pt.tag = dp.tag AND pt.value = dp.value
             WHERE dp.document_id = %s
         """
         params: List[Any] = [document_id]
         if not sees_all:
             query += " AND p.is_visible = 1"
-        query += " ORDER BY p.view_order, p.id, pe.value"
+        query += " ORDER BY p.view_order, p.id, dp.value"
 
         rows = await db.execute_read(query, tuple(params))
         return [
-            {"property_id": row[0], "tag": row[1], "title": row[2], "value": row[3]}
+            {
+                "property_id": row[0], "tag": row[1], "title": row[2], "type": row[3],
+                "value": row[4], "translated": row[5],
+            }
             for row in rows
         ]
 
@@ -206,43 +217,48 @@ class DocumentService:
         """
         Полностью заменяет набор указателей документа на переданный - вызывается
         одним пакетным сохранением со вкладки "Указатели" страницы документа.
+        Значения проверяются по тем же правилам, что и PropertyService.validate_value:
+        bool - только 'true'/'false', combobox/multicheckbox - только значение,
+        уже существующее в пуле допустимых (document_property, document_id = NULL).
 
-        :param entries: [{"property_id": int, "values": [str, ...]}, ...]. Значения,
-            которых ещё нет в property_enum для соответствующего property_id,
-            создаются здесь же (пользователь мог ввести новое значение на вкладке).
+        :param entries: [{"property_id": int, "values": [str, ...]}, ...].
         """
+        resolved: List[tuple] = []
         for entry in entries:
             property_id = entry["property_id"]
-            values = entry["values"]
-            rows = await db.execute_read("SELECT is_list FROM property WHERE id = %s", (property_id,))
+            values = list(dict.fromkeys(entry["values"]))
+            rows = await db.execute_read(
+                "SELECT tag, type, is_usable FROM property WHERE id = %s", (property_id,)
+            )
             if not rows:
                 raise ValueError("Указатель не найден")
-            if not bool(rows[0][0]) and len(values) > 1:
+            tag, type_, is_usable = rows[0]
+            if not is_usable:
+                raise ValueError(f"Указатель '{tag}' недоступен для использования")
+            if type_ != "multicheckbox" and len(values) > 1:
                 raise ValueError("Этот указатель не поддерживает несколько значений")
+
+            for value in values:
+                if type_ == "bool" and value not in ("true", "false"):
+                    raise ValueError(f"Недопустимое значение '{value}' для указателя '{tag}'")
+                if type_ in ("combobox", "multicheckbox"):
+                    existing = await db.execute_read(
+                        "SELECT 1 FROM document_property WHERE tag = %s AND value = %s AND document_id IS NULL",
+                        (tag, value),
+                    )
+                    if not existing:
+                        raise ValueError(f"Недопустимое значение '{value}' для указателя '{tag}'")
+
+            resolved.append((tag, values))
 
         async with db.transaction() as conn:
             await conn.execute("DELETE FROM document_property WHERE document_id = %s", (document_id,))
 
-            for entry in entries:
-                property_id = entry["property_id"]
-                for value in entry["values"]:
-                    cursor = await conn.execute(
-                        "SELECT id FROM property_enum WHERE property_id = %s AND value = %s",
-                        (property_id, value),
-                    )
-                    row = await cursor.fetchone()
-                    if row:
-                        enum_id = row[0]
-                    else:
-                        cursor = await conn.execute(
-                            "INSERT INTO property_enum (property_id, value) VALUES (%s, %s) RETURNING id",
-                            (property_id, value),
-                        )
-                        enum_id = (await cursor.fetchone())[0]
-
+            for tag, values in resolved:
+                for value in values:
                     await conn.execute(
-                        "INSERT INTO document_property (document_id, property_enum_id) VALUES (%s, %s)",
-                        (document_id, enum_id),
+                        "INSERT INTO document_property (document_id, tag, value) VALUES (%s, %s, %s)",
+                        (document_id, tag, value),
                     )
 
     async def create_document(self, name: str, author: str, user_id: int) -> int:

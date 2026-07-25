@@ -56,27 +56,27 @@ _EMPTY_FACETS = {
 
 class SearchService:
     async def get_facets(self) -> dict:
-        # Фасеты «указателей» (property/property_enum): видимые указатели и их
+        # Фасеты «указателей» (property/document_property): видимые указатели и их
         # значения, реально использованные видимыми документами (с количеством).
         rows = await db.execute_read(
             """
-            SELECT p.id, p.title, pe.id, pe.value, COUNT(DISTINCT dp.document_id) AS cnt
-            FROM property p
-            JOIN property_enum pe ON pe.property_id = p.id
-            JOIN document_property dp ON dp.property_enum_id = pe.id
+            SELECT p.id, p.tag, p.title, p.type, dp.value, COUNT(DISTINCT dp.document_id) AS cnt
+            FROM document_property dp
+            JOIN property p ON p.tag = dp.tag
             JOIN document d ON d.id = dp.document_id AND d.is_visible = 1
-            WHERE p.is_visible = 1
-            GROUP BY p.id, p.title, p.view_order, pe.id, pe.value
-            ORDER BY p.view_order, p.id, pe.value
+            WHERE p.is_visible = 1 AND dp.document_id IS NOT NULL
+            GROUP BY p.id, p.tag, p.title, p.type, p.view_order, dp.value
+            ORDER BY p.view_order, p.id, dp.value
             """
         )
         props: dict = {}
         order: list = []
-        for pid, ptitle, enum_id, value, cnt in rows:
+        for pid, tag, ptitle, type_, value, cnt in rows:
             if pid not in props:
                 props[pid] = {"id": pid, "title": ptitle, "values": []}
                 order.append(pid)
-            props[pid]["values"].append({"enum_id": enum_id, "value": value, "count": cnt})
+            label = ("Да" if value == "true" else "Нет") if type_ == "bool" else value
+            props[pid]["values"].append({"pointer": f"{tag}:{value}", "value": label, "count": cnt})
         properties = [props[pid] for pid in order]
         return {**_EMPTY_FACETS, "year_max": date.today().year, "properties": properties}
 
@@ -92,25 +92,26 @@ class SearchService:
         year_to: int,
         offset: int,
         limit: int,
-        pointers: list[int] | None = None,
+        pointers: list[str] | None = None,
     ) -> dict:
         # Поиск по названию документа (document.name, ILIKE) + фильтр по «указателям»
-        # (property_enum через document_property). Остальные фильтры (doc_type и т.п.)
+        # (document_property напрямую). Остальные фильтры (doc_type и т.п.)
         # игнорируются - у общего с porcelain_archive document таких полей нет.
         conditions = ["is_visible = 1"]
         params: list = []
         if q.strip():
             conditions.append("name ILIKE %s")
             params.append(f"%{q.strip()}%")
-        pointer_ids = sorted({int(p) for p in (pointers or []) if int(p) > 0})
-        if pointer_ids:
+        # pointer - строка "tag:value", однозначно определяющая допустимое значение указателя.
+        pointer_keys = sorted({str(p) for p in (pointers or []) if p})
+        if pointer_keys:
             # Документ должен иметь ВСЕ выбранные значения указателей.
             conditions.append(
-                "(SELECT COUNT(DISTINCT dp.property_enum_id) FROM document_property dp "
-                "WHERE dp.document_id = document.id AND dp.property_enum_id = ANY(%s)) = %s"
+                "(SELECT COUNT(DISTINCT dp.tag || ':' || dp.value) FROM document_property dp "
+                "WHERE dp.document_id = document.id AND (dp.tag || ':' || dp.value) = ANY(%s)) = %s"
             )
-            params.append(pointer_ids)
-            params.append(len(pointer_ids))
+            params.append(pointer_keys)
+            params.append(len(pointer_keys))
         where = " AND ".join(conditions)
 
         total_rows = await db.execute_read(f"SELECT COUNT(*) FROM document WHERE {where}", params)

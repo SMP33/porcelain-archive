@@ -23,6 +23,22 @@ function Get-PortOwnerPids([int]$Port) {
         Select-Object -ExpandProperty OwningProcess -Unique
 }
 
+function Stop-TaskManagers {
+    # task_manager - дочерний процесс backend (subprocess.Popen в lifespan), порт
+    # не слушает, поэтому поиск по порту его не находит. Ищем по командной строке -
+    # так же убиваются и осиротевшие процессы прошлых нештатных остановок.
+    $procs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -like '*porcelain_archive.task_manager*' }
+    if (-not $procs) {
+        return
+    }
+
+    Write-Host "Останавливаю task_manager (PID: $($procs.ProcessId -join ', '))..."
+    foreach ($proc in $procs) {
+        Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Start-Backend {
     $port = 8000
     $logFile = Join-Path $RunDir "server.log"
@@ -36,6 +52,7 @@ function Start-Backend {
         }
         Start-Sleep -Seconds 1
     }
+    Stop-TaskManagers
 
     Write-Host "Запуск backend..."
     $pythonExe = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"

@@ -92,7 +92,8 @@ CREATE    TABLE IF NOT EXISTS property (
           tag TEXT NOT NULL UNIQUE, -- Имя
           title TEXT NOT NULL UNIQUE, -- Отображаемое имя
           description TEXT, -- Описание
-          is_editable INTEGER DEFAULT 1, -- Доступно ли для редактирования
+          is_editable INTEGER DEFAULT 1, -- Доступен ли для редактирования список значений
+          is_usable INTEGER DEFAULT 1, -- Может ли применяться в документах пользователем
           is_visible INTEGER DEFAULT 0, -- Виден ли обычным пользователям
           view_order INTEGER DEFAULT 0, -- Порядок отображения
           type TEXT DEFAULT 'string' -- Тип
@@ -102,8 +103,17 @@ CREATE    TABLE IF NOT EXISTS property (
 -- Фактические значения указателей
 CREATE    TABLE IF NOT EXISTS document_property (
           document_id BIGINT REFERENCES document (id) ON DELETE SET NULL, -- Документ
-          property_id BIGINT REFERENCES property (id) ON DELETE SET NULL, -- Указатель
-          value TEXT -- Значение
+          tag TEXT REFERENCES property (tag) ON DELETE SET NULL, -- Указатель
+          value TEXT, -- Значение
+          UNIQUE NULLS NOT DISTINCT (document_id, tag, value)
+          );
+
+-- Переводы указателей
+CREATE    TABLE IF NOT EXISTS property_translate (
+          tag TEXT REFERENCES property (tag) ON DELETE CASCADE, -- Указатель
+          value TEXT NOT NULL, -- Значение
+          translated TEXT NOT NULL, -- Перевод
+          UNIQUE (tag, value)
           );
 
 -- Применённые патчи схемы БД (см. patch.py)

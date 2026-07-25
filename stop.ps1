@@ -9,6 +9,23 @@ function Get-PortOwnerPids([int]$Port) {
         Select-Object -ExpandProperty OwningProcess -Unique
 }
 
+function Stop-TaskManagers {
+    # task_manager - дочерний процесс backend (subprocess.Popen в lifespan), порт
+    # не слушает, поэтому Stop-ByPort его не находит. Ищем по командной строке -
+    # так же убиваются и осиротевшие процессы прошлых нештатных остановок.
+    $procs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -like '*porcelain_archive.task_manager*' }
+    if (-not $procs) {
+        Write-Host "task_manager не запущен."
+        return
+    }
+
+    Write-Host "Останавливаю task_manager (PID: $($procs.ProcessId -join ', '))..."
+    foreach ($proc in $procs) {
+        Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Stop-ByPort([int]$Port, [string]$Label) {
     $procIds = Get-PortOwnerPids $Port
     if (-not $procIds) {
@@ -31,3 +48,4 @@ function Stop-ByPort([int]$Port, [string]$Label) {
 
 Stop-ByPort -Port 8000 -Label "backend"
 Stop-ByPort -Port 5173 -Label "frontend dev-сервер"
+Stop-TaskManagers
