@@ -116,6 +116,26 @@
             </span>
           </div>
 
+          <div v-if="hasRole('moderator')" class="tw:flex tw:items-center tw:mb-4">
+            <button
+              type="button"
+              role="switch"
+              :aria-checked="document.is_object"
+              :disabled="objectTypeLoading"
+              class="tw:relative tw:inline-flex tw:items-center tw:h-6 tw:w-11 tw:rounded-full tw:transition-colors tw:disabled:opacity-50"
+              :class="document.is_object ? 'tw:bg-clay-500' : 'tw:bg-gray-300'"
+              @click="handleToggleObjectType(!document.is_object)"
+            >
+              <span
+                class="tw:inline-block tw:w-4 tw:h-4 tw:bg-white tw:rounded-full tw:shadow tw:transform tw:transition-transform"
+                :class="document.is_object ? 'tw:translate-x-6' : 'tw:translate-x-1'"
+              />
+            </button>
+            <span class="tw:ml-2 tw:text-sm tw:text-gray-600">
+              {{ document.is_object ? 'Показывается в разделе «Объекты»' : 'Обычный документ (не объект)' }}
+            </span>
+          </div>
+
           <div v-if="hasRole('moderator')" class="tw:mb-4">
             <button
               type="button"
@@ -135,7 +155,7 @@
             <div v-else-if="!documentProperties.length" class="tw:text-sm tw:text-gray-400">Указателей пока нет</div>
             <ul v-else class="tw:space-y-1">
               <li v-for="(item, idx) in documentProperties" :key="idx" class="tw:text-sm tw:text-gray-600">
-                <strong class="tw:text-gray-800">{{ item.title }}:</strong> {{ item.value }}
+                <strong class="tw:text-gray-800">{{ item.title }}:</strong> {{ item.translated || item.value }}
               </li>
             </ul>
           </div>
@@ -283,11 +303,11 @@
                   v-if="addPropertyMenuOpen"
                   class="tw:absolute tw:z-20 tw:left-0 tw:right-0 tw:top-full tw:bg-white tw:border tw:border-gray-200 tw:rounded-b-lg tw:shadow-lg tw:max-h-56 tw:overflow-y-auto"
                 >
-                  <label v-for="p in allProperties" :key="p.id" class="tw:flex tw:items-center tw:gap-2 tw:px-4 tw:py-2 tw:text-sm tw:text-gray-700 tw:hover:bg-gray-50">
+                  <label v-for="p in usableProperties" :key="p.id" class="tw:flex tw:items-center tw:gap-2 tw:px-4 tw:py-2 tw:text-sm tw:text-gray-700 tw:hover:bg-gray-50">
                     <input type="checkbox" :checked="isPropertySelected(p.id)" @change="togglePropertySelected(p)">
                     {{ p.title }}
                   </label>
-                  <div v-if="!allProperties.length" class="tw:px-4 tw:py-2 tw:text-sm tw:text-gray-400">Указателей нет</div>
+                  <div v-if="!usableProperties.length" class="tw:px-4 tw:py-2 tw:text-sm tw:text-gray-400">Указателей нет</div>
                 </div>
               </div>
 
@@ -316,19 +336,39 @@
                     :key="v"
                     class="tw:inline-flex tw:items-center tw:gap-1 tw:px-2 tw:py-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full"
                   >
-                    {{ v }}
+                    {{ boolLabel(activeEntry, v) }}
                     <button type="button" class="tw:hover:text-clay-900" @click="removeValueFromActiveEntry(v)">
                       <i class="mdi mdi-close tw:text-sm" />
                     </button>
                   </span>
                 </div>
-                <div class="tw:relative">
+
+                <div v-if="activeEntry.type === 'bool'" class="tw:flex tw:gap-2">
+                  <button
+                    type="button"
+                    class="tw:px-4 tw:py-2 tw:text-sm tw:font-medium tw:rounded-lg tw:border tw:transition-colors"
+                    :class="activeEntry.values.includes('true') ? 'tw:bg-clay-500 tw:text-white tw:border-clay-500' : 'tw:border-gray-300 tw:text-gray-700 tw:hover:bg-gray-50'"
+                    @click="addValueToActiveEntry('true')"
+                  >
+                    Да
+                  </button>
+                  <button
+                    type="button"
+                    class="tw:px-4 tw:py-2 tw:text-sm tw:font-medium tw:rounded-lg tw:border tw:transition-colors"
+                    :class="activeEntry.values.includes('false') ? 'tw:bg-clay-500 tw:text-white tw:border-clay-500' : 'tw:border-gray-300 tw:text-gray-700 tw:hover:bg-gray-50'"
+                    @click="addValueToActiveEntry('false')"
+                  >
+                    Нет
+                  </button>
+                </div>
+                <div v-else class="tw:relative">
                   <input
                     v-model="valueInput"
                     type="text"
-                    :disabled="!activeEntry.is_list && activeEntry.values.length > 0"
+                    :disabled="activeEntry.type !== 'multicheckbox' && activeEntry.values.length > 0"
                     placeholder="Введите значение…"
                     class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300 tw:disabled:opacity-50"
+                    @input="valueError = ''"
                     @keyup.enter="commitValueInput"
                     @focus="valueSuggestionsOpen = true"
                     @blur="onValueInputBlur"
@@ -348,7 +388,8 @@
                     </button>
                   </div>
                 </div>
-                <div v-if="!activeEntry.is_list && activeEntry.values.length" class="tw:text-xs tw:text-gray-400 tw:mt-1">
+                <div v-if="valueError" class="tw:text-xs tw:text-red-600 tw:mt-1">{{ valueError }}</div>
+                <div v-if="activeEntry.type !== 'multicheckbox' && activeEntry.values.length" class="tw:text-xs tw:text-gray-400 tw:mt-1">
                   Этот указатель принимает только одно значение - уберите текущее, чтобы задать другое
                 </div>
               </div>
@@ -401,6 +442,7 @@ const downloading = ref(false)
 const downloadError = ref('')
 
 const visibilityLoading = ref(false)
+const objectTypeLoading = ref(false)
 
 const renameForm = ref('')
 const renaming = ref(false)
@@ -431,15 +473,18 @@ const documentPropertiesLoading = ref(true)
 // нажата кнопка "Сохранить изменения" (см. handleSaveDocumentProperties).
 const propertiesTabInitialized = ref(false)
 const allProperties = ref([])
-const tabSelectedProperties = ref([]) // [{property_id, tag, title, is_list, values: []}]
+const tabSelectedProperties = ref([]) // [{property_id, tag, title, type, values: []}]
 const activePropertyId = ref(null)
 const addPropertyMenuOpen = ref(false)
 const addPropertyMenuRoot = ref(null)
 const valueInput = ref('')
+const valueError = ref('')
 const valueSuggestionsOpen = ref(false)
-const enumCache = ref({}) // property_id -> [{id, value}]
+const enumCache = ref({}) // property_id -> [{value}]
 const savingProperties = ref(false)
 const savePropertiesError = ref('')
+
+const usableProperties = computed(() => allProperties.value.filter((p) => p.is_usable))
 
 const activeEntry = computed(() => (
   tabSelectedProperties.value.find((e) => e.property_id === activePropertyId.value) || null
@@ -453,6 +498,11 @@ const valueSuggestions = computed(() => {
     !activeEntry.value.values.includes(v) && (!query || v.toLowerCase().includes(query))
   ))
 })
+
+function boolLabel(entry, value) {
+  if (entry.type !== 'bool') return value
+  return value === 'true' ? 'Да' : 'Нет'
+}
 
 function isPropertySelected(propertyId) {
   return tabSelectedProperties.value.some((e) => e.property_id === propertyId)
@@ -479,17 +529,30 @@ async function togglePropertySelected(property) {
     property_id: property.id,
     tag: property.tag,
     title: property.title,
-    is_list: property.is_list,
+    type: property.type,
     values: [],
   })
   await ensureEnumLoaded(property.id)
   activePropertyId.value = property.id
 }
 
-function addValueToActiveEntry(rawValue) {
+async function addValueToActiveEntry(rawValue) {
   const value = rawValue.trim()
   if (!value || !activeEntry.value || activeEntry.value.values.includes(value)) return
-  if (!activeEntry.value.is_list) {
+  valueError.value = ''
+
+  try {
+    const { data } = await http.post('/api/properties/validate', { tag: activeEntry.value.tag, value })
+    if (!data.valid) {
+      valueError.value = 'Недопустимое значение для этого указателя'
+      return
+    }
+  } catch (err) {
+    console.error('Ошибка при проверке значения указателя:', err)
+    return
+  }
+
+  if (activeEntry.value.type !== 'multicheckbox') {
     activeEntry.value.values = [value]
   } else {
     activeEntry.value.values.push(value)
@@ -616,11 +679,12 @@ async function openPropertiesTab() {
         property_id: item.property_id,
         tag: item.tag,
         title: item.title,
-        is_list: propertyDef ? propertyDef.is_list : false,
+        type: propertyDef ? propertyDef.type : 'string',
         values: [],
       })
     }
-    grouped.get(item.property_id).values.push(item.value)
+    const bucket = grouped.get(item.property_id)
+    if (!bucket.values.includes(item.value)) bucket.values.push(item.value)
   }
   tabSelectedProperties.value = Array.from(grouped.values())
 }
@@ -741,6 +805,18 @@ const handleToggleVisibility = async (isVisible) => {
     console.error('Ошибка при изменении видимости документа:', err)
   } finally {
     visibilityLoading.value = false
+  }
+}
+
+const handleToggleObjectType = async (isObject) => {
+  objectTypeLoading.value = true
+  try {
+    await http.post(`/api/documents/${document.value.id}/type`, { is_object: isObject })
+    document.value.is_object = isObject
+  } catch (err) {
+    console.error('Ошибка при изменении типа документа:', err)
+  } finally {
+    objectTypeLoading.value = false
   }
 }
 

@@ -14,11 +14,11 @@ const yearFrom = computed(() => route.query.year_from || '')
 const yearTo = computed(() => route.query.year_to || '')
 const page = computed(() => Math.max(1, parseInt(route.query.page) || 1))
 
-// Выбранные значения указателей (property_enum id) из query.pointer.
+// Выбранные значения указателей ("tag:value") из query.pointer.
 const pointers = computed(() => {
   const p = route.query.pointer
   if (!p) return []
-  return (Array.isArray(p) ? p : [p]).map(Number).filter((n) => n > 0)
+  return (Array.isArray(p) ? p : [p]).filter(Boolean)
 })
 
 const qInput = ref(q.value)
@@ -30,19 +30,19 @@ const loading = ref(true)
 
 const facets = ref({ properties: [], year_min: null, year_max: null })
 
-// enum_id -> {value, title указателя} для подписей активных фильтров.
+// pointer ("tag:value") -> подпись значения для активных фильтров.
 const pointerLabels = computed(() => {
   const m = {}
   for (const p of facets.value.properties || []) {
-    for (const v of p.values) m[v.enum_id] = v.value
+    for (const v of p.values) m[v.pointer] = v.value
   }
   return m
 })
 
-function togglePointer(enumId) {
+function togglePointer(pointer) {
   const cur = new Set(pointers.value)
-  if (cur.has(enumId)) cur.delete(enumId)
-  else cur.add(enumId)
+  if (cur.has(pointer)) cur.delete(pointer)
+  else cur.add(pointer)
   const arr = [...cur]
   router.push({ query: { ...route.query, pointer: arr.length ? arr : undefined, page: undefined } })
 }
@@ -191,10 +191,10 @@ function formatDates(doc) {
       <div v-for="prop in facets.properties" :key="prop.id" class="tw:mb-6">
         <p class="tw:text-xs tw:font-semibold tw:text-gray-400 tw:uppercase tw:tracking-wider tw:mb-2">{{ prop.title }}</p>
         <ul class="tw:space-y-0.5">
-          <li v-for="v in prop.values" :key="v.enum_id">
-            <button type="button" @click="togglePointer(v.enum_id)"
+          <li v-for="v in prop.values" :key="v.pointer">
+            <button type="button" @click="togglePointer(v.pointer)"
                class="tw:w-full tw:flex tw:items-center tw:justify-between tw:px-2 tw:py-1 tw:rounded-lg tw:text-sm tw:transition-colors tw:text-left"
-               :class="pointers.includes(v.enum_id) ? 'tw:bg-clay-100 tw:text-clay-700 tw:font-medium' : 'tw:text-gray-600 tw:hover:bg-gray-100'">
+               :class="pointers.includes(v.pointer) ? 'tw:bg-clay-100 tw:text-clay-700 tw:font-medium' : 'tw:text-gray-600 tw:hover:bg-gray-100'">
               <span class="tw:truncate">{{ v.value }}</span>
               <span class="tw:text-xs tw:text-gray-400 tw:shrink-0 tw:ml-1">{{ v.count }}</span>
             </button>

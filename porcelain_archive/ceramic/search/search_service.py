@@ -6,42 +6,57 @@ from porcelain_archive.database import db
 
 PER_PAGE_DEFAULT = 30
 
-
 DEFAULT_YEAR_MIN = 1900
+
+# Документы-объекты (см. porcelain_archive/ceramic/objects) - обычные document
+# с этим указателем, скрытые из общего поиска/списка "Материалы" - видны только
+# через отдельные /objects.
+DOCUMENT_TYPE_TAG = "document_type"
+OBJECT_TYPE_VALUE = "object"
 
 
 class SearchService:
     async def get_facets(self) -> dict:
-        # Фасеты «указателей» (property/property_enum): видимые указатели и их
-        # значения, реально использованные видимыми документами (с количеством).
+        # Фасеты «указателей» (property/document_property): видимые указатели и их
+        # значения, реально использованные видимыми документами-не-объектами (с количеством).
         rows = await db.execute_read(
             """
-            SELECT p.id, p.title, pe.id, pe.value, COUNT(DISTINCT dp.document_id) AS cnt
-            FROM property p
-            JOIN property_enum pe ON pe.property_id = p.id
-            JOIN document_property dp ON dp.property_enum_id = pe.id
-            JOIN document d ON d.id = dp.document_id AND d.is_visible = 1 AND d.deleted = 0
-            WHERE p.is_visible = 1
-            GROUP BY p.id, p.title, p.view_order, pe.id, pe.value
-            ORDER BY p.view_order, p.id, pe.value
-            """
+            SELECT p.id, p.tag, p.title, p.type, dp.value, COUNT(DISTINCT dp.document_id) AS cnt
+            FROM document_property dp
+            JOIN property p ON p.tag = dp.tag
+            JOIN document d ON d.id = dp.document_id AND d.is_visible = 1
+            WHERE p.is_visible = 1 AND dp.document_id IS NOT NULL
+              AND d.id NOT IN (
+                  SELECT document_id FROM document_property
+                  WHERE tag = %s AND value = %s
+              )
+            GROUP BY p.id, p.tag, p.title, p.type, p.view_order, dp.value
+            ORDER BY p.view_order, p.id, dp.value
+            """,
+            (DOCUMENT_TYPE_TAG, OBJECT_TYPE_VALUE),
         )
         props: dict = {}
         order: list = []
-        for pid, ptitle, enum_id, value, cnt in rows:
+        for pid, tag, ptitle, type_, value, cnt in rows:
             if pid not in props:
                 props[pid] = {"id": pid, "title": ptitle, "values": []}
                 order.append(pid)
-            props[pid]["values"].append({"enum_id": enum_id, "value": value, "count": cnt})
+            label = ("Да" if value == "true" else "Нет") if type_ == "bool" else value
+            props[pid]["values"].append({"pointer": f"{tag}:{value}", "value": label, "count": cnt})
         properties = [props[pid] for pid in order]
 
-        # Границы периода - по фактическим датам видимых документов
+        # Границы периода - по фактическим датам видимых документов (не объектов).
         year_rows = await db.execute_read(
             """
             SELECT MIN(LEFT(meta->>'date_from', 4)::int), MAX(LEFT(COALESCE(meta->>'date_to', meta->>'date_from'), 4)::int)
             FROM document
             WHERE is_visible = 1 AND deleted = 0 AND meta->>'date_from' ~ '^\\d{4}'
-            """
+              AND id NOT IN (
+                  SELECT document_id FROM document_property
+                  WHERE tag = %s AND value = %s
+              )
+            """,
+            (DOCUMENT_TYPE_TAG, OBJECT_TYPE_VALUE),
         )
         year_min, year_max = (year_rows[0] if year_rows else (None, None))
         return {
@@ -57,11 +72,17 @@ class SearchService:
         year_to: int,
         offset: int,
         limit: int,
-        pointers: list[int] | None = None,
+        pointers: list[str] | None = None,
     ) -> dict:
         # Поиск по названию и описанию документа + фильтры по указателям и датам.
-        conditions = ["document.is_visible = 1", "document.deleted = 0"]
-        params: list = []
+        # Документы-объекты (document_type=object) в выдачу не попадают - у них
+        # отдельные страницы /objects.
+        conditions = [
+            "document.is_visible = 1",
+            "document.deleted = 0",
+            "document.id NOT IN (SELECT document_id FROM document_property WHERE tag = %s AND value = %s)",
+        ]
+        params: list = [DOCUMENT_TYPE_TAG, OBJECT_TYPE_VALUE]
         if q.strip():
             conditions.append("(document.name ILIKE %s OR document.meta->>'description' ILIKE %s)")
             params += [f"%{q.strip()}%", f"%{q.strip()}%"]
@@ -80,15 +101,16 @@ class SearchService:
         if year_to:
             conditions.append("LEFT(document.meta->>'date_from', 4)::int <= %s")
             params.append(int(year_to))
-        pointer_ids = sorted({int(p) for p in (pointers or []) if int(p) > 0})
-        if pointer_ids:
+        # pointer - строка "tag:value", однозначно определяющая допустимое значение указателя.
+        pointer_keys = sorted({str(p) for p in (pointers or []) if p})
+        if pointer_keys:
             # Документ должен иметь ВСЕ выбранные значения указателей.
             conditions.append(
-                "(SELECT COUNT(DISTINCT dp.property_enum_id) FROM document_property dp "
-                "WHERE dp.document_id = document.id AND dp.property_enum_id = ANY(%s)) = %s"
+                "(SELECT COUNT(DISTINCT dp.tag || ':' || dp.value) FROM document_property dp "
+                "WHERE dp.document_id = document.id AND (dp.tag || ':' || dp.value) = ANY(%s)) = %s"
             )
-            params.append(pointer_ids)
-            params.append(len(pointer_ids))
+            params.append(pointer_keys)
+            params.append(len(pointer_keys))
         where = " AND ".join(conditions)
 
         total_rows = await db.execute_read(f"SELECT COUNT(*) FROM document WHERE {where}", params)
@@ -98,7 +120,7 @@ class SearchService:
             f"""
             SELECT document.id, document.name, document.meta->>'description',
                    (b.meta->>'page_count')::int, pg.image_hash,
-                   document.meta->>'date_from', document.meta->>'date_to' 
+                   document.meta->>'date_from', document.meta->>'date_to'
             FROM document
             LEFT JOIN branch b ON b.document_id = document.id AND b.name = 'master'
             LEFT JOIN page pg ON pg.commit = b.last_commit AND pg.pos = 1
@@ -130,22 +152,20 @@ class SearchService:
             return {}
         rows = await db.execute_read(
             """
-            SELECT dp.document_id, pe.id, pe.value, p.id, p.title
+            SELECT dp.document_id, dp.tag, dp.value, p.id, p.title
             FROM document_property dp
-            JOIN property_enum pe ON pe.id = dp.property_enum_id
-            JOIN property p ON p.id = pe.property_id AND p.is_visible = 1
+            JOIN property p ON p.tag = dp.tag AND p.is_visible = 1
             WHERE dp.document_id = ANY(%s)
-            ORDER BY dp.document_id, p.view_order, p.id, pe.value
+            ORDER BY dp.document_id, p.view_order, p.id, dp.value
             """,
             (doc_ids,),
         )
         grouped: dict[int, list[dict]] = {}
-        for doc_id, enum_id, value, property_id, title in rows:
+        for doc_id, tag, value, property_id, title in rows:
             grouped.setdefault(doc_id, []).append(
-                {"enum_id": enum_id, "value": value, "property_id": property_id, "property_title": title}
+                {"pointer": f"{tag}:{value}", "value": value, "property_id": property_id, "property_title": title}
             )
         return grouped
-
 
 
 search_service = SearchService()

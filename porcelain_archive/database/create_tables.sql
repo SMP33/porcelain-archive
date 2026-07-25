@@ -92,35 +92,38 @@ CREATE    TABLE IF NOT EXISTS property (
           tag TEXT NOT NULL UNIQUE, -- Имя
           title TEXT NOT NULL UNIQUE, -- Отображаемое имя
           description TEXT, -- Описание
-          is_list INTEGER DEFAULT 0, -- Список или одно значение
-          is_editable INTEGER DEFAULT 1, -- Доступно ли для редактирования
+          is_editable INTEGER DEFAULT 1, -- Доступен ли для редактирования список значений
+          is_usable INTEGER DEFAULT 1, -- Может ли применяться в документах пользователем
           is_visible INTEGER DEFAULT 0, -- Виден ли обычным пользователям
-          is_system INTEGER DEFAULT 0, -- Системный параметр
-          view_order INTEGER DEFAULT 0 -- Порядок отображения
-          );
-
--- Доступные значения указателей
-CREATE    TABLE IF NOT EXISTS property_enum (
-          id BIGSERIAL PRIMARY KEY, -- Уникальный id
-          property_id BIGINT REFERENCES property (id) ON DELETE SET NULL, -- Указатель
-          value TEXT, -- Значение
-          is_pointer INTEGER DEFAULT 1 -- Считается ли значение указателем
+          view_order INTEGER DEFAULT 0, -- Порядок отображения
+          type TEXT DEFAULT 'string' -- Тип
+          CHECK (type IN ('string', 'bool', 'combobox', 'multicheckbox'))
           );
 
 -- Фактические значения указателей
 CREATE    TABLE IF NOT EXISTS document_property (
           document_id BIGINT REFERENCES document (id) ON DELETE SET NULL, -- Документ
-          property_enum_id BIGINT REFERENCES property_enum (id) ON DELETE SET NULL -- Значение указателя
+          tag TEXT REFERENCES property (tag) ON DELETE SET NULL, -- Указатель
+          value TEXT, -- Значение
+          UNIQUE NULLS NOT DISTINCT (document_id, tag, value)
           );
 
--- Указатели документа читаются по документу (карточка) и по значению (фасеты, фильтр)
-CREATE    INDEX IF NOT EXISTS document_property_document_idx ON document_property (document_id);
-CREATE    INDEX IF NOT EXISTS document_property_enum_idx ON document_property (property_enum_id);
+-- Переводы указателей
+CREATE    TABLE IF NOT EXISTS property_translate (
+          tag TEXT REFERENCES property (tag) ON DELETE CASCADE, -- Указатель
+          value TEXT NOT NULL, -- Значение
+          translated TEXT NOT NULL, -- Перевод
+          UNIQUE (tag, value)
+          );
+
+-- Применённые патчи схемы БД (см. patch.py)
+CREATE    TABLE IF NOT EXISTS patch (
+          uuid UUID PRIMARY KEY UNIQUE NOT NULL -- Уникальный идентификатор патча
+          );
 
 -- ============================================================
--- Публичный сайт (ceramic): подписки и объекты (фарфоровые изделия).
+-- Публичный сайт (ceramic): подписки.
 -- Раньше жили в отдельной схеме со своим пулом соединений - объединены сюда.
--- Порядок важен: object_property ссылается на property_enum выше.
 -- ============================================================
 
 -- Подписчики на новости проекта (форма в подвале сайта).
@@ -130,50 +133,6 @@ CREATE TABLE IF NOT EXISTS subscriber (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Заводы как отдельная сущность удалены - см. porcelain_object ниже.
+-- Заводы как отдельная сущность удалены - объекты (фарфоровые изделия) теперь
+-- document с указателем document_type = 'object' (см. porcelain_archive/ceramic/objects).
 DROP TABLE IF EXISTS factory;
-
--- Объекты (отдельные фарфоровые изделия): название, описание, фото.
--- Без привязки к документам и без атрибутов завода-изготовителя.
-CREATE TABLE IF NOT EXISTS porcelain_object (
-    id         BIGSERIAL PRIMARY KEY,
-    name       TEXT NOT NULL,
-    notes      TEXT,        -- описание
-    cover_key  TEXT,        -- ключ фото в ceramic-хранилище
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Видимость объекта для посетителей сайта (0 - скрыт, виден только в админке).
-ALTER TABLE porcelain_object ADD COLUMN IF NOT EXISTS is_visible INTEGER DEFAULT 1;
-
--- Фотографии объекта (галерея). Первая по sort_order - обложка.
-CREATE TABLE IF NOT EXISTS object_image (
-    id         BIGSERIAL PRIMARY KEY,
-    object_id  BIGINT NOT NULL REFERENCES porcelain_object (id) ON DELETE CASCADE,
-    image_key  TEXT NOT NULL,  -- ключ файла в ceramic-хранилище
-    sort_order INTEGER DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS object_image_object_idx ON object_image (object_id, sort_order);
-
--- Перенос одиночной обложки в галерею и отказ от porcelain_object.cover_key.
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'porcelain_object' AND column_name = 'cover_key'
-    ) THEN
-        INSERT INTO object_image (object_id, image_key, sort_order)
-        SELECT id, cover_key, 0 FROM porcelain_object
-        WHERE cover_key IS NOT NULL
-          AND NOT EXISTS (SELECT 1 FROM object_image oi WHERE oi.object_id = porcelain_object.id);
-        ALTER TABLE porcelain_object DROP COLUMN cover_key;
-    END IF;
-END $$;
-
--- Указатели объекта (значения property_enum, общие с документами).
-CREATE TABLE IF NOT EXISTS object_property (
-    object_id        BIGINT NOT NULL REFERENCES porcelain_object (id) ON DELETE CASCADE,
-    property_enum_id BIGINT NOT NULL REFERENCES property_enum (id) ON DELETE CASCADE,
-    PRIMARY KEY (object_id, property_enum_id)
-);

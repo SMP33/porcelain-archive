@@ -37,6 +37,32 @@ FRONTEND_ASSETS_DIR = os.path.join(FRONTEND_DIST_DIR, "assets")
 
 task_service = TaskService()
 
+TASK_MANAGER_PATTERN = "porcelain_archive.task_manager"
+
+
+def _kill_stray_task_managers() -> None:
+    """
+    Убивает уже запущенные процессы task_manager - осиротевшие от предыдущего
+    нештатного завершения сервера (например, Stop-Process -Force, который не
+    даёт отработать finally в lifespan). Выполняется до запуска нового
+    task_manager, чтобы не плодить дубликаты, слушающие одни и те же задачи.
+    """
+    try:
+        if sys.platform == "win32":
+            subprocess.run(
+                [
+                    "powershell", "-NoProfile", "-Command",
+                    "Get-CimInstance Win32_Process | "
+                    f"Where-Object {{ $_.CommandLine -like '*{TASK_MANAGER_PATTERN}*' }} | "
+                    "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }",
+                ],
+                check=False,
+            )
+        else:
+            subprocess.run(["pkill", "-9", "-f", TASK_MANAGER_PATTERN], check=False)
+    except FileNotFoundError:
+        pass
+
 
 async def _run_backup_scheduler() -> None:
     """Раз в config.common.backup_period_hr часов создаёт задачу бэкапа."""
@@ -52,6 +78,8 @@ async def _run_backup_scheduler() -> None:
 async def lifespan(app: FastAPI):
     """Открывает пул соединений с БД при старте и закрывает при остановке сервера."""
     await db.init()
+
+    _kill_stray_task_managers()
 
     process = subprocess.Popen(
         [sys.executable, "-u", "-m", "porcelain_archive.task_manager"],

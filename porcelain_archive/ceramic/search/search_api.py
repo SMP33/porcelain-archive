@@ -13,7 +13,7 @@ async def search(
     q: str = "",
     year_from: int = Query(0, ge=0),
     year_to: int = Query(0, ge=0),
-    pointer: list[int] = Query(default=[]),
+    pointer: list[str] = Query(default=[]),
     offset: int = 0,
     limit: int = PER_PAGE_DEFAULT,
 ):

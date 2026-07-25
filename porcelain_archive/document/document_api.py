@@ -38,6 +38,10 @@ class SetVisibilityRequest(BaseModel):
     is_visible: bool
 
 
+class SetDocumentTypeRequest(BaseModel):
+    is_object: bool
+
+
 class RenameDocumentRequest(BaseModel):
     name: str
 
@@ -153,6 +157,29 @@ async def set_document_visibility(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Документ не найден")
 
     return {"is_visible": payload.is_visible}
+
+
+@router.post("/{document_id}/type")
+async def set_document_type(
+    document_id: int,
+    payload: SetDocumentTypeRequest,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """
+    Помечает/снимает отметку "объект" (см. porcelain_archive/ceramic/objects) -
+    единственное отличие объекта от обычного документа. Требует роли moderator+.
+    """
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not role_at_least(user.get("role"), "moderator"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для изменения типа документа")
+
+    success = await document_service.set_document_type(document_id, payload.is_object)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Документ не найден")
+
+    return {"is_object": payload.is_object}
 
 
 @router.post("/{document_id}/rename")

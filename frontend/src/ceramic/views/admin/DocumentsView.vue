@@ -45,11 +45,12 @@ async function load() {
 
 async function loadProperties() {
   const { data } = await http.get('/api/properties/')
-  const items = data.items || data.properties || []
+  const items = data.items || []
   properties.value = await Promise.all(
     items.map(async (p) => {
       const { data: enumData } = await http.get(`/api/properties/${p.id}/enum`)
-      return { id: p.id, title: p.title, values: enumData.items || enumData.values || [] }
+      const values = (enumData.items || []).map((v) => ({ pointer: `${p.tag}:${v.value}`, value: v.value }))
+      return { id: p.id, title: p.title, values }
     })
   )
 }
@@ -91,9 +92,7 @@ async function startEdit(doc) {
     date_to: data.date_to || '',
   }
   const { data: props } = await http.get(`/api/documents/${doc.id}/properties`)
-  selectedPointers.value = (props.items || [])
-    .flatMap((p) => (p.values || []).map((v) => v.enum_id || v.id))
-    .filter(Boolean)
+  selectedPointers.value = (props.items || []).map((p) => `${p.tag}:${p.value}`)
 }
 
 function cancelEdit() {
@@ -123,7 +122,7 @@ async function save(doc) {
     const byProperty = properties.value
       .map((p) => ({
         property_id: p.id,
-        values: p.values.filter((v) => selectedPointers.value.includes(v.id)).map((v) => v.value),
+        values: p.values.filter((v) => selectedPointers.value.includes(v.pointer)).map((v) => v.value),
       }))
       .filter((entry) => entry.values.length)
     await http.put(`/api/documents/${doc.id}/properties`, { properties: byProperty })
@@ -250,9 +249,9 @@ async function del(doc) {
                       <div v-for="prop in properties" :key="prop.id">
                         <p class="tw:text-xs tw:text-gray-400 tw:uppercase tw:tracking-wider tw:mb-1">{{ prop.title }}</p>
                         <div class="tw:flex tw:flex-wrap tw:gap-2">
-                          <button v-for="v in prop.values" :key="v.id" type="button" @click="togglePointer(v.id)"
+                          <button v-for="v in prop.values" :key="v.pointer" type="button" @click="togglePointer(v.pointer)"
                                   class="tw:text-sm tw:rounded-full tw:border tw:px-3 tw:py-1 tw:transition-colors"
-                                  :class="selectedPointers.includes(v.id)
+                                  :class="selectedPointers.includes(v.pointer)
                                     ? 'tw:bg-red-50 tw:border-red-300 tw:text-red-700'
                                     : 'tw:border-gray-200 tw:text-gray-600 tw:hover:bg-white'">
                             {{ v.value }}

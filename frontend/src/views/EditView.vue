@@ -284,6 +284,7 @@
           :branch-id="branch.id"
           :page-count="pageCount"
           :commit="branch.lastCommit"
+          layout-text-view
         />
 
         <div v-if="loading" class="tw:text-sm tw:text-gray-400">Загрузка…</div>

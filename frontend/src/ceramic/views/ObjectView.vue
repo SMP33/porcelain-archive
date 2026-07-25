@@ -9,14 +9,12 @@ const object = ref(null)
 const loading = ref(true)
 const notFound = ref(false)
 
-// Кадры галереи (page_number - номер фото, thumb_url = image_url: отдельных
-// миниатюр в хранилище нет, браузер масштабирует оригинал).
+// Кадры галереи - страницы master-ветки документа-объекта.
 const shots = computed(() =>
-  (object.value ? object.value.images : []).map((img, i) => ({
-    id: img.id,
-    page_number: i + 1,
+  (object.value ? object.value.images : []).map((img) => ({
+    page_number: img.page,
     image_url: img.url,
-    thumb_url: img.url,
+    thumb_url: img.thumb_url,
   }))
 )
 
@@ -94,7 +92,7 @@ watch(() => props.id, load)
               <div v-for="g in pointerGroups" :key="g.id" class="tw:flex tw:items-center tw:gap-2">
                 <dt class="tw:text-gray-400">{{ g.title }}:</dt>
                 <dd class="tw:flex tw:flex-wrap tw:gap-1.5">
-                  <router-link v-for="v in g.values" :key="v.enum_id" :to="{ path: '/objects', query: { pointer: v.enum_id } }"
+                  <router-link v-for="v in g.values" :key="v.pointer" :to="{ path: '/objects', query: { pointer: v.pointer } }"
                      class="tw:bg-clay-50 tw:text-clay-700 tw:border tw:border-clay-100 tw:rounded-full tw:px-2.5 tw:py-0.5 tw:hover:bg-clay-100 tw:transition-colors">
                     {{ v.value }}
                   </router-link>
@@ -102,7 +100,7 @@ watch(() => props.id, load)
               </div>
             </dl>
           </div>
-          <p v-if="object.notes" class="tw:text-sm tw:text-gray-600 tw:leading-relaxed tw:whitespace-pre-line tw:mt-3">{{ object.notes }}</p>
+          <p v-if="object.description" class="tw:text-sm tw:text-gray-600 tw:leading-relaxed tw:whitespace-pre-line tw:mt-3">{{ object.description }}</p>
         </div>
 
         <template v-if="shots.length">

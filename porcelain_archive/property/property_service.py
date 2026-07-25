@@ -4,37 +4,43 @@ from typing import Any, Dict, List, Optional
 from porcelain_archive.database import db
 
 TAG_PATTERN = re.compile(r"^[a-z_]+$")
+PROPERTY_TYPES = {"string", "bool", "combobox", "multicheckbox"}
+
+# Служебные указатели, не управляемые через общий редактор указателей
+# (document_type - см. porcelain_archive/ceramic/objects).
+SYSTEM_TAGS = {"document_type"}
 
 
 class PropertyService:
     async def get_properties(self) -> List[Dict[str, Any]]:
-        """Возвращает все указатели (property), в порядке view_order."""
+        """Возвращает все указатели (property), кроме служебных, в порядке view_order."""
         rows = await db.execute_read(
             """
-            SELECT p.id, p.tag, p.title, p.description, p.is_list, p.is_editable,
-                   p.is_visible, p.is_system, p.view_order,
+            SELECT p.id, p.tag, p.title, p.description, p.type, p.is_editable,
+                   p.is_usable, p.is_visible, p.view_order,
                    EXISTS (
                        SELECT 1 FROM document_property dp
-                       JOIN property_enum pe ON pe.id = dp.property_enum_id
-                       WHERE pe.property_id = p.id
+                       WHERE dp.tag = p.tag AND dp.document_id IS NOT NULL
                    ) AS in_use
             FROM property p
+            WHERE p.tag != ALL(%s)
             ORDER BY p.view_order, p.id
-            """
+            """,
+            (list(SYSTEM_TAGS),),
         )
         return [self._row_to_property(row) for row in rows]
 
     def _row_to_property(self, row) -> Dict[str, Any]:
-        id_, tag, title, description, is_list, is_editable, is_visible, is_system, view_order, in_use = row
+        id_, tag, title, description, type_, is_editable, is_usable, is_visible, view_order, in_use = row
         return {
             "id": id_,
             "tag": tag,
             "title": title,
             "description": description,
-            "is_list": bool(is_list),
+            "type": type_,
             "is_editable": bool(is_editable),
+            "is_usable": bool(is_usable),
             "is_visible": bool(is_visible),
-            "is_system": bool(is_system),
             "view_order": view_order,
             "in_use": bool(in_use),
         }
@@ -44,13 +50,16 @@ class PropertyService:
         tag: str,
         title: str,
         description: Optional[str],
-        is_list: bool,
+        type: str,
         is_editable: bool,
+        is_usable: bool,
         is_visible: bool,
     ) -> int:
         """Создаёт новый указатель и возвращает его id."""
         if not TAG_PATTERN.match(tag):
             raise ValueError("Указатель должен состоять только из маленьких латинских букв и символа '_'")
+        if type not in PROPERTY_TYPES:
+            raise ValueError(f"Неизвестный тип указателя: '{type}'")
 
         existing = await db.execute_read(
             "SELECT 1 FROM property WHERE tag = %s OR title = %s", (tag, title)
@@ -61,16 +70,16 @@ class PropertyService:
         async with db.transaction() as conn:
             cursor = await conn.execute(
                 """
-                INSERT INTO property (tag, title, description, is_list, is_editable, is_visible)
-                VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
+                INSERT INTO property (tag, title, description, type, is_editable, is_usable, is_visible)
+                VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
                 """,
-                (tag, title, description, int(is_list), int(is_editable), int(is_visible)),
+                (tag, title, description, type, int(is_editable), int(is_usable), int(is_visible)),
             )
             row = await cursor.fetchone()
             return row[0]
 
     async def update_property_title(self, property_id: int, title: str) -> bool:
-        """Изменяет отображаемое имя указателя (tag после создания не меняется)."""
+        """Изменяет отображаемое имя указателя (tag и type после создания не меняются)."""
         existing = await db.execute_read(
             "SELECT 1 FROM property WHERE title = %s AND id != %s", (title, property_id)
         )
@@ -83,18 +92,12 @@ class PropertyService:
         return rows_affected > 0
 
     async def update_property_flags(
-        self, property_id: int, is_list: bool, is_editable: bool, is_visible: bool
+        self, property_id: int, is_editable: bool, is_usable: bool, is_visible: bool
     ) -> bool:
-        """Изменяет флаги указателя. Недоступно для системных указателей (is_system)."""
-        rows = await db.execute_read("SELECT is_system FROM property WHERE id = %s", (property_id,))
-        if not rows:
-            raise ValueError("Указатель не найден")
-        if bool(rows[0][0]):
-            raise ValueError("Флаги системного указателя изменить нельзя")
-
+        """Изменяет флаги указателя."""
         rows_affected = await db.execute_write(
-            "UPDATE property SET is_list = %s, is_editable = %s, is_visible = %s WHERE id = %s",
-            (int(is_list), int(is_editable), int(is_visible), property_id),
+            "UPDATE property SET is_editable = %s, is_usable = %s, is_visible = %s WHERE id = %s",
+            (int(is_editable), int(is_usable), int(is_visible), property_id),
         )
         return rows_affected > 0
 
@@ -109,15 +112,15 @@ class PropertyService:
     async def delete_property(self, property_id: int) -> bool:
         """
         Удаляет указатель. Нельзя удалить указатель, у которого хоть одно
-        значение уже используется в document_property.
+        значение уже проставлено документу.
         """
+        rows = await db.execute_read("SELECT tag FROM property WHERE id = %s", (property_id,))
+        if not rows:
+            return False
+        tag = rows[0][0]
+
         in_use = await db.execute_read(
-            """
-            SELECT 1 FROM document_property dp
-            JOIN property_enum pe ON pe.id = dp.property_enum_id
-            WHERE pe.property_id = %s
-            """,
-            (property_id,),
+            "SELECT 1 FROM document_property WHERE tag = %s AND document_id IS NOT NULL", (tag,)
         )
         if in_use:
             raise ValueError("Указатель используется в документах и не может быть удалён")
@@ -125,62 +128,162 @@ class PropertyService:
         rows_affected = await db.execute_write("DELETE FROM property WHERE id = %s", (property_id,))
         return rows_affected > 0
 
-    async def get_property_enum_values(self, property_id: int) -> List[Dict[str, Any]]:
-        """Возвращает допустимые значения указателя."""
+    async def _get_editable_tag(self, property_id: int) -> str:
+        """Возвращает tag указателя, если разрешено редактировать список его значений."""
         rows = await db.execute_read(
-            "SELECT id, value FROM property_enum WHERE property_id = %s ORDER BY value", (property_id,)
+            "SELECT tag, is_editable FROM property WHERE id = %s", (property_id,)
         )
-        return [{"id": row[0], "value": row[1]} for row in rows]
-
-    async def create_property_enum_value(self, property_id: int, value: str) -> int:
-        """Добавляет допустимое значение указателя и возвращает его id."""
-        property_rows = await db.execute_read("SELECT 1 FROM property WHERE id = %s", (property_id,))
-        if not property_rows:
+        if not rows:
             raise ValueError("Указатель не найден")
+        tag, is_editable = rows[0]
+        if not is_editable:
+            raise ValueError("Список значений этого указателя нельзя редактировать")
+        return tag
+
+    async def get_property_enum_values(self, property_id: int) -> List[Dict[str, Any]]:
+        """Возвращает допустимые значения указателя (пул для combobox/multicheckbox)."""
+        rows = await db.execute_read(
+            """
+            SELECT dp.value FROM document_property dp
+            JOIN property p ON p.tag = dp.tag
+            WHERE p.id = %s AND dp.document_id IS NULL
+            ORDER BY dp.value
+            """,
+            (property_id,),
+        )
+        return [{"value": row[0]} for row in rows]
+
+    async def create_property_enum_value(self, property_id: int, value: str) -> None:
+        """Добавляет допустимое значение указателя."""
+        tag = await self._get_editable_tag(property_id)
 
         existing = await db.execute_read(
-            "SELECT 1 FROM property_enum WHERE property_id = %s AND value = %s", (property_id, value)
+            "SELECT 1 FROM document_property WHERE tag = %s AND document_id IS NULL AND value = %s",
+            (tag, value),
         )
         if existing:
             raise ValueError(f"Значение '{value}' уже существует для этого указателя")
 
-        async with db.transaction() as conn:
-            cursor = await conn.execute(
-                "INSERT INTO property_enum (property_id, value) VALUES (%s, %s) RETURNING id",
-                (property_id, value),
-            )
-            row = await cursor.fetchone()
-            return row[0]
+        await db.execute_write(
+            "INSERT INTO document_property (document_id, tag, value) VALUES (NULL, %s, %s)",
+            (tag, value),
+        )
 
-    async def update_property_enum_value(self, enum_id: int, new_value: str) -> bool:
-        """Переименовывает допустимое значение указателя по его id."""
-        rows = await db.execute_read("SELECT property_id, value FROM property_enum WHERE id = %s", (enum_id,))
-        if not rows:
-            raise ValueError("Значение не найдено")
-        property_id, old_value = rows[0]
+    async def update_property_enum_value(self, property_id: int, old_value: str, new_value: str) -> bool:
+        """Переименовывает допустимое значение указателя всюду, где оно используется."""
+        tag = await self._get_editable_tag(property_id)
         if old_value == new_value:
             return True
 
         existing = await db.execute_read(
-            "SELECT 1 FROM property_enum WHERE property_id = %s AND value = %s AND id != %s",
-            (property_id, new_value, enum_id),
+            "SELECT 1 FROM document_property WHERE tag = %s AND document_id IS NULL AND value = %s",
+            (tag, new_value),
         )
         if existing:
             raise ValueError(f"Значение '{new_value}' уже существует для этого указателя")
 
-        await db.execute_write("UPDATE property_enum SET value = %s WHERE id = %s", (new_value, enum_id))
-        return True
+        rows_affected = await db.execute_write(
+            "UPDATE document_property SET value = %s WHERE tag = %s AND value = %s",
+            (new_value, tag, old_value),
+        )
+        return rows_affected > 0
 
-    async def delete_property_enum_value(self, enum_id: int) -> bool:
+    async def delete_property_enum_value(self, property_id: int, value: str) -> bool:
         """
         Удаляет допустимое значение указателя. Нельзя удалить значение,
         которое уже проставлено хотя бы одному документу.
         """
+        tag = await self._get_editable_tag(property_id)
+
         in_use = await db.execute_read(
-            "SELECT 1 FROM document_property WHERE property_enum_id = %s", (enum_id,)
+            "SELECT 1 FROM document_property WHERE tag = %s AND value = %s AND document_id IS NOT NULL",
+            (tag, value),
         )
         if in_use:
             raise ValueError("Значение используется в документах и не может быть удалено")
 
-        rows_affected = await db.execute_write("DELETE FROM property_enum WHERE id = %s", (enum_id,))
+        rows_affected = await db.execute_write(
+            "DELETE FROM document_property WHERE tag = %s AND value = %s AND document_id IS NULL",
+            (tag, value),
+        )
+        return rows_affected > 0
+
+    async def validate_value(self, tag: str, value: str) -> bool:
+        """
+        Проверяет, допустимо ли значение для указателя с данным tag: для bool -
+        только 'true'/'false', для combobox/multicheckbox - только значение,
+        уже существующее в пуле допустимых (document_property, document_id = NULL),
+        для string - любое значение.
+        """
+        rows = await db.execute_read("SELECT type FROM property WHERE tag = %s", (tag,))
+        if not rows:
+            raise ValueError("Указатель не найден")
+        type_ = rows[0][0]
+
+        if type_ == "bool":
+            return value in ("true", "false")
+
+        if type_ in ("combobox", "multicheckbox"):
+            existing = await db.execute_read(
+                "SELECT 1 FROM document_property WHERE tag = %s AND value = %s AND document_id IS NULL",
+                (tag, value),
+            )
+            return bool(existing)
+
+        return True
+
+    async def get_property_values(self, property_id: int) -> List[str]:
+        """Возвращает все различные значения, когда-либо использованные для указателя."""
+        rows = await db.execute_read(
+            """
+            SELECT DISTINCT dp.value FROM document_property dp
+            JOIN property p ON p.tag = dp.tag
+            WHERE p.id = %s
+            ORDER BY dp.value
+            """,
+            (property_id,),
+        )
+        return [row[0] for row in rows]
+
+    async def get_property_translations(self, property_id: int) -> List[Dict[str, Any]]:
+        """Возвращает переводы значений указателя (property_translate)."""
+        rows = await db.execute_read(
+            """
+            SELECT pt.value, pt.translated
+            FROM property_translate pt
+            JOIN property p ON p.tag = pt.tag
+            WHERE p.id = %s
+            ORDER BY pt.value
+            """,
+            (property_id,),
+        )
+        return [{"value": row[0], "translated": row[1]} for row in rows]
+
+    async def _get_translatable_tag(self, property_id: int) -> str:
+        """Возвращает tag указателя, если для его типа выполняется перевод (не string)."""
+        rows = await db.execute_read("SELECT tag, type FROM property WHERE id = %s", (property_id,))
+        if not rows:
+            raise ValueError("Указатель не найден")
+        tag, type_ = rows[0]
+        if type_ == "string":
+            raise ValueError("Для указателей типа 'строка' перевод не выполняется")
+        return tag
+
+    async def set_property_translation(self, property_id: int, value: str, translated: str) -> None:
+        """Добавляет или изменяет перевод значения указателя."""
+        tag = await self._get_translatable_tag(property_id)
+        await db.execute_write(
+            """
+            INSERT INTO property_translate (tag, value, translated) VALUES (%s, %s, %s)
+            ON CONFLICT (tag, value) DO UPDATE SET translated = EXCLUDED.translated
+            """,
+            (tag, value, translated),
+        )
+
+    async def delete_property_translation(self, property_id: int, value: str) -> bool:
+        """Удаляет перевод значения указателя (значение снова отображается как есть)."""
+        tag = await self._get_translatable_tag(property_id)
+        rows_affected = await db.execute_write(
+            "DELETE FROM property_translate WHERE tag = %s AND value = %s", (tag, value)
+        )
         return rows_affected > 0

@@ -11,22 +11,22 @@ const q = computed(() => route.query.q || '')
 const qInput = ref(q.value)
 watch(q, (v) => (qInput.value = v))
 
-// Выбранные значения указателей (property_enum id) из query.pointer.
+// Выбранные значения указателей ("tag:value") из query.pointer.
 const pointers = computed(() => {
   const p = route.query.pointer
   if (!p) return []
-  return (Array.isArray(p) ? p : [p]).map(Number).filter((n) => n > 0)
+  return (Array.isArray(p) ? p : [p]).filter(Boolean)
 })
 
 const objects = ref([])
 const loading = ref(true)
 const properties = ref([])
 
-// enum_id -> значение указателя (подписи активных фильтров)
+// pointer ("tag:value") -> значение указателя (подписи активных фильтров)
 const pointerLabels = computed(() => {
   const m = {}
   for (const p of properties.value) {
-    for (const v of p.values) m[v.enum_id] = v.value
+    for (const v of p.values) m[v.pointer] = v.value
   }
   return m
 })
@@ -66,10 +66,10 @@ function submitSearch() {
   router.push({ query: { ...route.query, q: qInput.value || undefined } })
 }
 
-function togglePointer(enumId) {
+function togglePointer(pointer) {
   const cur = new Set(pointers.value)
-  if (cur.has(enumId)) cur.delete(enumId)
-  else cur.add(enumId)
+  if (cur.has(pointer)) cur.delete(pointer)
+  else cur.add(pointer)
   const arr = [...cur]
   router.push({ query: { ...route.query, pointer: arr.length ? arr : undefined } })
 }
@@ -112,10 +112,10 @@ const hasActiveFilters = computed(() => !!q.value || pointers.value.length > 0)
       <div v-for="prop in properties" :key="prop.id" class="tw:mb-6">
         <p class="tw:text-xs tw:font-semibold tw:text-gray-400 tw:uppercase tw:tracking-wider tw:mb-2">{{ prop.title }}</p>
         <ul class="tw:space-y-0.5">
-          <li v-for="v in prop.values" :key="v.enum_id">
-            <button type="button" @click="togglePointer(v.enum_id)"
+          <li v-for="v in prop.values" :key="v.pointer">
+            <button type="button" @click="togglePointer(v.pointer)"
                class="tw:w-full tw:flex tw:items-center tw:justify-between tw:px-2 tw:py-1 tw:rounded-lg tw:text-sm tw:transition-colors tw:text-left"
-               :class="pointers.includes(v.enum_id) ? 'tw:bg-clay-100 tw:text-clay-700 tw:font-medium' : 'tw:text-gray-600 tw:hover:bg-gray-100'">
+               :class="pointers.includes(v.pointer) ? 'tw:bg-clay-100 tw:text-clay-700 tw:font-medium' : 'tw:text-gray-600 tw:hover:bg-gray-100'">
               <span class="tw:truncate">{{ v.value }}</span>
               <span class="tw:text-xs tw:text-gray-400 tw:shrink-0 tw:ml-1">{{ v.count }}</span>
             </button>
@@ -147,9 +147,9 @@ const hasActiveFilters = computed(() => !!q.value || pointers.value.length > 0)
             <img v-if="o.cover_url" :src="o.cover_url" :alt="o.name"
                  class="tw:w-full tw:h-full tw:object-cover tw:group-hover:scale-105 tw:transition-transform tw:duration-300">
             <div v-else class="stripe-placeholder tw:w-full tw:h-full"></div>
-            <span v-if="o.images.length > 1"
+            <span v-if="o.page_count > 1"
                   class="tw:absolute tw:bottom-2 tw:right-2 tw:text-xs tw:text-white tw:bg-black/50 tw:rounded-full tw:px-2 tw:py-0.5">
-              {{ o.images.length }} фото
+              {{ o.page_count }} фото
             </span>
           </div>
 
@@ -157,9 +157,9 @@ const hasActiveFilters = computed(() => !!q.value || pointers.value.length > 0)
             <h2 class="tw:font-serif tw:font-semibold tw:text-base tw:text-ink-900 tw:group-hover:text-clay-500 tw:transition-colors tw:leading-snug">
               {{ o.name }}
             </h2>
-            <p v-if="o.notes" class="tw:text-sm tw:text-gray-500 tw:line-clamp-2">{{ o.notes }}</p>
+            <p v-if="o.description" class="tw:text-sm tw:text-gray-500 tw:line-clamp-2">{{ o.description }}</p>
             <div v-if="o.pointers.length" class="tw:flex tw:flex-wrap tw:gap-1 tw:mt-1">
-              <span v-for="p in o.pointers" :key="p.enum_id"
+              <span v-for="p in o.pointers" :key="p.pointer"
                     class="tw:text-xs tw:bg-clay-50 tw:text-clay-700 tw:border tw:border-clay-100 tw:rounded-full tw:px-2 tw:py-0.5">
                 {{ p.value }}
               </span>

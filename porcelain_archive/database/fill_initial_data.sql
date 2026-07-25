@@ -16,3 +16,15 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO member (name, display_name, email, hash, role)
 VALUES ('admin', 'Администратор', NULL, '$2b$12$71UKwGlo5Wyb13g7yfIEue/tJ2R76ywV56hre.UU6jv7FM9ur4bvq', 'admin')
 ON CONFLICT (name) DO NOTHING;
+
+-- Указатель "тип документа" - служебный, скрыт из общего списка указателей и
+-- недоступен для редактирования списка значений (см. property_service/document_service,
+-- WHERE tag != 'document_type'). Значение 'object' отличает документы-объекты
+-- (porcelain_archive/ceramic/objects) от обычных архивных документов.
+INSERT INTO property (tag, title, type, is_visible, is_usable, is_editable)
+VALUES ('document_type', 'Тип документа', 'combobox', 0, 1, 0)
+ON CONFLICT (tag) DO NOTHING;
+
+INSERT INTO document_property (document_id, tag, value)
+VALUES (NULL, 'document_type', 'object')
+ON CONFLICT (document_id, tag, value) DO NOTHING;
