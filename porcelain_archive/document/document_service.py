@@ -71,7 +71,9 @@ class DocumentService:
             "name": name,
             "author": meta.get("author"),
             "created_at": meta.get("created_at"),
-            "factory_id": meta.get("factory_id"),
+            "description": meta.get("description"),
+            "date_from": meta.get("date_from"),
+            "date_to": meta.get("date_to"),
             "is_visible": bool(is_visible),
         }
 
@@ -148,17 +150,50 @@ class DocumentService:
         )
         return rows_affected > 0
 
-    async def set_document_factory(self, document_id: int, factory_id: Optional[int]) -> bool:
-        """Привязывает документ к объекту (meta.factory_id) или снимает привязку (factory_id=None)."""
-        if factory_id is None:
+    async def set_document_dates(
+        self, document_id: int, date_from: Optional[str], date_to: Optional[str]
+    ) -> bool:
+        """
+        Задаёт даты документа (meta.date_from/date_to, ISO YYYY-MM-DD).
+        Пустые значения снимают дату; одна дата - документ без периода.
+        """
+        updates = {}
+        removals = []
+        for key, value in (("date_from", date_from), ("date_to", date_to)):
+            value = (value or "").strip()
+            if value:
+                updates[key] = value
+            else:
+                removals.append(key)
+
+        rows_affected = 0
+        if updates:
             rows_affected = await db.execute_write(
-                "UPDATE document SET meta = COALESCE(meta, '{}'::jsonb) - 'factory_id' WHERE id = %s",
-                (document_id,),
+                "UPDATE document SET meta = COALESCE(meta, '{}'::jsonb) || %s::jsonb WHERE id = %s",
+                (json.dumps(updates), document_id),
+            )
+        for key in removals:
+            rows_affected = await db.execute_write(
+                "UPDATE document SET meta = COALESCE(meta, '{}'::jsonb) - %s WHERE id = %s",
+                (key, document_id),
+            )
+        return rows_affected > 0
+
+    async def set_document_description(self, document_id: int, description: str) -> bool:
+        """
+        Задаёт описание документа (meta.description). Пустая строка снимает описание.
+        """
+        description = (description or "").strip()
+        if description:
+            rows_affected = await db.execute_write(
+                "UPDATE document SET meta = COALESCE(meta, '{}'::jsonb) || "
+                "jsonb_build_object('description', %s::text) WHERE id = %s",
+                (description, document_id),
             )
         else:
             rows_affected = await db.execute_write(
-                "UPDATE document SET meta = COALESCE(meta, '{}'::jsonb) || jsonb_build_object('factory_id', %s::bigint) WHERE id = %s",
-                (factory_id, document_id),
+                "UPDATE document SET meta = COALESCE(meta, '{}'::jsonb) - 'description' WHERE id = %s",
+                (document_id,),
             )
         return rows_affected > 0
 
