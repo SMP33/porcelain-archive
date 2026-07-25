@@ -43,7 +43,40 @@
           </div>
         </div>
         <div v-if="showTextColumn" class="tw:md:col-span-5">
+          <div v-if="layoutTextView && spans.length" class="tw:flex tw:items-center tw:gap-1 tw:mb-2">
+            <button
+              type="button"
+              class="tw:px-2 tw:py-1 tw:text-xs tw:rounded tw:transition-colors"
+              :class="textViewMode === 'list' ? 'tw:bg-clay-100 tw:text-clay-700' : 'tw:text-gray-500 tw:hover:bg-gray-50'"
+              @click="textViewMode = 'list'"
+            >
+              Списком
+            </button>
+            <button
+              type="button"
+              class="tw:px-2 tw:py-1 tw:text-xs tw:rounded tw:transition-colors"
+              :class="textViewMode === 'layout' ? 'tw:bg-clay-100 tw:text-clay-700' : 'tw:text-gray-500 tw:hover:bg-gray-50'"
+              @click="textViewMode = 'layout'"
+            >
+              Как на странице
+            </button>
+          </div>
           <div v-if="textLoading" class="tw:text-sm tw:text-gray-400">Загрузка…</div>
+          <div
+            v-else-if="layoutTextView && textViewMode === 'layout'"
+            class="page-layout-canvas"
+            :style="{ aspectRatio: pageSize.width && pageSize.height ? `${pageSize.width} / ${pageSize.height}` : undefined }"
+          >
+            <div
+              v-for="(span, idx) in spans"
+              :key="idx"
+              class="page-layout-block"
+              :class="{ 'page-layout-block--active': hoveredSpanIndex === idx }"
+              :style="layoutBlockStyle(span)"
+              @mouseenter="hoveredSpanIndex = idx"
+              @mouseleave="hoveredSpanIndex = null"
+            >{{ span.text }}</div>
+          </div>
           <div v-else class="page-text-panel">
             <div
               v-for="(span, idx) in spans"
@@ -95,7 +128,10 @@ const props = defineProps({
   branchId: { type: [Number, String], required: true },
   pageCount: { type: Number, required: true },
   commit: { type: String, default: null },
+  layoutTextView: { type: Boolean, default: false },
 })
+
+const FALLBACK_FONT_SIZE_PT = 11
 
 const dialog = ref(false)
 const dialogUrl = ref('')
@@ -104,6 +140,8 @@ const spans = ref([])
 const textLoading = ref(false)
 const hoveredSpanIndex = ref(null)
 const pageOcrQuality = ref(null)
+const textViewMode = ref('list')
+const pageSize = ref({ width: 0, height: 0 })
 
 const hasPrev = computed(() => currentPos.value > 1)
 const hasNext = computed(() => currentPos.value < props.pageCount)
@@ -137,10 +175,25 @@ const spanHighlightStyle = (span) => ({
   height: span.rect.height + '%',
 })
 
+// Стиль блока в режиме "как на странице" - позиция и размер как на изображении,
+// шрифт и выравнивание берутся из блока (доля от ширины страницы в pt, чтобы
+// корректно масштабироваться вместе с холстом через container query units).
+const layoutBlockStyle = (span) => ({
+  left: span.rect.x + '%',
+  top: span.rect.y + '%',
+  width: span.rect.width + '%',
+  height: span.rect.height + '%',
+  textAlign: span.alignment || 'left',
+  fontSize: pageSize.value.width
+    ? `${(span.font_size || FALLBACK_FONT_SIZE_PT) / pageSize.value.width * 100}cqw`
+    : undefined,
+})
+
 const loadText = async (pos) => {
   spans.value = []
   hoveredSpanIndex.value = null
   pageOcrQuality.value = null
+  pageSize.value = { width: 0, height: 0 }
   textLoading.value = true
   try {
     const response = await http.get(`/api/documents/branches/${props.branchId}/pages/${pos}/text`)
@@ -150,6 +203,9 @@ const loadText = async (pos) => {
     }
     if (page && page.ocr_quality) {
       pageOcrQuality.value = page.ocr_quality
+    }
+    if (page && page.width && page.height) {
+      pageSize.value = { width: page.width, height: page.height }
     }
   } catch (error) {
     console.error('Ошибка при получении текста страницы:', error)
@@ -253,6 +309,30 @@ defineExpose({ show, previewImageUrl })
   white-space: pre-line;
 }
 .page-text-span--active {
+  background: rgba(255, 213, 0, 0.35);
+}
+.page-layout-canvas {
+  position: relative;
+  width: 100%;
+  max-height: 75vh;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  container-type: inline-size;
+}
+.page-layout-block {
+  position: absolute;
+  overflow: hidden;
+  line-height: 1.15;
+  white-space: pre-wrap;
+  padding: 1px 2px;
+  cursor: default;
+  border-radius: 2px;
+  transition: background-color .1s;
+}
+.page-layout-block--active {
   background: rgba(255, 213, 0, 0.35);
 }
 .page-thumb-strip {

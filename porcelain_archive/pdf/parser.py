@@ -19,6 +19,7 @@ docx, координаты есть у всего текста без исклю
 
 import itertools
 import sys
+from collections import Counter
 from pdfminer.converter import PDFPageAggregator
 from pdfminer.layout import LAParams, LTTextContainer, LTChar, LTPage
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
@@ -41,10 +42,37 @@ class _SequencedAggregator(PDFPageAggregator):
         return adv
 
 
-def _line_font_size(line):
-    """Наибольший размер шрифта символов строки (для оценки высоты строки на границе блоков)."""
-    sizes = [obj.size for obj in line if isinstance(obj, LTChar)]
-    return max(sizes) if sizes else None
+def _block_font_size(sizes):
+    """Наиболее часто встречающийся размер шрифта символов блока."""
+    if not sizes:
+        return None
+    rounded = [round(size, 1) for size in sizes]
+    return Counter(rounded).most_common(1)[0][0]
+
+
+def _block_alignment(line_bboxes, x0, x1, tolerance=2.0):
+    """
+    Определяет выравнивание блока (left/right/center/justify) по тому,
+    насколько строки прилегают к левой/правой границе блока.
+    """
+    if len(line_bboxes) < 2:
+        return "left"
+
+    left_flush = [abs(lx0 - x0) <= tolerance for lx0, lx1 in line_bboxes]
+    right_flush = [abs(lx1 - x1) <= tolerance for lx0, lx1 in line_bboxes]
+
+    if all(left_flush) and all(right_flush[:-1]):
+        return "justify"
+    if all(left_flush):
+        return "left"
+    if all(right_flush):
+        return "right"
+
+    center = (x0 + x1) / 2
+    if all(abs((lx0 + lx1) / 2 - center) <= tolerance for lx0, lx1 in line_bboxes):
+        return "center"
+
+    return "left"
 
 
 def _boundary_font_size(prev, block):
@@ -120,16 +148,19 @@ def extract_sequence(pdf_path):
                 x0, y0, x1, y1 = element.bbox
                 char_seqs = []
                 line_sizes = []
+                char_sizes = []
+                line_bboxes = []
 
                 for line in element:
                     if not hasattr(line, "__iter__"):
                         continue
-                    char_seqs.extend(
-                        obj.seq for obj in line if isinstance(obj, LTChar) and hasattr(obj, "seq")
-                    )
-                    size = _line_font_size(line)
-                    if size is not None:
-                        line_sizes.append(size)
+                    chars = [obj for obj in line if isinstance(obj, LTChar)]
+                    char_seqs.extend(obj.seq for obj in chars if hasattr(obj, "seq"))
+                    sizes = [obj.size for obj in chars]
+                    if sizes:
+                        line_sizes.append(max(sizes))
+                        char_sizes.extend(sizes)
+                        line_bboxes.append((line.x0, line.x1))
 
                 blocks_out.append({
                     "order": min(char_seqs) if char_seqs else 0,
@@ -138,6 +169,8 @@ def extract_sequence(pdf_path):
                     "x1": round(x1, 1), "y1": round(y1, 1),
                     "top_down_y0": round(page_h - y1, 1),
                     "top_down_y1": round(page_h - y0, 1),
+                    "alignment": _block_alignment(line_bboxes, x0, x1),
+                    "font_size": _block_font_size(char_sizes),
                     "_first_line_size": line_sizes[0] if line_sizes else None,
                     "_last_line_size": line_sizes[-1] if line_sizes else None,
                 })
