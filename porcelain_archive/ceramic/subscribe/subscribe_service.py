@@ -4,7 +4,7 @@ import re
 import time
 from collections import defaultdict
 
-from porcelain_archive.ceramic.database import db as ceramic_db
+from porcelain_archive.database import db
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -32,19 +32,37 @@ class SubscribeService:
         if not _allowed(ip):
             raise ValueError("rate_limited")
         # Повторная подписка тем же email не создаёт дубликат и не считается ошибкой.
-        await ceramic_db.execute_write(
+        await db.execute_write(
             "INSERT INTO subscriber (email) VALUES (%s) ON CONFLICT (email) DO NOTHING",
             (email,),
         )
 
-    async def list_subscribers(self, offset: int, limit: int) -> dict:
-        total_row = await ceramic_db.execute_read_one("SELECT COUNT(*) AS n FROM subscriber")
+    async def list_subscribers(self, offset: int, limit: int, q: str = "") -> dict:
+        q = (q or "").strip().lower()
+        where, params = ("WHERE email ILIKE %s", [f"%{q}%"]) if q else ("", [])
+        total_row = await db.execute_read_one_dict(
+            f"SELECT COUNT(*) AS n FROM subscriber {where}", params
+        )
         total = total_row["n"] if total_row else 0
-        rows = await ceramic_db.execute_read(
-            "SELECT id, email, created_at FROM subscriber ORDER BY created_at DESC LIMIT %s OFFSET %s",
-            (limit, offset),
+        rows = await db.execute_read_dict(
+            f"SELECT id, email, created_at FROM subscriber {where} ORDER BY created_at DESC LIMIT %s OFFSET %s",
+            [*params, limit, offset],
         )
         return {"items": rows, "total": total}
+
+    async def all_emails(self, q: str = "") -> list[dict]:
+        """Все подписки (для выгрузки), с учётом поиска."""
+        q = (q or "").strip().lower()
+        where, params = ("WHERE email ILIKE %s", [f"%{q}%"]) if q else ("", [])
+        return await db.execute_read_dict(
+            f"SELECT email, created_at FROM subscriber {where} ORDER BY created_at DESC", params
+        )
+
+    async def delete_subscriber(self, subscriber_id: int) -> bool:
+        deleted = await db.execute_write(
+            "DELETE FROM subscriber WHERE id = %s", (subscriber_id,)
+        )
+        return deleted > 0
 
 
 subscribe_service = SubscribeService()
