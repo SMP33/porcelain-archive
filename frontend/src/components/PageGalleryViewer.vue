@@ -64,12 +64,14 @@
           <div v-if="textLoading" class="tw:text-sm tw:text-gray-400">Загрузка…</div>
           <div
             v-else-if="layoutTextView && textViewMode === 'layout'"
+            ref="layoutCanvasRef"
             class="page-layout-canvas"
             :style="{ aspectRatio: pageSize.width && pageSize.height ? `${pageSize.width} / ${pageSize.height}` : undefined }"
           >
             <div
               v-for="(span, idx) in spans"
               :key="idx"
+              :ref="(el) => setLayoutBlockEl(el, idx)"
               class="page-layout-block"
               :class="{ 'page-layout-block--active': hoveredSpanIndex === idx }"
               :style="layoutBlockStyle(span)"
@@ -131,7 +133,8 @@ const props = defineProps({
   layoutTextView: { type: Boolean, default: false },
 })
 
-const FALLBACK_FONT_SIZE_PT = 11
+const MIN_LAYOUT_FONT_PX = 9
+const MAX_LAYOUT_FONT_PX = 200
 
 const dialog = ref(false)
 const dialogUrl = ref('')
@@ -142,6 +145,8 @@ const hoveredSpanIndex = ref(null)
 const pageOcrQuality = ref(null)
 const textViewMode = ref('list')
 const pageSize = ref({ width: 0, height: 0 })
+const layoutCanvasRef = ref(null)
+const layoutBlockEls = ref([])
 
 const hasPrev = computed(() => currentPos.value > 1)
 const hasNext = computed(() => currentPos.value < props.pageCount)
@@ -175,22 +180,72 @@ const spanHighlightStyle = (span) => ({
   height: span.rect.height + '%',
 })
 
-// Стиль блока в режиме "как на странице" - позиция и размер как на изображении,
-// шрифт и выравнивание берутся из блока (доля от ширины страницы в pt, чтобы
-// корректно масштабироваться вместе с холстом через container query units).
+// Позиция, размер и выравнивание блока в режиме "как на странице" - размер шрифта
+// сюда не входит, он подбирается отдельно (см. fitLayoutBlockFont) под фактические
+// пиксели блока, а не проставляется через :style, чтобы не перетираться при ререндере.
 const layoutBlockStyle = (span) => ({
   left: span.rect.x + '%',
   top: span.rect.y + '%',
   width: span.rect.width + '%',
   height: span.rect.height + '%',
   textAlign: span.alignment || 'left',
-  fontSize: pageSize.value.width
-    ? `${(span.font_size || FALLBACK_FONT_SIZE_PT) / pageSize.value.width * 100}cqw`
-    : undefined,
+})
+
+const setLayoutBlockEl = (el, idx) => {
+  layoutBlockEls.value[idx] = el || null
+}
+
+const layoutBlockFits = (el) => (
+  el.scrollHeight <= el.clientHeight + 0.5 && el.scrollWidth <= el.clientWidth + 0.5
+)
+
+// Подбирает максимальный размер шрифта, при котором текст блока помещается в его
+// рамку (без обрезки), но не меньше MIN_LAYOUT_FONT_PX. Если текст не помещается
+// даже при минимальном размере, оставляет минимальный и не обрезает его (overflow: visible) -
+// лучше вылезти за рамку блока, чем сделать нечитаемо мелкий шрифт или обрезать текст.
+const fitLayoutBlockFont = (el) => {
+  if (!el || !el.clientHeight || !el.clientWidth) return
+  el.style.overflow = 'hidden'
+  el.style.fontSize = `${MIN_LAYOUT_FONT_PX}px`
+  if (!layoutBlockFits(el)) {
+    el.style.overflow = 'visible'
+    return
+  }
+  let lo = MIN_LAYOUT_FONT_PX
+  let hi = MAX_LAYOUT_FONT_PX
+  while (hi - lo > 1) {
+    const mid = Math.floor((lo + hi) / 2)
+    el.style.fontSize = `${mid}px`
+    if (layoutBlockFits(el)) lo = mid
+    else hi = mid
+  }
+  el.style.fontSize = `${lo}px`
+}
+
+const refitLayoutBlocks = () => {
+  nextTick(() => {
+    layoutBlockEls.value.forEach((el) => fitLayoutBlockFont(el))
+  })
+}
+
+watch([textViewMode, spans], () => {
+  if (props.layoutTextView && textViewMode.value === 'layout') {
+    refitLayoutBlocks()
+  }
+})
+
+let layoutResizeObserver = null
+watch(layoutCanvasRef, (el) => {
+  layoutResizeObserver?.disconnect()
+  if (el) {
+    layoutResizeObserver = new ResizeObserver(() => refitLayoutBlocks())
+    layoutResizeObserver.observe(el)
+  }
 })
 
 const loadText = async (pos) => {
   spans.value = []
+  layoutBlockEls.value = []
   hoveredSpanIndex.value = null
   pageOcrQuality.value = null
   pageSize.value = { width: 0, height: 0 }
@@ -251,6 +306,7 @@ watch(dialog, (isOpen) => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
+  layoutResizeObserver?.disconnect()
 })
 
 defineExpose({ show, previewImageUrl })
@@ -320,13 +376,13 @@ defineExpose({ show, previewImageUrl })
   border-radius: 4px;
   overflow-x: hidden;
   overflow-y: auto;
-  container-type: inline-size;
 }
 .page-layout-block {
   position: absolute;
   overflow: hidden;
   line-height: 1.15;
   white-space: pre-wrap;
+  overflow-wrap: break-word;
   padding: 1px 2px;
   cursor: default;
   border-radius: 2px;
