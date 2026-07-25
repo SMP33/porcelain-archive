@@ -1,11 +1,10 @@
 <template>
-  <div class="tw:min-h-screen tw:bg-gray-100">
-    <AppToolbar />
-    <main class="tw:md:pl-[232px]">
-      <div class="tw:border-b tw:border-gray-200 tw:bg-white tw:px-8 tw:py-4">
+  <div>
+    <main>
+      <div class="tw:mb-4">
         <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">{{ document ? document.name : 'Документ' }}</h1>
       </div>
-      <div class="tw:px-8 tw:py-6 tw:space-y-4">
+      <div class="tw:space-y-4">
         <AppModal v-model="confirmDeleteDialog" max-width="tw:max-w-md" :persistent="true" :show-close="false">
           <h2 class="tw:font-serif tw:font-bold tw:text-lg tw:text-ink-900 tw:mb-4">Удаление документа</h2>
           <p class="tw:text-sm tw:text-gray-600">
@@ -75,6 +74,28 @@
             <div v-if="renameError" class="tw:text-sm tw:text-red-600 tw:mt-1">{{ renameError }}</div>
           </div>
 
+          <div v-if="hasRole('moderator')" class="tw:mb-4">
+            <label class="tw:block tw:text-xs tw:font-medium tw:text-gray-500 tw:mb-1">
+              Описание (выводится на публичной странице документа и в списке)
+            </label>
+            <div class="tw:max-w-md">
+              <textarea
+                v-model="descriptionForm"
+                rows="3"
+                class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300"
+              ></textarea>
+              <button
+                type="button"
+                :disabled="savingDescription || descriptionForm.trim() === (document.description || '')"
+                class="tw:mt-2 tw:px-3 tw:py-2 tw:text-sm tw:font-medium tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:rounded-lg tw:transition-colors tw:disabled:opacity-50"
+                @click="handleSaveDescription"
+              >
+                {{ savingDescription ? '…' : 'Сохранить описание' }}
+              </button>
+            </div>
+            <div v-if="descriptionError" class="tw:text-sm tw:text-red-600 tw:mt-1">{{ descriptionError }}</div>
+          </div>
+
           <div v-if="hasRole('moderator')" class="tw:flex tw:items-center tw:mb-4">
             <button
               type="button"
@@ -93,21 +114,6 @@
             <span class="tw:ml-2 tw:text-sm tw:text-gray-600">
               {{ document.is_visible ? 'Виден всем пользователям' : 'Скрыт от обычных пользователей' }}
             </span>
-          </div>
-
-          <div v-if="hasRole('moderator')" class="tw:mb-4">
-            <label class="tw:block tw:text-xs tw:font-medium tw:text-gray-500 tw:mb-1">Объект</label>
-            <div class="tw:flex tw:items-center tw:gap-2 tw:max-w-md">
-              <select
-                v-model="factoryId"
-                :disabled="factorySaving"
-                class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:bg-white tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300 tw:disabled:opacity-50"
-                @change="handleSetFactory"
-              >
-                <option :value="null">— не привязан —</option>
-                <option v-for="f in factories" :key="f.id" :value="f.id">{{ f.name }}</option>
-              </select>
-            </div>
           </div>
 
           <div v-if="hasRole('moderator')" class="tw:mb-4">
@@ -135,7 +141,7 @@
           </div>
 
           <div class="tw:flex tw:items-center tw:gap-3 tw:mt-5">
-            <router-link to="/edit" class="tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors">Назад к списку</router-link>
+            <router-link to="/admin/documents" class="tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors">Назад к списку</router-link>
             <button
               v-if="user"
               type="button"
@@ -368,15 +374,17 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import http from '../api/http'
-import { useAuth } from '../composables/useAuth'
-import AppToolbar from '../components/AppToolbar.vue'
+import http from '../ceramic/api/http'
+import { useAuth } from '../ceramic/composables/useAuth'
 import AppPager from '../components/AppPager.vue'
 import AppModal from '../components/AppModal.vue'
 import PageGalleryViewer from '../components/PageGalleryViewer.vue'
 import { usePagedTable } from '../composables/usePagedTable'
 
 const route = useRoute()
+const adminHeading = inject('adminHeading', ref(''))
+adminHeading.value = 'Документ'
+
 const router = useRouter()
 const { user, hasRole } = useAuth()
 
@@ -398,9 +406,9 @@ const renameForm = ref('')
 const renaming = ref(false)
 const renameError = ref('')
 
-const factories = ref([])
-const factoryId = ref(null)
-const factorySaving = ref(false)
+const descriptionForm = ref('')
+const savingDescription = ref(false)
+const descriptionError = ref('')
 
 const confirmDeleteDialog = ref(false)
 const deleteReady = ref(false)
@@ -673,8 +681,9 @@ const loadDocument = async (id) => {
   try {
     const response = await http.get(`/api/documents/${id}`)
     document.value = response.data
+    adminHeading.value = document.value.name
     renameForm.value = document.value.name
-    factoryId.value = document.value.factory_id ?? null
+    descriptionForm.value = document.value.description || ''
   } catch (err) {
     const status = err.response ? err.response.status : null
     if (status === 401) {
@@ -682,7 +691,7 @@ const loadDocument = async (id) => {
       return
     }
     if (status === 403 || status === 404) {
-      router.push('/edit/access-denied')
+      router.push('/admin/access-denied')
       return
     }
     error.value = 'Не удалось загрузить документ.'
@@ -708,7 +717,7 @@ const loadGallery = async () => {
 }
 
 const openBranch = (item) => {
-  router.push(`/edit/${item.id}`)
+  router.push(`/admin/branches/${item.id}`)
 }
 
 const loadDocumentProperties = async () => {
@@ -732,28 +741,6 @@ const handleToggleVisibility = async (isVisible) => {
     console.error('Ошибка при изменении видимости документа:', err)
   } finally {
     visibilityLoading.value = false
-  }
-}
-
-const loadFactories = async () => {
-  try {
-    const { data } = await http.get('/api/ceramic/factories')
-    factories.value = data.items
-  } catch (err) {
-    console.error('Ошибка при загрузке объектов:', err)
-  }
-}
-
-const handleSetFactory = async () => {
-  factorySaving.value = true
-  try {
-    const fid = factoryId.value != null ? Number(factoryId.value) : null
-    await http.post(`/api/documents/${document.value.id}/factory`, { factory_id: fid })
-    document.value.factory_id = fid
-  } catch (err) {
-    console.error('Ошибка при привязке документа к объекту:', err)
-  } finally {
-    factorySaving.value = false
   }
 }
 
@@ -791,7 +778,7 @@ const confirmDeleteDocument = async () => {
   deleteLoading.value = true
   try {
     await http.post(`/api/documents/${document.value.id}/delete`, {})
-    router.push('/edit')
+    router.push('/admin/documents')
   } catch (err) {
     deleteError.value = 'Не удалось удалить документ.'
     console.error('Ошибка при удалении документа:', err)
@@ -802,12 +789,28 @@ const confirmDeleteDocument = async () => {
   }
 }
 
+const handleSaveDescription = async () => {
+  const description = descriptionForm.value.trim()
+  savingDescription.value = true
+  descriptionError.value = ''
+  try {
+    await http.post(`/api/documents/${document.value.id}/description`, { description })
+    document.value.description = description
+    descriptionForm.value = description
+  } catch (err) {
+    descriptionError.value = (err.response && err.response.data && err.response.data.detail) || 'Не удалось сохранить описание.'
+    console.error('Ошибка при сохранении описания документа:', err)
+  } finally {
+    savingDescription.value = false
+  }
+}
+
 const handleEditDocument = async () => {
   creatingBranch.value = true
   editError.value = ''
   try {
     const response = await http.post(`/api/documents/${document.value.id}/create_branch`, {})
-    router.push(`/edit/${response.data.branch_id}`)
+    router.push(`/admin/branches/${response.data.branch_id}`)
   } catch (err) {
     editError.value = (err.response && err.response.data && err.response.data.detail) || 'Не удалось создать набор изменений для редактирования.'
     console.error('Ошибка при создании ветки:', err)
@@ -822,7 +825,6 @@ onMounted(async () => {
     loadGallery()
     loadDocumentProperties()
     if (hasRole('moderator')) {
-      loadFactories()
       reloadBranches()
     }
   }

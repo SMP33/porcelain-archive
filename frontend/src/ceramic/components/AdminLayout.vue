@@ -47,7 +47,35 @@ async function onLogout() {
         <div class="tw:text-gray-500 tw:text-xs tw:mt-0.5">Управление</div>
       </router-link>
       <nav class="tw:flex tw:flex-col tw:py-3 tw:text-sm tw:flex-1">
+        <p class="tw:px-5 tw:pt-2 tw:pb-1 tw:text-[0.65rem] tw:uppercase tw:tracking-wider tw:text-gray-600">Архив</p>
+        <router-link v-if="hasRole('moderator')" to="/admin/documents"
+                     class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
+                     :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-document') }">
+          📄 Документы
+        </router-link>
+        <router-link to="/admin/branches"
+                     class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
+                     :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-branch') }">
+          ✎ Наборы изменений
+        </router-link>
+        <router-link to="/admin/tasks"
+                     class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
+                     :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-tasks') }">
+          ⚙️ Задачи
+        </router-link>
+        <router-link v-if="hasRole('moderator')" to="/admin/properties"
+                     class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
+                     :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-properties') }">
+          🏷 Указатели
+        </router-link>
+
         <template v-if="hasRole('admin')">
+          <p class="tw:px-5 tw:pt-4 tw:pb-1 tw:text-[0.65rem] tw:uppercase tw:tracking-wider tw:text-gray-600">Сайт</p>
+          <router-link to="/admin/objects"
+                       class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
+                       :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-objects') }">
+            🏺 Объекты
+          </router-link>
           <router-link to="/admin/feedback"
                        class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors tw:flex tw:items-center tw:gap-2"
                        :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-feedback') }">
@@ -56,15 +84,27 @@ async function onLogout() {
               {{ unreadFeedback }}
             </span>
           </router-link>
-          <router-link to="/admin/objects"
+          <router-link to="/admin/subscribers"
                        class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
-                       :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-objects') }">
-            🏭 Объекты
+                       :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-subscribers') }">
+            📬 Подписчики
           </router-link>
+
+          <p class="tw:px-5 tw:pt-4 tw:pb-1 tw:text-[0.65rem] tw:uppercase tw:tracking-wider tw:text-gray-600">Система</p>
           <router-link to="/admin/users"
                        class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
                        :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-users') }">
             👥 Пользователи
+          </router-link>
+          <router-link to="/admin/maintenance"
+                       class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
+                       :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-maintenance') }">
+            🛟 Обслуживание
+          </router-link>
+          <router-link to="/admin/server-log"
+                       class="tw:px-5 tw:py-2.5 tw:hover:bg-white/10 tw:transition-colors"
+                       :class="{ 'tw:bg-white/10 tw:text-white': isSection('ceramic-admin-server-log') }">
+            📜 Лог сервера
           </router-link>
         </template>
         <div class="tw:mt-auto tw:border-t tw:border-white/10 tw:pt-3">

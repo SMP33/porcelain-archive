@@ -1,8 +1,7 @@
 <template>
-  <div class="tw:min-h-screen tw:bg-gray-100">
-    <AppToolbar />
-    <main class="tw:md:pl-[232px]">
-      <div class="tw:border-b tw:border-gray-200 tw:bg-white tw:px-8 tw:py-4 tw:flex tw:items-center tw:justify-between">
+  <div>
+    <main>
+      <div class="tw:mb-4 tw:flex tw:items-center tw:justify-between">
         <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">Лог сервера</h1>
         <button
           type="button"
@@ -13,7 +12,7 @@
           <i class="mdi mdi-refresh tw:text-xl" :class="{ 'tw:animate-spin': serverLogLoading }" />
         </button>
       </div>
-      <div class="tw:px-8 tw:py-6">
+      <div>
         <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:p-6">
           <div v-if="serverLogLoading" class="tw:text-sm tw:text-gray-400">Загрузка…</div>
           <div v-else class="tw:max-h-[70vh] tw:overflow-y-auto tw:bg-ink-800 tw:rounded-lg">
@@ -28,9 +27,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import http from '../api/http'
-import { useAuth } from '../composables/useAuth'
-import AppToolbar from '../components/AppToolbar.vue'
+import http from '../ceramic/api/http'
+import { inject } from 'vue'
+import { useAuth } from '../ceramic/composables/useAuth'
 
 const router = useRouter()
 const route = useRoute()
@@ -51,7 +50,7 @@ const fetchServerLog = async () => {
       return
     }
     if (status === 403) {
-      router.push('/edit/access-denied')
+      router.push('/admin/access-denied')
       return
     }
     console.error('Ошибка при загрузке лога сервера:', error)
@@ -62,7 +61,7 @@ const fetchServerLog = async () => {
 
 onMounted(() => {
   if (!hasRole('admin')) {
-    router.push('/edit/access-denied')
+    router.push('/admin/access-denied')
     return
   }
   fetchServerLog()

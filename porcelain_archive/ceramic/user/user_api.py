@@ -9,6 +9,9 @@ from .user_service import ROLE_LEVELS, role_at_least, user_service
 router = APIRouter(prefix="/api/ceramic/users", tags=["users"])
 
 SESSION_COOKIE_NAME = "ceramic_session_token"
+# Сессия общая с архивом (одна таблица session) - его API читает свою cookie,
+# поэтому вход в админку ставит обе.
+ARCHIVE_SESSION_COOKIE_NAME = "session_token"
 SESSION_MAX_AGE = 14 * 24 * 3600
 
 
@@ -48,15 +51,16 @@ async def login(request: Request, response: Response):
             )
         raise HTTPException(status_code=401, detail="Неверное имя пользователя или пароль")
 
-    response.set_cookie(
-        SESSION_COOKIE_NAME,
-        result["token"],
-        httponly=True,
-        samesite="lax",
-        secure=config.ceramicsite.app_env == "production",
-        max_age=SESSION_MAX_AGE,
-        path="/",
-    )
+    for cookie_name in (SESSION_COOKIE_NAME, ARCHIVE_SESSION_COOKIE_NAME):
+        response.set_cookie(
+            cookie_name,
+            result["token"],
+            httponly=True,
+            samesite="lax",
+            secure=config.ceramicsite.app_env == "production",
+            max_age=SESSION_MAX_AGE,
+            path="/",
+        )
     return result["user"]
 
 
@@ -66,10 +70,22 @@ async def logout(request: Request, response: Response):
     if token:
         await user_service.logout(token)
     response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    response.delete_cookie(ARCHIVE_SESSION_COOKIE_NAME, path="/")
 
 
 @router.get("/me")
-async def me(user: dict = Depends(require_user)):
+async def me(request: Request, response: Response, user: dict = Depends(require_user)):
+    # Восстановление cookie архива для сессий, созданных до её появления.
+    if not request.cookies.get(ARCHIVE_SESSION_COOKIE_NAME):
+        response.set_cookie(
+            ARCHIVE_SESSION_COOKIE_NAME,
+            request.cookies.get(SESSION_COOKIE_NAME, ""),
+            httponly=True,
+            samesite="lax",
+            secure=config.ceramicsite.app_env == "production",
+            max_age=SESSION_MAX_AGE,
+            path="/",
+        )
     return user
 
 

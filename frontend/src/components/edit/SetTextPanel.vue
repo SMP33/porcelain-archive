@@ -48,7 +48,7 @@
 import { ref, computed, watch } from 'vue'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import http from '../../api/http'
+import http from '../../ceramic/api/http'
 import PageNumberField from '../PageNumberField.vue'
 import AppListbox from '../AppListbox.vue'
 

@@ -13,7 +13,7 @@ const newPassword = ref('')
 
 const newUsername = ref('')
 const newUserPassword = ref('')
-const newUserRole = ref('contributor')
+const newUserRole = ref('user')
 const creating = ref(false)
 
 async function load() {
@@ -28,7 +28,7 @@ async function createUser() {
     await http.post('/api/ceramic/users', { username: newUsername.value, password: newUserPassword.value, role: newUserRole.value })
     newUsername.value = ''
     newUserPassword.value = ''
-    newUserRole.value = 'contributor'
+    newUserRole.value = 'user'
     await load()
   } finally {
     creating.value = false
@@ -73,7 +73,8 @@ async function savePassword(u) {
               <span v-if="currentUser && u.username === currentUser.username" class="tw:ml-1.5 tw:text-xs tw:text-gray-400">(вы)</span>
             </td>
             <td class="tw:px-4 tw:py-3">
-              <span v-if="u.role === 'admin'" class="tw:inline-block tw:px-2 tw:py-0.5 tw:rounded-full tw:text-xs tw:font-medium tw:bg-red-100 tw:text-red-700">Администратор</span>
+              <span v-if="u.role === 'moderator'" class="tw:inline-block tw:px-2 tw:py-0.5 tw:rounded-full tw:text-xs tw:font-medium tw:bg-amber-100 tw:text-amber-700">Модератор</span>
+              <span v-else-if="u.role === 'admin'" class="tw:inline-block tw:px-2 tw:py-0.5 tw:rounded-full tw:text-xs tw:font-medium tw:bg-red-100 tw:text-red-700">Администратор</span>
               <span v-else class="tw:inline-block tw:px-2 tw:py-0.5 tw:rounded-full tw:text-xs tw:font-medium tw:bg-gray-100 tw:text-gray-600">Участник</span>
             </td>
             <td class="tw:px-4 tw:py-3 tw:text-gray-400 tw:hidden tw:sm:table-cell tw:text-xs">{{ u.created_at }}</td>
@@ -126,7 +127,8 @@ async function savePassword(u) {
           <label class="tw:block tw:text-sm tw:font-medium tw:text-gray-700 tw:mb-1">Роль</label>
           <select v-model="newUserRole"
                   class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-red-300">
-            <option value="contributor">Участник — только добавление документов</option>
+            <option value="user">Участник — добавление документов и правок</option>
+            <option value="moderator">Модератор — проверка правок, видимость, описания</option>
             <option value="admin">Администратор — полный доступ</option>
           </select>
         </div>

@@ -1,11 +1,10 @@
 <template>
-  <div class="tw:min-h-screen tw:bg-gray-100">
-    <AppToolbar />
-    <main class="tw:md:pl-[232px]">
-      <div class="tw:border-b tw:border-gray-200 tw:bg-white tw:px-8 tw:py-4">
+  <div>
+    <main>
+      <div class="tw:mb-4">
         <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">Наборы изменений</h1>
       </div>
-      <div class="tw:px-8 tw:py-6">
+      <div>
         <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:overflow-hidden">
           <div class="tw:px-4 tw:py-3 tw:border-b tw:border-gray-200 tw:flex tw:flex-wrap tw:items-center tw:gap-3">
             <span class="tw:text-sm tw:text-gray-500">Статус</span>
@@ -83,8 +82,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import http from '../api/http'
-import AppToolbar from '../components/AppToolbar.vue'
+import http from '../ceramic/api/http'
 import AppPager from '../components/AppPager.vue'
 import { usePagedTable } from '../composables/usePagedTable'
 
@@ -140,7 +138,7 @@ function toggleStatus(value) {
 }
 
 function openBranch(item) {
-  router.push(`/edit/${item.id}`)
+  router.push(`/admin/branches/${item.id}`)
 }
 
 onMounted(reload)

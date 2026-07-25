@@ -1,12 +1,11 @@
 <template>
-  <div class="tw:min-h-screen tw:bg-gray-100">
-    <AppToolbar />
-    <main class="tw:md:pl-[232px]">
-      <div class="tw:border-b tw:border-gray-200 tw:bg-white tw:px-8 tw:py-4">
+  <div>
+    <main>
+      <div class="tw:mb-4">
         <div class="tw:flex tw:items-center tw:justify-between tw:gap-4 tw:flex-wrap">
           <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">
             <template v-if="branch">
-              <router-link :to="`/edit/document/${branch.documentId}`" class="tw:hover:text-clay-500 tw:transition-colors">{{ branch.documentName }}</router-link>
+              <router-link :to="`/admin/documents/${branch.documentId}`" class="tw:hover:text-clay-500 tw:transition-colors">{{ branch.documentName }}</router-link>
               <span class="tw:text-gray-300 tw:mx-2">/</span>
               <span>Набор изменений № {{ branch.id }}</span>
             </template>
@@ -108,7 +107,7 @@
           </div>
         </div>
       </div>
-      <div class="tw:px-8 tw:py-6 tw:space-y-4">
+      <div class="tw:space-y-4">
         <AppModal v-model="confirmStatusDialog" max-width="tw:max-w-md" :persistent="true" :show-close="false">
           <h2 class="tw:font-serif tw:font-bold tw:text-lg tw:text-ink-900 tw:mb-4">Подтверждение изменения статуса</h2>
           <p class="tw:text-sm tw:text-gray-600">
@@ -295,11 +294,10 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, inject, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import http from '../api/http'
-import { useAuth } from '../composables/useAuth'
-import AppToolbar from '../components/AppToolbar.vue'
+import http from '../ceramic/api/http'
+import { useAuth } from '../ceramic/composables/useAuth'
 import AppModal from '../components/AppModal.vue'
 import PageGalleryViewer from '../components/PageGalleryViewer.vue'
 import AddPagesPanel from '../components/edit/AddPagesPanel.vue'
@@ -311,6 +309,8 @@ import ViewChangesPanel from '../components/edit/ViewChangesPanel.vue'
 import BranchCommentsPanel from '../components/edit/BranchCommentsPanel.vue'
 
 const route = useRoute()
+inject('adminHeading', ref('')).value = 'Набор изменений'
+
 const router = useRouter()
 const { user, hasRole } = useAuth()
 
@@ -514,7 +514,7 @@ const loadBranch = async (id) => {
       return
     }
     if (status === 403 || status === 404) {
-      router.push('/edit/access-denied')
+      router.push('/admin/access-denied')
       return
     }
     error.value = 'Не удалось загрузить набор изменений.'

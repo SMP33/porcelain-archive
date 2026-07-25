@@ -1,11 +1,10 @@
 <template>
-  <div class="tw:min-h-screen tw:bg-gray-100">
-    <AppToolbar />
-    <main class="tw:md:pl-[232px]">
-      <div class="tw:border-b tw:border-gray-200 tw:bg-white tw:px-8 tw:py-4">
+  <div>
+    <main>
+      <div class="tw:mb-4">
         <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">Администрирование</h1>
       </div>
-      <div class="tw:px-8 tw:py-6">
+      <div>
         <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:p-6">
           <button
             type="button"
@@ -27,9 +26,11 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import http from '../api/http'
-import { useAuth } from '../composables/useAuth'
-import AppToolbar from '../components/AppToolbar.vue'
+import http from '../ceramic/api/http'
+import { inject } from 'vue'
+import { useAuth } from '../ceramic/composables/useAuth'
+
+inject('adminHeading').value = 'Обслуживание'
 
 const router = useRouter()
 const { hasRole } = useAuth()
@@ -59,7 +60,7 @@ async function handleBackup() {
 
 onMounted(() => {
   if (!hasRole('admin')) {
-    router.push('/edit/access-denied')
+    router.push('/admin/access-denied')
   }
 })
 </script>

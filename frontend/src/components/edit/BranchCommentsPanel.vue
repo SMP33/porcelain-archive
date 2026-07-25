@@ -60,7 +60,7 @@
 
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
-import http from '../../api/http'
+import http from '../../ceramic/api/http'
 import AppModal from '../AppModal.vue'
 
 const props = defineProps({

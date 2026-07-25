@@ -1,8 +1,7 @@
 <template>
-  <div class="tw:min-h-screen tw:bg-gray-100">
-    <AppToolbar />
-    <main class="tw:md:pl-[232px] tw:flex tw:flex-col tw:h-screen">
-      <div class="tw:border-b tw:border-gray-200 tw:bg-white tw:px-8 tw:py-4 tw:flex tw:items-center tw:justify-between tw:shrink-0">
+  <div>
+    <main class="tw:flex tw:flex-col" style="height: calc(100vh - 9rem)">
+      <div class="tw:mb-4 tw:flex tw:items-center tw:justify-between tw:shrink-0">
         <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">Указатели</h1>
         <button
           v-if="hasRole('admin')"
@@ -14,7 +13,7 @@
         </button>
       </div>
 
-      <div class="tw:flex-1 tw:min-h-0 tw:px-8 tw:py-6">
+      <div class="tw:flex-1 tw:min-h-0 ">
         <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:h-full tw:overflow-hidden">
           <AppSplitter>
             <template #left>
@@ -230,9 +229,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import http from '../api/http'
-import { useAuth } from '../composables/useAuth'
-import AppToolbar from '../components/AppToolbar.vue'
+import http from '../ceramic/api/http'
+import { inject } from 'vue'
+import { useAuth } from '../ceramic/composables/useAuth'
 import AppModal from '../components/AppModal.vue'
 import AppSplitter from '../components/AppSplitter.vue'
 
@@ -448,7 +447,7 @@ async function handleDeleteEnumValue(item) {
 
 onMounted(() => {
   if (!hasRole('moderator')) {
-    router.push('/edit/access-denied')
+    router.push('/admin/access-denied')
     return
   }
   loadProperties()

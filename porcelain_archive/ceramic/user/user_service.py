@@ -9,11 +9,11 @@ import psycopg
 
 from porcelain_archive.database import db
 
-# Роли, видимые ceramic-фронтенду. Общая таблица member хранит user/moderator/admin -
-# member.user и member.moderator обе отображаются наружу как "contributor".
-ROLE_LEVELS = {"contributor": 1, "admin": 2}
+# Роли общие с архивом (см. ROLES.md): user < moderator < admin.
+# "contributor" - устаревший синоним user, оставлен для старых проверок.
+ROLE_LEVELS = {"user": 1, "contributor": 1, "moderator": 2, "admin": 3}
 
-_CERAMIC_TO_MEMBER_ROLE = {"contributor": "user", "admin": "admin"}
+_CERAMIC_TO_MEMBER_ROLE = {"user": "user", "contributor": "user", "moderator": "moderator", "admin": "admin"}
 
 
 def role_at_least(role: str | None, minimum: str) -> bool:
@@ -21,7 +21,7 @@ def role_at_least(role: str | None, minimum: str) -> bool:
 
 
 def _member_role_to_ceramic(role: str | None) -> str:
-    return "admin" if role == "admin" else "contributor"
+    return role if role in _CERAMIC_TO_MEMBER_ROLE else "user"
 
 
 # In-memory throttle по неудачным попыткам входа: 5 попыток / 15 минут на IP.
