@@ -1,8 +1,8 @@
 import { ref } from 'vue'
 import http from '../api/http'
 
-// Иерархия ролей - contributor может добавлять документы, admin имеет полный доступ
-const ROLE_LEVELS = { contributor: 1, admin: 2 }
+// Иерархия ролей общая с архивом (см. ROLES.md); contributor - синоним user
+const ROLE_LEVELS = { user: 1, contributor: 1, moderator: 2, admin: 3 }
 
 const user = ref(null)
 const authChecked = ref(false)
