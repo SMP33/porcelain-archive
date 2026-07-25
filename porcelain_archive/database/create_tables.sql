@@ -112,3 +112,8 @@ CREATE    TABLE IF NOT EXISTS document_property (
           document_id BIGINT REFERENCES document (id) ON DELETE SET NULL, -- Документ
           property_enum_id BIGINT REFERENCES property_enum (id) ON DELETE SET NULL -- Значение указателя
           );
+
+-- Применённые патчи схемы БД (см. patch.py)
+CREATE    TABLE IF NOT EXISTS patch (
+          uuid UUID PRIMARY KEY UNIQUE NOT NULL -- Уникальный идентификатор патча
+          );

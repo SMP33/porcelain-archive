@@ -6,6 +6,7 @@ from psycopg import AsyncConnection
 from psycopg_pool import AsyncConnectionPool
 
 from porcelain_archive.config import config
+from porcelain_archive.database.patch import apply_patches
 
 
 class Database:
@@ -51,22 +52,30 @@ class Database:
 
     async def init(self) -> None:
         """
-        Открывает пул соединений и выполняет create_tables.sql, patch_tables.sql,
-        create_triggers.sql и fill_initial_data.sql.
+        Открывает пул соединений и выполняет create_tables.sql и create_triggers.sql,
+        затем применяет неприменённые патчи схемы БД (см. patch.py) и выполняет
+        fill_initial_data.sql.
         Должна вызываться из async-контекста (lifespan FastAPI при старте сервера).
         """
         await self._pool.open()
 
         async with self._pool.connection() as conn:
-            files = ['create_tables.sql', 'patch_tables.sql', 'create_triggers.sql', 'fill_initial_data.sql']
-            
+            files = ['create_tables.sql', 'create_triggers.sql']
+
             sql_script=''
             for file in files:
                 sql_file_path = os.path.join(os.path.dirname(__file__), file)
                 with open(sql_file_path, 'r', encoding='utf-8') as f:
                     sql_script += f.read() + '\n'
-            
+
             await conn.execute(sql_script)
+
+        await apply_patches(self._pool)
+
+        async with self._pool.connection() as conn:
+            sql_file_path = os.path.join(os.path.dirname(__file__), 'fill_initial_data.sql')
+            with open(sql_file_path, 'r', encoding='utf-8') as f:
+                await conn.execute(f.read())
 
         print("Database pool opened, tables initialized/verified.")
 

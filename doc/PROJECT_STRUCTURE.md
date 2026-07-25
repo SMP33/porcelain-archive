@@ -1,0 +1,20 @@
+# Project Structure
+- porcelain_archive - backend - серверная часть, единый python-пакет
+- porcelain_archive/server.py - FastAPI-приложение (роуты, статика frontend/dist)
+- porcelain_archive/__main__.py - точка входа сервера (config.ini, генерация config.py, запуск uvicorn)
+- porcelain_archive/document, porcelain_archive/user, porcelain_archive/task - роутеры (*_api.py) и сервисы (*_service.py) по доменам
+- routers в fastapi должны быть максимально краткими и должны быть только прослойкой между FastApi и service
+- porcelain_archive/database - база данных на postgresql, может использоваться несколькими сервисами сразу
+- porcelain_archive/config - config.py (класс доступа к настройкам) и generator.py (генератор config.py)
+- porcelain_archive/pdf - извлечение текстовых блоков из PDF
+- frontend - фронтенд, npm/Vite-проект (Vue3 + Vuetify + vue-router), исходники в frontend/src, сборка в frontend/dist (гитигнор, отдаётся FastAPI через porcelain_archive/server.py)
+- porcelain_archive/task_manager - менеджер задач
+- porcelain_archive/task/script - задачи, которыми управляет task_manager
+- папки и остальные каталоги в корне проекта - рабочие файлы, которые должны читаться и изменяться только по запросу
+- js-packages - кастомные js пакеты
+- postgresql - обеспечивается извне
+- запуск сервера - вручную .\.venv\Scripts\python.exe -m porcelain_archive
+- doc/TRANSLATE.md - словарь терминов, которые используются в коде, и как они должны отображаться для пользователя в frontend
+- doc/ROLES.md - список возможностей для каждой роли а также неавторизованных пользователей. Каждая следующая роль имеет все возможности предыдущей
+- раздел сайта edit - то что относится к редактированию контента
+- основной раздел сайте - то что не относится к edit
