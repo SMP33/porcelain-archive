@@ -11,3 +11,5 @@
 @doc/DONT.md
 
 @doc/PATCHES.md
+
+@doc/PROPERTY.md

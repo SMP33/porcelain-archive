@@ -92,25 +92,18 @@ CREATE    TABLE IF NOT EXISTS property (
           tag TEXT NOT NULL UNIQUE, -- Имя
           title TEXT NOT NULL UNIQUE, -- Отображаемое имя
           description TEXT, -- Описание
-          is_list INTEGER DEFAULT 0, -- Список или одно значение
           is_editable INTEGER DEFAULT 1, -- Доступно ли для редактирования
           is_visible INTEGER DEFAULT 0, -- Виден ли обычным пользователям
-          is_system INTEGER DEFAULT 0, -- Системный параметр
-          view_order INTEGER DEFAULT 0 -- Порядок отображения
-          );
-
--- Доступные значения указателей
-CREATE    TABLE IF NOT EXISTS property_enum (
-          id BIGSERIAL PRIMARY KEY, -- Уникальный id
-          property_id BIGINT REFERENCES property (id) ON DELETE SET NULL, -- Указатель
-          value TEXT, -- Значение
-          is_pointer INTEGER DEFAULT 1 -- Считается ли значение указателем
+          view_order INTEGER DEFAULT 0, -- Порядок отображения
+          type TEXT DEFAULT 'string' -- Тип
+          CHECK (type IN ('string', 'bool', 'combobox', 'multicheckbox'))
           );
 
 -- Фактические значения указателей
 CREATE    TABLE IF NOT EXISTS document_property (
           document_id BIGINT REFERENCES document (id) ON DELETE SET NULL, -- Документ
-          property_enum_id BIGINT REFERENCES property_enum (id) ON DELETE SET NULL -- Значение указателя
+          property_id BIGINT REFERENCES property (id) ON DELETE SET NULL, -- Указатель
+          value TEXT -- Значение
           );
 
 -- Применённые патчи схемы БД (см. patch.py)
