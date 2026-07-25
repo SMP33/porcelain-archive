@@ -58,7 +58,7 @@ function sendAnother() {
 </script>
 
 <template>
-  <main class="tw:flex-1 tw:max-w-6xl tw:mx-auto tw:px-4 tw:py-8 tw:w-full">
+  <main class="tw:flex-1 tw:max-w-6xl tw:mx-auto tw:px-4 tw:pt-16 tw:pb-8 tw:w-full">
   <div class="tw:grid tw:grid-cols-1 tw:md:grid-cols-2 tw:gap-8 tw:md:gap-16 tw:items-start">
 
     <div>

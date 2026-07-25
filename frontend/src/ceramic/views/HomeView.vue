@@ -3,7 +3,9 @@ import { ref, onMounted } from 'vue'
 import http from '../api/http'
 import { useHomeAnimations } from '../composables/useHomeAnimations'
 import teapotIcon from '../assets/img/teapot-icon.png'
-import cupSaucer from '../assets/img/cup-saucer.png'
+import cupSaucerReal from '../assets/img/cup-saucer-real.png'
+import sugarBowl from '../assets/img/sugar-bowl.png'
+import saucerPlate from '../assets/img/saucer-plate.png'
 
 const stats = ref({ doc_count: 0, page_count: 0 })
 
@@ -38,16 +40,16 @@ const {
 } = useHomeAnimations()
 
 const searchSteps = [
-  ['01', 'Выберите завод', 'Перейдите в раздел «Объекты» — там список всех заводов с описаниями, датами и географией.'],
-  ['02', 'Найдите документ', 'Воспользуйтесь поиском по материалам: по типу документа, дате или ключевому слову.'],
-  ['03', 'Запросите копию', 'Высококачественные сканы предоставляются по запросу для некоммерческого использования.'],
+  ['01', 'Выберите объект', 'Перейдите в раздел «Объекты» — там каталог фарфоровых изделий с описаниями и фотографиями.'],
+  ['02', 'Найдите документ', 'Воспользуйтесь поиском по документам: по типу документа, дате или ключевому слову.'],
+  ['03', 'Помогите с доработкой', 'Нашли неточность или ошибку в архиве — сообщите нам через форму обратной связи.'],
 ]
 
 // Кнопки правого столбца - по одной на строку с пунктами 01/02/03.
 const searchLinks = [
-  { to: '/search', title: 'Поиск по материалам →' },
-  { to: '/feedback', title: 'Связаться с нами →', subtitle: 'Помочь улучшить архив' },
-  { to: '/feedback', title: 'Предложить материалы в архив →', subtitle: 'Прикрепите документы или сведения' },
+  { to: '/objects', title: 'Объекты →', subtitle: 'Каталог фарфоровых изделий' },
+  { to: '/materials', title: 'Материалы →' },
+  { to: '/feedback', title: 'Обратная связь →', subtitle: 'Напишите нам' },
 ]
 
 const teamMembers = [
@@ -192,11 +194,11 @@ const teamMembers = [
              class="tw:min-h-screen tw:relative tw:flex tw:items-center tw:justify-center tw:overflow-hidden" style="background-color: #0f172a;">
 
       <div class="prob-obj prob-obj-left">
-        <img :src="cupSaucer" alt="" class="tw:object-contain tw:drop-shadow-2xl" style="width: min(340px, 32vw); max-height: 55vh;">
+        <img :src="sugarBowl" alt="" class="tw:object-contain tw:drop-shadow-2xl" style="width: min(260px, 24.5vw); max-height: 55vh;">
       </div>
 
       <div class="prob-obj prob-obj-right">
-        <img :src="cupSaucer" alt="" class="tw:object-contain tw:drop-shadow-2xl" style="width: min(340px, 32vw); max-height: 55vh; transform: scaleX(-1);">
+        <img :src="cupSaucerReal" alt="" class="tw:object-contain tw:drop-shadow-2xl" style="width: min(272px, 25.6vw); max-height: 55vh;">
       </div>
 
       <div class="prob-text">
@@ -313,15 +315,15 @@ const teamMembers = [
 
     <!-- ===== ЭКРАН 6: РЕЗУЛЬТАТЫ И ПОИСК ===== -->
     <section id="home-results" ref="resultsSectionRef" class="tw:min-h-screen tw:bg-white tw:flex tw:flex-col">
-      <div id="results-saucer" ref="saucerRef"></div>
+      <div id="results-saucer" ref="saucerRef" :style="{ backgroundImage: `url(${saucerPlate})` }"></div>
       <div class="tw:flex-1 tw:max-w-5xl tw:mx-auto tw:px-10 tw:pt-20 tw:pb-16 tw:w-full tw:flex tw:flex-col">
 
         <div class="tw:relative">
           <p class="tw:text-xs tw:font-semibold tw:tracking-widest tw:uppercase tw:absolute tw:-top-6 tw:text-gray-400">Архив открыт</p>
-          <h2 class="tw:font-serif tw:text-3xl tw:font-bold tw:text-ink-900 tw:mb-12">Как искать материалы?</h2>
+          <h2 class="tw:font-serif tw:text-3xl tw:font-bold tw:text-ink-900 tw:mb-12">Как работать с архивом?</h2>
         </div>
 
-        <div class="tw:grid tw:grid-cols-2 tw:gap-x-16 tw:gap-y-10 tw:items-start">
+        <div class="tw:grid tw:grid-cols-2 tw:gap-x-8 tw:gap-y-10 tw:items-start">
 
           <template v-for="(step, idx) in searchSteps" :key="step[0]">
             <div class="tw:flex tw:gap-5">
@@ -333,12 +335,12 @@ const teamMembers = [
             </div>
 
             <router-link :to="searchLinks[idx].to"
-               class="tw:self-start tw:block tw:border tw:border-gray-200 tw:rounded-lg tw:px-4 tw:py-3 tw:w-2/3 tw:hover:border-gray-300 tw:transition-colors tw:group">
+               class="tw:self-start tw:block tw:border tw:border-gray-200 tw:rounded-lg tw:px-4 tw:py-3 tw:w-1/2 tw:hover:border-gray-300 tw:transition-colors tw:group">
               <div class="tw:text-sm tw:font-semibold tw:text-ink-900 tw:mb-0.5 tw:group-hover:text-clay-500 tw:transition-colors">
                 {{ searchLinks[idx].title }}
               </div>
               <p class="tw:text-xs tw:text-gray-400">
-                <template v-if="idx === 0">{{ stats.doc_count }} документов в базе</template>
+                <template v-if="idx === 1">{{ stats.doc_count }} документов в базе</template>
                 <template v-else>{{ searchLinks[idx].subtitle }}</template>
               </p>
             </router-link>
@@ -497,11 +499,20 @@ const teamMembers = [
 }
 .prob-obj-right { transition-delay: 0.1s; }
 
+/* Сахарница (left) остаётся на исходном месте (центр по высоте контейнера).
+   Чашка с блюдцем (right) немного ниже: у самого фото ещё и разный отступ
+   до реального края предмета внутри рамки (не только разная высота
+   картинок), поэтому центрирование по контейнеру не совмещает низ - сдвиг
+   подобран по фактическим видимым краям обоих изделий. */
+.prob-obj-right {
+  transform: translate(-50%, calc(-50% + 52px));
+}
+
 #home-problem.animated .prob-obj-left  {
   transform: translate(calc(-50% - 32vw), -50%);
 }
 #home-problem.animated .prob-obj-right {
-  transform: translate(calc(-50% + 32vw), -50%);
+  transform: translate(calc(-50% + 32vw), calc(-50% + 52px));
 }
 
 .prob-text {
@@ -580,28 +591,21 @@ const teamMembers = [
    SAUCER (Screen 6)
    ============================ */
 #home-results { position: relative; overflow: hidden; }
+/* Круглая маска статична (не трансформируется) - вращающийся/сдвигаемый
+   слой лежит внутри как обычный прямоугольник. Так браузер не тесселирует
+   скруглённую маску заново на каждом кадре анимации - это убирает
+   диагональный шов-артефакт, характерный для transform на border-radius:50%. */
 #results-saucer {
   position: absolute;
   right: -140px;
   top: 20px;
-  width: 448px;
-  height: 448px;
+  width: 500px;
+  height: 500px;
   border-radius: 50%;
-  background: #f5ede6;
-  border: 3px solid #c8a898;
+  background-size: cover;
+  background-position: center;
   transform-origin: center center;
   will-change: transform;
-}
-#results-saucer::after {
-  content: '';
-  position: absolute;
-  top: 30px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #6b1a1a;
 }
 
 /* ============================

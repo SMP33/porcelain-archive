@@ -136,8 +136,8 @@ export function useHomeAnimations() {
       ribbonPathRef.value.style.strokeDasharray = String(len)
       ribbonPathRef.value.style.strokeDashoffset = String(len)
     }
-    // Лента рисуется по клику, но и сама проявляется через 10с после открытия.
-    ribbonTimer = setTimeout(drawRibbonOnce, 10000)
+    // Лента рисуется по клику, но и сама проявляется через 6с после открытия.
+    ribbonTimer = setTimeout(drawRibbonOnce, 6000)
     tickShimmer(performance.now())
 
     window.addEventListener('scroll', updateSaucer, { passive: true })
