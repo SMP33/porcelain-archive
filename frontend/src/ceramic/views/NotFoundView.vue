@@ -18,7 +18,7 @@ import teapotIcon from '../assets/img/teapot-icon.png'
            class="tw:px-5 tw:py-2.5 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors">
           На главную
         </router-link>
-        <router-link to="/search"
+        <router-link to="/materials"
            class="tw:px-5 tw:py-2.5 tw:border tw:border-clay-200 tw:hover:bg-clay-50 tw:text-ink-800 tw:text-sm tw:rounded-lg tw:transition-colors">
           Поиск
         </router-link>

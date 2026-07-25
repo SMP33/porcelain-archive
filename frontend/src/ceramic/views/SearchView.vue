@@ -7,13 +7,9 @@ import { useDualRangeSlider } from '../composables/useDualRangeSlider'
 const route = useRoute()
 const router = useRouter()
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 21   // кратно трём колонкам сетки
 
 const q = computed(() => route.query.q || '')
-const docType = computed(() => route.query.doc_type || '')
-const authenticity = computed(() => route.query.authenticity || '')
-const language = computed(() => route.query.language || '')
-const keyword = computed(() => route.query.keyword || '')
 const yearFrom = computed(() => route.query.year_from || '')
 const yearTo = computed(() => route.query.year_to || '')
 const page = computed(() => Math.max(1, parseInt(route.query.page) || 1))
@@ -32,10 +28,7 @@ const results = ref([])
 const total = ref(0)
 const loading = ref(true)
 
-const facets = ref({
-  doc_types: [], authenticities: [], languages: [], keywords: [], properties: [],
-  year_min: null, year_max: null,
-})
+const facets = ref({ properties: [], year_min: null, year_max: null })
 
 // enum_id -> {value, title указателя} для подписей активных фильтров.
 const pointerLabels = computed(() => {
@@ -59,10 +52,6 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)
 function activeFilterParams() {
   const params = {}
   if (q.value) params.q = q.value
-  if (docType.value) params.doc_type = docType.value
-  if (authenticity.value) params.authenticity = authenticity.value
-  if (language.value) params.language = language.value
-  if (keyword.value) params.keyword = keyword.value
   if (yearFrom.value) params.year_from = yearFrom.value
   if (yearTo.value) params.year_to = yearTo.value
   if (pointers.value.length) params.pointer = pointers.value
@@ -97,7 +86,7 @@ function reload() {
 
 onMounted(reload)
 watch(
-  () => [q.value, docType.value, authenticity.value, language.value, keyword.value, yearFrom.value, yearTo.value, pointers.value.join(','), page.value],
+  () => [q.value, yearFrom.value, yearTo.value, pointers.value.join(','), page.value],
   reload
 )
 
@@ -129,12 +118,20 @@ function goToPage(p) {
 }
 
 const hasActiveFilters = computed(
-  () => q.value || docType.value || authenticity.value || language.value || keyword.value || yearFrom.value || yearTo.value || pointers.value.length
+  () => q.value || yearFrom.value || yearTo.value || pointers.value.length
 )
+
+// «1958» или «1955–1960» - даты документа для карточки
+function formatDates(doc) {
+  const from = (doc.date_from || '').slice(0, 4)
+  const to = (doc.date_to || '').slice(0, 4)
+  if (from && to && from !== to) return `${from}–${to}`
+  return from || to || ''
+}
 </script>
 
 <template>
-  <main class="tw:flex-1 tw:max-w-6xl tw:mx-auto tw:px-4 tw:py-8 tw:w-full">
+  <main class="tw:flex-1 tw:max-w-6xl tw:mx-auto tw:px-4 tw:pt-16 tw:pb-16 tw:w-full" style="min-height: calc(100vh - 4rem);">
   <div class="tw:flex tw:gap-8 tw:items-start">
 
     <!-- Sidebar: filters -->
@@ -151,22 +148,6 @@ const hasActiveFilters = computed(
            class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
           «{{ q }}» <span class="tw:hover:text-clay-900 tw:font-bold tw:leading-none">×</span>
         </router-link>
-        <router-link v-if="docType" :to="{ query: withoutKeys(['doc_type']) }"
-           class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
-          {{ docType }} <span class="tw:hover:text-clay-900 tw:font-bold tw:leading-none">×</span>
-        </router-link>
-        <router-link v-if="authenticity" :to="{ query: withoutKeys(['authenticity']) }"
-           class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
-          {{ authenticity }} <span class="tw:hover:text-clay-900 tw:font-bold tw:leading-none">×</span>
-        </router-link>
-        <router-link v-if="language" :to="{ query: withoutKeys(['language']) }"
-           class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
-          {{ language }} <span class="tw:hover:text-clay-900 tw:font-bold tw:leading-none">×</span>
-        </router-link>
-        <router-link v-if="keyword" :to="{ query: withoutKeys(['keyword']) }"
-           class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
-          {{ keyword }} <span class="tw:hover:text-clay-900 tw:font-bold tw:leading-none">×</span>
-        </router-link>
         <router-link v-if="yearFrom || yearTo" :to="{ query: withoutKeys(['year_from', 'year_to']) }"
            class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
           {{ yearFrom || facets.year_min }}–{{ yearTo || facets.year_max }} <span class="tw:hover:text-clay-900 tw:font-bold tw:leading-none">×</span>
@@ -175,7 +156,7 @@ const hasActiveFilters = computed(
            class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
           {{ pointerLabels[pid] || pid }} <span class="tw:hover:text-clay-900 tw:font-bold tw:leading-none">×</span>
         </button>
-        <router-link to="/search" class="tw:text-xs tw:text-gray-400 tw:hover:text-gray-600 tw:transition-colors">Сбросить всё</router-link>
+        <router-link to="/materials" class="tw:text-xs tw:text-gray-400 tw:hover:text-gray-600 tw:transition-colors">Сбросить всё</router-link>
       </div>
 
       <!-- Период -->
@@ -202,65 +183,9 @@ const hasActiveFilters = computed(
         </form>
       </div>
 
-      <!-- Тип документа -->
-      <div v-if="facets.doc_types.length" class="tw:mb-6">
-        <p class="tw:text-xs tw:font-semibold tw:text-gray-400 tw:uppercase tw:tracking-wider tw:mb-2">Тип</p>
-        <ul class="tw:space-y-0.5">
-          <li v-for="t in facets.doc_types" :key="t.id">
-            <router-link :to="{ query: { ...route.query, doc_type: t.id, page: undefined } }"
-               class="tw:flex tw:items-center tw:justify-between tw:px-2 tw:py-1 tw:rounded-lg tw:text-sm tw:transition-colors"
-               :class="docType === t.id ? 'tw:bg-clay-100 tw:text-clay-700 tw:font-medium' : 'tw:text-gray-600 tw:hover:bg-gray-100'">
-              <span class="tw:truncate">{{ t.id }}</span>
-              <span class="tw:text-xs tw:text-gray-400 tw:shrink-0 tw:ml-1">{{ t.count }}</span>
-            </router-link>
-          </li>
-        </ul>
-      </div>
 
-      <!-- Подлинность -->
-      <div v-if="facets.authenticities.length" class="tw:mb-6">
-        <p class="tw:text-xs tw:font-semibold tw:text-gray-400 tw:uppercase tw:tracking-wider tw:mb-2">Подлинность</p>
-        <ul class="tw:space-y-0.5">
-          <li v-for="a in facets.authenticities" :key="a.id">
-            <router-link :to="{ query: { ...route.query, authenticity: a.id, page: undefined } }"
-               class="tw:flex tw:items-center tw:justify-between tw:px-2 tw:py-1 tw:rounded-lg tw:text-sm tw:transition-colors"
-               :class="authenticity === a.id ? 'tw:bg-clay-100 tw:text-clay-700 tw:font-medium' : 'tw:text-gray-600 tw:hover:bg-gray-100'">
-              <span class="tw:truncate">{{ a.id }}</span>
-              <span class="tw:text-xs tw:text-gray-400 tw:shrink-0 tw:ml-1">{{ a.count }}</span>
-            </router-link>
-          </li>
-        </ul>
-      </div>
 
-      <!-- Язык -->
-      <div v-if="facets.languages.length" class="tw:mb-6">
-        <p class="tw:text-xs tw:font-semibold tw:text-gray-400 tw:uppercase tw:tracking-wider tw:mb-2">Язык</p>
-        <ul class="tw:space-y-0.5">
-          <li v-for="l in facets.languages" :key="l.id">
-            <router-link :to="{ query: { ...route.query, language: l.id, page: undefined } }"
-               class="tw:flex tw:items-center tw:justify-between tw:px-2 tw:py-1 tw:rounded-lg tw:text-sm tw:transition-colors"
-               :class="language === l.id ? 'tw:bg-clay-100 tw:text-clay-700 tw:font-medium' : 'tw:text-gray-600 tw:hover:bg-gray-100'">
-              <span class="tw:truncate">{{ l.id }}</span>
-              <span class="tw:text-xs tw:text-gray-400 tw:shrink-0 tw:ml-1">{{ l.count }}</span>
-            </router-link>
-          </li>
-        </ul>
-      </div>
 
-      <!-- Ключевые слова -->
-      <div v-if="facets.keywords.length" class="tw:mb-6">
-        <p class="tw:text-xs tw:font-semibold tw:text-gray-400 tw:uppercase tw:tracking-wider tw:mb-2">Ключевые слова</p>
-        <ul class="tw:space-y-0.5">
-          <li v-for="kw in facets.keywords" :key="kw.id">
-            <router-link :to="{ query: { ...route.query, keyword: kw.id, page: undefined } }"
-               class="tw:flex tw:items-center tw:justify-between tw:px-2 tw:py-1 tw:rounded-lg tw:text-sm tw:transition-colors"
-               :class="keyword === kw.id ? 'tw:bg-clay-100 tw:text-clay-700 tw:font-medium' : 'tw:text-gray-600 tw:hover:bg-gray-100'">
-              <span class="tw:break-words tw:min-w-0">{{ kw.id }}</span>
-              <span class="tw:text-xs tw:text-gray-400 tw:shrink-0 tw:ml-1">{{ kw.count }}</span>
-            </router-link>
-          </li>
-        </ul>
-      </div>
 
       <!-- Указатели (из админки) -->
       <div v-for="prop in facets.properties" :key="prop.id" class="tw:mb-6">
@@ -283,34 +208,44 @@ const hasActiveFilters = computed(
     <div class="tw:flex-1 tw:min-w-0">
 
       <form @submit.prevent="submitSearch" class="tw:flex tw:gap-2 tw:mb-4 tw:lg:hidden">
-        <input v-model="qInput" type="text" placeholder="Поиск по материалам…"
+        <input v-model="qInput" type="text" placeholder="Поиск по документам…"
                class="tw:flex-1 tw:rounded-lg tw:border tw:border-clay-200 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300 tw:bg-white">
         <button type="submit" class="tw:px-4 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:rounded-lg tw:transition-colors tw:text-sm">→</button>
       </form>
 
       <div class="tw:flex tw:items-baseline tw:justify-between tw:mb-4">
-        <h1 class="tw:font-serif tw:text-2xl tw:font-bold tw:text-ink-900">{{ q ? 'Результаты поиска' : 'Все материалы' }}</h1>
+        <h1 class="tw:font-serif tw:text-2xl tw:font-bold tw:text-ink-900">{{ q ? 'Результаты поиска' : 'Материалы' }}</h1>
         <span class="tw:text-sm tw:text-gray-400">{{ total }}</span>
       </div>
 
-      <div v-if="results.length" class="tw:space-y-2">
+      <div v-if="results.length" class="tw:grid tw:grid-cols-1 tw:sm:grid-cols-2 tw:xl:grid-cols-3 tw:gap-5 tw:content-start">
         <router-link v-for="doc in results" :key="doc.id" :to="`/document/${doc.id}`"
-           class="tw:group tw:flex tw:items-start tw:gap-4 tw:bg-white tw:rounded-xl tw:border tw:border-clay-100 tw:shadow-sm tw:hover:shadow-md tw:hover:border-clay-200 tw:transition-all tw:p-3">
+           class="tw:group tw:bg-white tw:rounded-lg tw:border tw:border-clay-100 tw:shadow-sm tw:hover:shadow-md tw:hover:border-clay-200 tw:transition-all tw:overflow-hidden tw:flex tw:flex-col">
 
-          <div class="tw:flex-1 tw:min-w-0">
-            <p class="tw:text-sm tw:font-medium tw:text-ink-900 tw:group-hover:text-clay-500 tw:transition-colors tw:leading-snug tw:truncate"
-               v-html="doc.title_hl || doc.title"></p>
-            <div class="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-0.5 tw:mt-0.5">
-              <span v-if="doc.doc_type" class="tw:text-xs tw:text-gray-400">{{ doc.doc_type }}</span>
-              <span v-if="doc.doc_date" class="tw:text-xs tw:text-gray-400">{{ doc.doc_date }}</span>
-            </div>
-            <p v-if="doc.snippet_hl && doc.snippet_hl.includes('<mark>')"
-               class="tw:text-xs tw:text-gray-500 tw:mt-1 tw:leading-snug tw:line-clamp-2" v-html="doc.snippet_hl"></p>
+          <div class="tw:relative tw:overflow-hidden tw:bg-gray-100 tw:shrink-0" style="aspect-ratio:1/1">
+            <img v-if="doc.thumb_url" :src="doc.thumb_url" :alt="doc.title" loading="lazy"
+                 class="tw:w-full tw:h-full tw:object-cover tw:object-top tw:group-hover:scale-105 tw:transition-transform tw:duration-300">
+            <div v-else class="stripe-placeholder tw:w-full tw:h-full"></div>
+            <span v-if="doc.page_count"
+                  class="tw:absolute tw:bottom-2 tw:right-2 tw:text-xs tw:text-white tw:bg-black/50 tw:rounded-full tw:px-2 tw:py-0.5">
+              {{ doc.page_count }} стр.
+            </span>
           </div>
 
-          <span v-if="doc.page_count" class="tw:shrink-0 tw:text-xs tw:text-gray-400">{{ doc.page_count }} стр.</span>
-
+          <div class="tw:p-4 tw:flex tw:flex-col tw:gap-1.5">
+            <h2 class="tw:font-serif tw:font-semibold tw:text-base tw:text-ink-900 tw:group-hover:text-clay-500 tw:transition-colors tw:leading-snug"
+                >{{ doc.title }}</h2>
+            <p v-if="formatDates(doc)" class="tw:text-xs tw:text-gray-400">{{ formatDates(doc) }}</p>
+            <p v-if="doc.description" class="tw:text-sm tw:text-gray-500 tw:line-clamp-2">{{ doc.description }}</p>
+            <div v-if="doc.pointers && doc.pointers.length" class="tw:flex tw:flex-wrap tw:gap-1 tw:mt-1">
+              <span v-for="p in doc.pointers" :key="p.enum_id"
+                    class="tw:text-xs tw:bg-clay-50 tw:text-clay-700 tw:border tw:border-clay-100 tw:rounded-full tw:px-2 tw:py-0.5">
+                {{ p.value }}
+              </span>
+            </div>
+          </div>
         </router-link>
+
       </div>
 
       <div v-if="results.length && totalPages > 1" class="tw:mt-8 tw:flex tw:justify-center tw:items-center tw:gap-2 tw:text-sm">

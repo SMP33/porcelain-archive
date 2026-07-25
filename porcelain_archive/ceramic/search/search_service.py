@@ -1,57 +1,13 @@
 from __future__ import annotations
 
-import html
-import time
 from datetime import date
-from typing import Any
 
 from porcelain_archive.database import db
 
 PER_PAGE_DEFAULT = 30
 
 
-class TTLCache:
-    """Простейший одно-значный кэш с истечением по времени.
-
-    Рассчитан на один процесс uvicorn (asyncio, без вытесняющего параллелизма):
-    гонка между проверкой и установкой максимум приводит к лишнему пересчёту,
-    что безопасно. Для многопроцессного деплоя нужен общий кэш (Redis и т.п.).
-    """
-
-    def __init__(self, ttl: float = 300.0) -> None:
-        self.ttl = ttl
-        self._value: Any | None = None
-        self._expires: float = 0.0
-
-    def get(self) -> Any | None:
-        if self._value is not None and time.monotonic() < self._expires:
-            return self._value
-        return None
-
-    def set(self, value: Any) -> None:
-        self._value = value
-        self._expires = time.monotonic() + self.ttl
-
-    def invalidate(self) -> None:
-        self._value = None
-        self._expires = 0.0
-
-
-# Фасеты поиска - заглушка (см. ниже): документы теперь общие с porcelain_archive
-# (таблица document), у которой нет полей doc_type/authenticity/language/keywords/year,
-# по которым раньше строились фасеты ceramic. Кэш оставлен для единообразия API.
-facets_cache = TTLCache(ttl=300.0)
-
-_EMPTY_FACETS = {
-    "factories": [],
-    "doc_types": [],
-    "authenticities": [],
-    "languages": [],
-    "keywords": [],
-    "properties": [],
-    "year_min": 1900,
-    "year_max": 2100,
-}
+DEFAULT_YEAR_MIN = 1900
 
 
 class SearchService:
@@ -64,7 +20,7 @@ class SearchService:
             FROM property p
             JOIN property_enum pe ON pe.property_id = p.id
             JOIN document_property dp ON dp.property_enum_id = pe.id
-            JOIN document d ON d.id = dp.document_id AND d.is_visible = 1
+            JOIN document d ON d.id = dp.document_id AND d.is_visible = 1 AND d.deleted = 0
             WHERE p.is_visible = 1
             GROUP BY p.id, p.title, p.view_order, pe.id, pe.value
             ORDER BY p.view_order, p.id, pe.value
@@ -78,30 +34,52 @@ class SearchService:
                 order.append(pid)
             props[pid]["values"].append({"enum_id": enum_id, "value": value, "count": cnt})
         properties = [props[pid] for pid in order]
-        return {**_EMPTY_FACETS, "year_max": date.today().year, "properties": properties}
+
+        # Границы периода - по фактическим датам видимых документов
+        year_rows = await db.execute_read(
+            """
+            SELECT MIN(LEFT(meta->>'date_from', 4)::int), MAX(LEFT(COALESCE(meta->>'date_to', meta->>'date_from'), 4)::int)
+            FROM document
+            WHERE is_visible = 1 AND deleted = 0 AND meta->>'date_from' ~ '^\\d{4}'
+            """
+        )
+        year_min, year_max = (year_rows[0] if year_rows else (None, None))
+        return {
+            "properties": properties,
+            "year_min": year_min or DEFAULT_YEAR_MIN,
+            "year_max": year_max or date.today().year,
+        }
 
     async def search(
         self,
         q: str,
-        factory_id: int,
-        doc_type: str,
-        authenticity: str,
-        language: str,
-        keyword: str,
         year_from: int,
         year_to: int,
         offset: int,
         limit: int,
         pointers: list[int] | None = None,
     ) -> dict:
-        # Поиск по названию документа (document.name, ILIKE) + фильтр по «указателям»
-        # (property_enum через document_property). Остальные фильтры (doc_type и т.п.)
-        # игнорируются - у общего с porcelain_archive document таких полей нет.
-        conditions = ["is_visible = 1"]
+        # Поиск по названию и описанию документа + фильтры по указателям и датам.
+        conditions = ["document.is_visible = 1", "document.deleted = 0"]
         params: list = []
         if q.strip():
-            conditions.append("name ILIKE %s")
-            params.append(f"%{q.strip()}%")
+            conditions.append("(document.name ILIKE %s OR document.meta->>'description' ILIKE %s)")
+            params += [f"%{q.strip()}%", f"%{q.strip()}%"]
+        # Документ попадает в период, если его интервал пересекается с выбранным.
+        # Проверка ~ '^\d{4}' обязательна: без неё документ с нечисловой датой
+        # (данные заводились и вручную) роняет запрос на ::int.
+        if year_from or year_to:
+            conditions.append("document.meta->>'date_from' ~ '^[0-9]{4}'")
+        if year_from:
+            conditions.append(
+                "LEFT(COALESCE(NULLIF(document.meta->>'date_to', ''), document.meta->>'date_from'), 4)"
+                " ~ '^[0-9]{4}' AND"
+                " LEFT(COALESCE(NULLIF(document.meta->>'date_to', ''), document.meta->>'date_from'), 4)::int >= %s"
+            )
+            params.append(int(year_from))
+        if year_to:
+            conditions.append("LEFT(document.meta->>'date_from', 4)::int <= %s")
+            params.append(int(year_to))
         pointer_ids = sorted({int(p) for p in (pointers or []) if int(p) > 0})
         if pointer_ids:
             # Документ должен иметь ВСЕ выбранные значения указателей.
@@ -117,27 +95,57 @@ class SearchService:
         total = total_rows[0][0] if total_rows else 0
 
         rows = await db.execute_read(
-            f"SELECT id, name FROM document WHERE {where} ORDER BY name LIMIT %s OFFSET %s",
+            f"""
+            SELECT document.id, document.name, document.meta->>'description',
+                   (b.meta->>'page_count')::int, pg.image_hash,
+                   document.meta->>'date_from', document.meta->>'date_to' 
+            FROM document
+            LEFT JOIN branch b ON b.document_id = document.id AND b.name = 'master'
+            LEFT JOIN page pg ON pg.commit = b.last_commit AND pg.pos = 1
+            WHERE {where} ORDER BY document.name LIMIT %s OFFSET %s
+            """,
             [*params, limit, offset],
         )
+
+        pointers_map = await self._pointers_by_document([r[0] for r in rows])
 
         items = [
             {
                 "id": r[0],
                 "title": r[1],
-                "doc_type": None,
-                "doc_date": None,
-                "year": None,
-                "page_count": None,
-                "factory_id": None,
-                "factory_name": None,
-                "thumb_url": None,
-                "title_hl": html.escape(r[1] or ""),
-                "snippet_hl": "",
+                "date_from": r[5],
+                "date_to": r[6],
+                "page_count": r[3],
+                "thumb_url": f"/api/ceramic/documents/{r[0]}/thumb" if r[4] else None,
+                "pointers": pointers_map.get(r[0], []),
+                "description": r[2],
             }
             for r in rows
         ]
         return {"items": items, "total": total}
+
+    async def _pointers_by_document(self, doc_ids: list[int]) -> dict[int, list[dict]]:
+        """Видимые указатели документов, сгруппированные по document_id."""
+        if not doc_ids:
+            return {}
+        rows = await db.execute_read(
+            """
+            SELECT dp.document_id, pe.id, pe.value, p.id, p.title
+            FROM document_property dp
+            JOIN property_enum pe ON pe.id = dp.property_enum_id
+            JOIN property p ON p.id = pe.property_id AND p.is_visible = 1
+            WHERE dp.document_id = ANY(%s)
+            ORDER BY dp.document_id, p.view_order, p.id, pe.value
+            """,
+            (doc_ids,),
+        )
+        grouped: dict[int, list[dict]] = {}
+        for doc_id, enum_id, value, property_id, title in rows:
+            grouped.setdefault(doc_id, []).append(
+                {"enum_id": enum_id, "value": value, "property_id": property_id, "property_title": title}
+            )
+        return grouped
+
 
 
 search_service = SearchService()

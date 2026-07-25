@@ -10,11 +10,19 @@ router = APIRouter(tags=["site"])
 
 @router.get("/api/ceramic/site/stats")
 async def stats():
-    # page_count - заглушка (0): дешёвого агрегата по страницам всех документов нет
-    # (страницы считаются per-branch через meta->>'page_count', см. document_service).
-    rows = await db.execute_read("SELECT COUNT(*) FROM document WHERE is_visible = 1")
+    rows = await db.execute_read("SELECT COUNT(*) FROM document WHERE is_visible = 1 AND deleted = 0")
     doc_count = rows[0][0] if rows else 0
-    return {"doc_count": doc_count, "page_count": 0}
+    # Сумма страниц по master-веткам видимых документов (branch.meta->>'page_count').
+    page_rows = await db.execute_read(
+        """
+        SELECT COALESCE(SUM((b.meta->>'page_count')::int), 0)
+        FROM branch b
+        JOIN document d ON d.id = b.document_id AND d.is_visible = 1 AND d.deleted = 0
+        WHERE b.name = 'master' AND b.meta ? 'page_count'
+        """
+    )
+    page_count = page_rows[0][0] if page_rows else 0
+    return {"doc_count": doc_count, "page_count": page_count}
 
 
 @router.get("/robots.txt")
@@ -31,9 +39,9 @@ async def robots(request: Request):
 @router.get("/sitemap.xml")
 async def sitemap(request: Request):
     base = str(request.base_url).rstrip("/")
-    urls = [base + "/", base + "/search", base + "/about", base + "/feedback"]
+    urls = [base + "/", base + "/materials", base + "/about", base + "/feedback"]
 
-    doc_rows = await db.execute_read("SELECT id FROM document WHERE is_visible = 1")
+    doc_rows = await db.execute_read("SELECT id FROM document WHERE is_visible = 1 AND deleted = 0")
     for row in doc_rows:
         urls.append(f"{base}/document/{row[0]}")
 
