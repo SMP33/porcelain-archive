@@ -134,6 +134,25 @@ async def _check_property_is_system(conn: AsyncConnection) -> List[str]:
     return ["ALTER TABLE property ADD COLUMN IF NOT EXISTS is_system INTEGER DEFAULT 0"]
 
 
+async def _check_document_status_values(conn: AsyncConnection) -> List[str]:
+    """
+    document_status: старые значения пула ('Закончен', 'Требуется проверка')
+    заменяются кодами с переводом (in_work/need_help/finished), по аналогии с
+    document_type. Уже проставленные документам значения переименовываются.
+    """
+    return [
+        "UPDATE document_property SET value = 'finished' WHERE tag = 'document_status' AND value = 'Закончен'",
+        "UPDATE document_property SET value = 'need_help' WHERE tag = 'document_status' AND value = 'Требуется проверка'",
+        "INSERT INTO document_property (document_id, tag, value) VALUES (NULL, 'document_status', 'in_work') "
+        "ON CONFLICT (document_id, tag, value) DO NOTHING",
+        "DELETE FROM property_translate WHERE tag = 'document_status'",
+        "INSERT INTO property_translate (tag, value, translated) VALUES "
+        "('document_status', 'in_work', 'В работе'), "
+        "('document_status', 'need_help', 'Нужны правки'), "
+        "('document_status', 'finished', 'Закончен')",
+    ]
+
+
 async def _check_drop_object_tables(conn: AsyncConnection) -> List[str]:
     """
     porcelain_object/object_image/object_property (отдельная сущность "объект" со
@@ -160,6 +179,7 @@ PATCHES: List[Patch] = [
     Patch("06a3c7d2-3c1c-475f-9529-630e54635de9", _check_document_property_unique),
     Patch("d6d7f56b-e466-4603-b723-253b3f68dd69", _check_drop_object_tables),
     Patch("1a9d4b2e-5f7c-4a3d-8e9b-2c6f0d1a7b4e", _check_property_is_system),
+    Patch("7c2e9f04-3b8a-4d1e-9a6c-5f1d0e8b6a3c", _check_document_status_values),
 ]
 
 

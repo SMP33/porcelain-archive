@@ -32,6 +32,7 @@ async def _resolve_commit(branch_id: int, commit: Optional[str]) -> Optional[str
 
 class DocumentCreateRequest(BaseModel):
     name: str
+    document_type: str
 
 
 class SetVisibilityRequest(BaseModel):
@@ -99,6 +100,21 @@ async def read_documents(request: Request, offset: int = 0, limit: int = 25) -> 
     return {"items": docs, "total": total}
 
 
+@router.get("/document_types")
+async def read_document_type_options(
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """Возвращает допустимые значения типа документа для выбора при создании. Требует авторизации."""
+    user = await user_service.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+    if not role_at_least(user.get("role"), "user"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+
+    items = await document_service.get_document_type_options()
+    return {"items": items}
+
+
 @router.post("/create")
 async def create_document(
     payload: DocumentCreateRequest,
@@ -113,7 +129,12 @@ async def create_document(
     if not role_at_least(user.get("role"), "user"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для создания документа")
 
-    document_id = await document_service.create_document(name=payload.name, author=user["username"], user_id=user["id"])
+    try:
+        document_id = await document_service.create_document(
+            name=payload.name, author=user["username"], user_id=user["id"], document_type=payload.document_type
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return {"id": document_id}
 
 

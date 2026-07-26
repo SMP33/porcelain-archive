@@ -331,14 +331,38 @@ class DocumentService:
                         (document_id, tag, value),
                     )
 
-    async def create_document(self, name: str, author: str, user_id: int) -> int:
+    async def get_document_type_options(self) -> List[Dict[str, Any]]:
+        """Возвращает допустимые значения document_type с переводом - для выбора при создании документа."""
+        rows = await db.execute_read(
+            """
+            SELECT dp.value, pt.translated
+            FROM document_property dp
+            LEFT JOIN property_translate pt ON pt.tag = dp.tag AND pt.value = dp.value
+            WHERE dp.tag = 'document_type' AND dp.document_id IS NULL
+            ORDER BY dp.value
+            """
+        )
+        return [{"value": row[0], "translated": row[1] or row[0]} for row in rows]
+
+    async def create_document(self, name: str, author: str, user_id: int, document_type: str) -> int:
         """
-        Создаёт новый документ и возвращает его id.
+        Создаёт новый документ и возвращает его id. document_type обязателен и
+        записывается напрямую в document_property (минуя общий редактор
+        указателей - см. is_usable=0 у document_type). Статус документа
+        (document_status) выставляется автоматически в 'in_work'.
 
         :param name: Название документа.
         :param author: Автор документа (имя пользователя).
         :param user_id: Id пользователя, создающего документ (автор задачи).
+        :param document_type: Значение указателя document_type (из пула допустимых).
         """
+        valid_type = await db.execute_read(
+            "SELECT 1 FROM document_property WHERE tag = 'document_type' AND document_id IS NULL AND value = %s",
+            (document_type,),
+        )
+        if not valid_type:
+            raise ValueError(f"Недопустимое значение '{document_type}' для типа документа")
+
         async with db.transaction() as conn:
             cursor = await conn.execute(
                 "INSERT INTO document (name, is_visible) VALUES (%s, 1) RETURNING id", (name,)
@@ -346,12 +370,22 @@ class DocumentService:
             row = await cursor.fetchone()
 
             if row:
+                document_id = row[0]
                 await conn.execute(
                     "INSERT INTO branch (document_id, name, created_time) VALUES (%s, 'master', NOW()) RETURNING id",
-                    (row[0],),
+                    (document_id,),
                 )
 
-                task_data = {"document_id": row[0]}
+                await conn.execute(
+                    "INSERT INTO document_property (document_id, tag, value) VALUES (%s, 'document_type', %s)",
+                    (document_id, document_type),
+                )
+                await conn.execute(
+                    "INSERT INTO document_property (document_id, tag, value) VALUES (%s, 'document_status', 'in_work')",
+                    (document_id,),
+                )
+
+                task_data = {"document_id": document_id}
                 await conn.execute(
                     "INSERT INTO task (type, author_id, data) VALUES ('create_repos', %s, %s) RETURNING id",
                     (user_id, Jsonb(task_data)),

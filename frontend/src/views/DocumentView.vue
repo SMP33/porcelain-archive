@@ -117,26 +117,6 @@
             </span>
           </div>
 
-          <div v-if="hasRole('moderator')" class="tw:flex tw:items-center tw:mb-4">
-            <button
-              type="button"
-              role="switch"
-              :aria-checked="document.is_object"
-              :disabled="objectTypeLoading"
-              class="tw:relative tw:inline-flex tw:items-center tw:h-6 tw:w-11 tw:rounded-full tw:transition-colors tw:disabled:opacity-50"
-              :class="document.is_object ? 'tw:bg-clay-500' : 'tw:bg-gray-300'"
-              @click="handleToggleObjectType(!document.is_object)"
-            >
-              <span
-                class="tw:inline-block tw:w-4 tw:h-4 tw:bg-white tw:rounded-full tw:shadow tw:transform tw:transition-transform"
-                :class="document.is_object ? 'tw:translate-x-6' : 'tw:translate-x-1'"
-              />
-            </button>
-            <span class="tw:ml-2 tw:text-sm tw:text-gray-600">
-              {{ document.is_object ? 'Показывается в разделе «Объекты»' : 'Обычный документ (не объект)' }}
-            </span>
-          </div>
-
           <div v-if="hasRole('moderator')" class="tw:mb-4">
             <button
               type="button"
@@ -441,7 +421,6 @@ const downloading = ref(false)
 const downloadError = ref('')
 
 const visibilityLoading = ref(false)
-const objectTypeLoading = ref(false)
 
 const renameForm = ref('')
 const renaming = ref(false)
@@ -803,18 +782,6 @@ const handleToggleVisibility = async (isVisible) => {
     console.error('Ошибка при изменении видимости документа:', err)
   } finally {
     visibilityLoading.value = false
-  }
-}
-
-const handleToggleObjectType = async (isObject) => {
-  objectTypeLoading.value = true
-  try {
-    await http.post(`/api/documents/${document.value.id}/type`, { is_object: isObject })
-    document.value.is_object = isObject
-  } catch (err) {
-    console.error('Ошибка при изменении типа документа:', err)
-  } finally {
-    objectTypeLoading.value = false
   }
 }
 

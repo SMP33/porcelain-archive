@@ -70,6 +70,16 @@
             @keyup.enter="handleCreateDocument"
           >
         </div>
+        <div>
+          <label class="tw:block tw:text-sm tw:font-medium tw:text-gray-700 tw:mb-1">Тип документа</label>
+          <select
+            v-model="newDocumentType"
+            class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300"
+          >
+            <option value="" disabled>Выберите тип…</option>
+            <option v-for="opt in documentTypeOptions" :key="opt.value" :value="opt.value">{{ opt.translated }}</option>
+          </select>
+        </div>
         <div v-if="createError" class="tw:text-sm tw:text-red-600 tw:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:px-3 tw:py-2">
           {{ createError }}
         </div>
@@ -78,7 +88,7 @@
         <button type="button" class="tw:px-5 tw:py-2 tw:text-sm tw:text-gray-500 tw:hover:text-gray-700 tw:transition-colors" @click="showCreateDialog = false">Отмена</button>
         <button
           type="button"
-          :disabled="creating"
+          :disabled="creating || !newDocumentName || !newDocumentType"
           class="tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
           @click="handleCreateDocument"
         >
@@ -111,6 +121,8 @@ const { page, itemsPerPage, items, total, loading, pageCount, reload, goToPage, 
 
 const showCreateDialog = ref(false)
 const newDocumentName = ref('')
+const newDocumentType = ref('')
+const documentTypeOptions = ref([])
 const creating = ref(false)
 const createError = ref('')
 
@@ -118,22 +130,37 @@ function openDocument(item) {
   router.push(`/edit/document/${item.id}`)
 }
 
+async function loadDocumentTypeOptions() {
+  try {
+    const { data } = await http.get('/api/documents/document_types')
+    documentTypeOptions.value = data.items
+  } catch (error) {
+    console.error('Ошибка при загрузке типов документа:', error)
+  }
+}
+
 const handleCreateDocument = async () => {
-  if (!newDocumentName.value) {
+  if (!newDocumentName.value || !newDocumentType.value) {
     return
   }
   creating.value = true
   createError.value = ''
   try {
-    const response = await http.post('/api/documents/create', { name: newDocumentName.value })
+    const response = await http.post('/api/documents/create', {
+      name: newDocumentName.value,
+      document_type: newDocumentType.value,
+    })
     router.push(`/edit/document/${response.data.id}`)
   } catch (error) {
-    createError.value = 'Не удалось создать документ.'
+    createError.value = (error.response && error.response.data && error.response.data.detail) || 'Не удалось создать документ.'
     console.error('Ошибка при создании документа:', error)
   } finally {
     creating.value = false
   }
 }
 
-onMounted(reload)
+onMounted(() => {
+  reload()
+  loadDocumentTypeOptions()
+})
 </script>

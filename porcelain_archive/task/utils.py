@@ -521,6 +521,25 @@ def regenerate_branch_cache(repo_path: str, branch_id: int, branch: Optional[str
                 (Jsonb(branch_meta), commit, commit, branch_id),
             )
         )
+
+        if branch is None:
+            # branch=None - обновляется master-ветка документа: указатель
+            # page_count должен отражать актуальное число страниц.
+            queries.append(
+                (
+                    "DELETE FROM document_property WHERE tag = 'page_count' "
+                    "AND document_id = (SELECT document_id FROM branch WHERE id = %s)",
+                    (branch_id,),
+                )
+            )
+            queries.append(
+                (
+                    "INSERT INTO document_property (document_id, tag, value) "
+                    "SELECT document_id, 'page_count', %s FROM branch WHERE id = %s "
+                    "ON CONFLICT (document_id, tag, value) DO NOTHING",
+                    (str(page_count), branch_id),
+                )
+            )
     if len(queries) == 0:
         return
 

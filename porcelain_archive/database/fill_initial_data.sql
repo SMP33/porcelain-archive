@@ -47,5 +47,8 @@ ON CONFLICT (document_id, tag, value) DO NOTHING;
 INSERT INTO property_translate (tag, value, translated)
 VALUES
     ('document_type', 'object', 'Объект'),
-    ('document_type', 'historical_document', 'Исторический документ')
+    ('document_type', 'historical_document', 'Исторический документ'),
+    ('document_status', 'in_work', 'В работе'),
+    ('document_status', 'need_help', 'Нужны правки'),
+    ('document_status', 'finished', 'Закончен')
 ON CONFLICT (tag, value) DO NOTHING;
