@@ -95,6 +95,7 @@ CREATE    TABLE IF NOT EXISTS property (
           is_editable INTEGER DEFAULT 1, -- Доступен ли для редактирования список значений
           is_usable INTEGER DEFAULT 1, -- Может ли применяться в документах пользователем
           is_visible INTEGER DEFAULT 0, -- Виден ли обычным пользователям
+          is_system INTEGER DEFAULT 0, -- Принудительно виден при наличии значения, нельзя удалить
           view_order INTEGER DEFAULT 0, -- Порядок отображения
           type TEXT DEFAULT 'string' -- Тип
           CHECK (type IN ('string', 'bool', 'combobox', 'multicheckbox'))

@@ -129,6 +129,11 @@ async def _check_document_property_unique(conn: AsyncConnection) -> List[str]:
     ]
 
 
+async def _check_property_is_system(conn: AsyncConnection) -> List[str]:
+    """property.is_system - принудительная видимость указателя и защита от удаления."""
+    return ["ALTER TABLE property ADD COLUMN IF NOT EXISTS is_system INTEGER DEFAULT 0"]
+
+
 async def _check_drop_object_tables(conn: AsyncConnection) -> List[str]:
     """
     porcelain_object/object_image/object_property (отдельная сущность "объект" со
@@ -154,6 +159,7 @@ PATCHES: List[Patch] = [
     Patch("9f8b4fbc-692b-4cf5-908c-0ba026218b35", _check_document_property_indexes),
     Patch("06a3c7d2-3c1c-475f-9529-630e54635de9", _check_document_property_unique),
     Patch("d6d7f56b-e466-4603-b723-253b3f68dd69", _check_drop_object_tables),
+    Patch("1a9d4b2e-5f7c-4a3d-8e9b-2c6f0d1a7b4e", _check_property_is_system),
 ]
 
 

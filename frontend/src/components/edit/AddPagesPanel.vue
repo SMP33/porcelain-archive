@@ -69,7 +69,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import http from '../../ceramic/api/http'
+import http from '../../api/http'
 import PageNumberField from '../PageNumberField.vue'
 
 const props = defineProps({

@@ -6,32 +6,26 @@ from porcelain_archive.database import db
 TAG_PATTERN = re.compile(r"^[a-z_]+$")
 PROPERTY_TYPES = {"string", "bool", "combobox", "multicheckbox"}
 
-# Служебные указатели, не управляемые через общий редактор указателей
-# (document_type - см. porcelain_archive/ceramic/objects).
-SYSTEM_TAGS = {"document_type"}
-
 
 class PropertyService:
     async def get_properties(self) -> List[Dict[str, Any]]:
-        """Возвращает все указатели (property), кроме служебных, в порядке view_order."""
+        """Возвращает все указатели (property) в порядке view_order."""
         rows = await db.execute_read(
             """
             SELECT p.id, p.tag, p.title, p.description, p.type, p.is_editable,
-                   p.is_usable, p.is_visible, p.view_order,
+                   p.is_usable, p.is_visible, p.is_system, p.view_order,
                    EXISTS (
                        SELECT 1 FROM document_property dp
                        WHERE dp.tag = p.tag AND dp.document_id IS NOT NULL
                    ) AS in_use
             FROM property p
-            WHERE p.tag != ALL(%s)
             ORDER BY p.view_order, p.id
-            """,
-            (list(SYSTEM_TAGS),),
+            """
         )
         return [self._row_to_property(row) for row in rows]
 
     def _row_to_property(self, row) -> Dict[str, Any]:
-        id_, tag, title, description, type_, is_editable, is_usable, is_visible, view_order, in_use = row
+        id_, tag, title, description, type_, is_editable, is_usable, is_visible, is_system, view_order, in_use = row
         return {
             "id": id_,
             "tag": tag,
@@ -41,6 +35,7 @@ class PropertyService:
             "is_editable": bool(is_editable),
             "is_usable": bool(is_usable),
             "is_visible": bool(is_visible),
+            "is_system": bool(is_system),
             "view_order": view_order,
             "in_use": bool(in_use),
         }
@@ -80,6 +75,12 @@ class PropertyService:
 
     async def update_property_title(self, property_id: int, title: str) -> bool:
         """Изменяет отображаемое имя указателя (tag и type после создания не меняются)."""
+        rows = await db.execute_read("SELECT is_editable FROM property WHERE id = %s", (property_id,))
+        if not rows:
+            return False
+        if not rows[0][0]:
+            raise ValueError("Название этого указателя изменить нельзя")
+
         existing = await db.execute_read(
             "SELECT 1 FROM property WHERE title = %s AND id != %s", (title, property_id)
         )
@@ -88,6 +89,19 @@ class PropertyService:
 
         rows_affected = await db.execute_write(
             "UPDATE property SET title = %s WHERE id = %s", (title, property_id)
+        )
+        return rows_affected > 0
+
+    async def update_property_description(self, property_id: int, description: Optional[str]) -> bool:
+        """Изменяет описание указателя."""
+        rows = await db.execute_read("SELECT is_editable FROM property WHERE id = %s", (property_id,))
+        if not rows:
+            return False
+        if not rows[0][0]:
+            raise ValueError("Описание этого указателя изменить нельзя")
+
+        rows_affected = await db.execute_write(
+            "UPDATE property SET description = %s WHERE id = %s", (description, property_id)
         )
         return rows_affected > 0
 
@@ -111,13 +125,15 @@ class PropertyService:
 
     async def delete_property(self, property_id: int) -> bool:
         """
-        Удаляет указатель. Нельзя удалить указатель, у которого хоть одно
-        значение уже проставлено документу.
+        Удаляет указатель. Нельзя удалить системный указатель (is_system) или
+        указатель, у которого хоть одно значение уже проставлено документу.
         """
-        rows = await db.execute_read("SELECT tag FROM property WHERE id = %s", (property_id,))
+        rows = await db.execute_read("SELECT tag, is_system FROM property WHERE id = %s", (property_id,))
         if not rows:
             return False
-        tag = rows[0][0]
+        tag, is_system = rows[0]
+        if is_system:
+            raise ValueError("Системный указатель нельзя удалить")
 
         in_use = await db.execute_read(
             "SELECT 1 FROM document_property WHERE tag = %s AND document_id IS NOT NULL", (tag,)
@@ -153,8 +169,16 @@ class PropertyService:
         )
         return [{"value": row[0]} for row in rows]
 
+    def _validate_enum_value(self, value: str) -> None:
+        """Проверяет значение указателя: не пустое и без пробелов по краям."""
+        if not value:
+            raise ValueError("Значение не может быть пустым")
+        if value != value.strip():
+            raise ValueError("Значение не должно начинаться или заканчиваться пробельным символом")
+
     async def create_property_enum_value(self, property_id: int, value: str) -> None:
         """Добавляет допустимое значение указателя."""
+        self._validate_enum_value(value)
         tag = await self._get_editable_tag(property_id)
 
         existing = await db.execute_read(
@@ -171,6 +195,7 @@ class PropertyService:
 
     async def update_property_enum_value(self, property_id: int, old_value: str, new_value: str) -> bool:
         """Переименовывает допустимое значение указателя всюду, где оно используется."""
+        self._validate_enum_value(new_value)
         tag = await self._get_editable_tag(property_id)
         if old_value == new_value:
             return True
@@ -245,6 +270,40 @@ class PropertyService:
         )
         return [row[0] for row in rows]
 
+    async def get_property_value_counts(self, property_id: int, query: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Возвращает значения указателя, проставленные документам, и количество
+        документов для каждого значения. query - фильтр по подстроке (ILIKE).
+        """
+        rows = await db.execute_read(
+            """
+            SELECT dp.value, COUNT(DISTINCT dp.document_id) AS count
+            FROM document_property dp
+            JOIN property p ON p.tag = dp.tag
+            WHERE p.id = %s AND dp.document_id IS NOT NULL
+              AND (%s::text IS NULL OR dp.value ILIKE '%%' || %s || '%%')
+            GROUP BY dp.value
+            ORDER BY dp.value
+            """,
+            (property_id, query, query),
+        )
+        return [{"value": row[0], "count": row[1]} for row in rows]
+
+    async def get_documents_by_property_value(self, property_id: int, value: str) -> List[Dict[str, Any]]:
+        """Возвращает документы, у которых указателю проставлено данное значение."""
+        rows = await db.execute_read(
+            """
+            SELECT d.id, d.name
+            FROM document_property dp
+            JOIN property p ON p.tag = dp.tag
+            JOIN document d ON d.id = dp.document_id
+            WHERE p.id = %s AND dp.value = %s
+            ORDER BY d.name
+            """,
+            (property_id, value),
+        )
+        return [{"id": row[0], "name": row[1]} for row in rows]
+
     async def get_property_translations(self, property_id: int) -> List[Dict[str, Any]]:
         """Возвращает переводы значений указателя (property_translate)."""
         rows = await db.execute_read(
@@ -260,13 +319,15 @@ class PropertyService:
         return [{"value": row[0], "translated": row[1]} for row in rows]
 
     async def _get_translatable_tag(self, property_id: int) -> str:
-        """Возвращает tag указателя, если для его типа выполняется перевод (не string)."""
-        rows = await db.execute_read("SELECT tag, type FROM property WHERE id = %s", (property_id,))
+        """Возвращает tag указателя, если для его типа выполняется перевод (не string) и разрешено редактирование."""
+        rows = await db.execute_read("SELECT tag, type, is_editable FROM property WHERE id = %s", (property_id,))
         if not rows:
             raise ValueError("Указатель не найден")
-        tag, type_ = rows[0]
+        tag, type_, is_editable = rows[0]
         if type_ == "string":
             raise ValueError("Для указателей типа 'строка' перевод не выполняется")
+        if not is_editable:
+            raise ValueError("Перевод этого указателя изменить нельзя")
         return tag
 
     async def set_property_translation(self, property_id: int, value: str, translated: str) -> None:

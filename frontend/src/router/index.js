@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuth } from '../ceramic/composables/useAuth'
+import { useAuth } from '../composables/useAuth'
 
 const routes = [
   // ceramic-factories-archive - основной сайт на корневом домене (свои роуты, свой useAuth).
@@ -21,38 +21,23 @@ const routes = [
       { path: ':pathMatch(.*)*', name: 'ceramic-not-found', component: () => import('../ceramic/views/NotFoundView.vue') },
     ],
   },
-  {
-    path: '/admin/login',
-    name: 'ceramic-admin-login',
-    component: () => import('../ceramic/views/admin/LoginView.vue'),
-  },
-  {
-    path: '/admin',
-    component: () => import('../ceramic/components/AdminLayout.vue'),
-    meta: { requiresAuth: true, minRole: 'contributor' },
-    children: [
-      // Вся работа с архивом (документы, наборы изменений, задачи, указатели)
-      // перенесена сюда из /edit - отдельного раздела больше нет.
-      { path: '', name: 'ceramic-admin-index', redirect: () => (useAuth().hasRole('moderator') ? '/admin/documents' : '/admin/branches') },
-      { path: 'feedback', name: 'ceramic-admin-feedback', component: () => import('../ceramic/views/admin/FeedbackView.vue'), meta: { minRole: 'admin' } },
-      { path: 'subscribers', name: 'ceramic-admin-subscribers', component: () => import('../ceramic/views/admin/SubscribersView.vue'), meta: { minRole: 'admin' } },
-      { path: 'objects', name: 'ceramic-admin-objects', component: () => import('../ceramic/views/admin/ObjectsView.vue'), meta: { minRole: 'admin' } },
-      { path: 'users', name: 'ceramic-admin-users', component: () => import('../ceramic/views/admin/UsersView.vue'), meta: { minRole: 'admin' } },
-
-      { path: 'documents', name: 'ceramic-admin-documents', component: () => import('../ceramic/views/admin/DocumentsView.vue'), meta: { minRole: 'moderator' } },
-      { path: 'documents/:documentId', name: 'ceramic-admin-document', component: () => import('../views/DocumentView.vue'), props: true },
-      { path: 'branches', name: 'ceramic-admin-branches', component: () => import('../views/BranchListView.vue') },
-      { path: 'branches/:branchId', name: 'ceramic-admin-branch', component: () => import('../views/EditView.vue'), props: true },
-      { path: 'tasks', name: 'ceramic-admin-tasks', component: () => import('../views/TaskListView.vue') },
-      { path: 'properties', name: 'ceramic-admin-properties', component: () => import('../views/PropertiesView.vue'), meta: { minRole: 'moderator' } },
-      { path: 'maintenance', name: 'ceramic-admin-maintenance', component: () => import('../views/AdminView.vue'), meta: { minRole: 'admin' } },
-      { path: 'server-log', name: 'ceramic-admin-server-log', component: () => import('../views/ServerLogView.vue'), meta: { minRole: 'admin' } },
-      { path: 'access-denied', name: 'ceramic-admin-access-denied', component: () => import('../views/AccessDeniedView.vue') },
-    ],
-  },
-
-  // Раздел /edit расформирован: его экраны живут в /admin (см. выше).
-  { path: '/edit/:pathMatch(.*)*', redirect: '/admin' },
+  // Porcelain (архив документов) - отдельная ветка /edit, чтобы не пересекаться
+  // с публичным ceramic-сайтом на корневом домене (свои роуты, свой useAuth).
+  { path: '/edit/all-pages', name: 'all-pages', component: () => import('../views/AllPagesView.vue') },
+  { path: '/edit/login', name: 'login', component: () => import('../views/LoginView.vue') },
+  { path: '/edit', name: 'document-list', component: () => import('../views/DocumentListView.vue') },
+  { path: '/edit/branches', name: 'branch-list', component: () => import('../views/BranchListView.vue'), meta: { requiresAuth: true } },
+  { path: '/edit/tasks', name: 'task-list', component: () => import('../views/TaskListView.vue'), meta: { requiresAuth: true } },
+  { path: '/edit/users', name: 'user-list', component: () => import('../views/UserListView.vue'), meta: { requiresAuth: true } },
+  { path: '/edit/server-log', name: 'server-log', component: () => import('../views/ServerLogView.vue'), meta: { requiresAuth: true } },
+  { path: '/edit/admin', name: 'admin', component: () => import('../views/AdminView.vue'), meta: { requiresAuth: true } },
+  { path: '/edit/properties', name: 'properties', component: () => import('../views/PropertiesView.vue'), meta: { requiresAuth: true } },
+  { path: '/edit/feedback', name: 'feedback-list', component: () => import('../views/FeedbackView.vue'), meta: { requiresAuth: true } },
+  { path: '/edit/subscribers', name: 'subscriber-list', component: () => import('../views/SubscribersView.vue'), meta: { requiresAuth: true } },
+  { path: '/edit/document/:documentId', name: 'document', component: () => import('../views/DocumentView.vue'), props: true },
+  { path: '/edit/:branchId', name: 'edit', component: () => import('../views/EditView.vue'), props: true },
+  { path: '/edit/access-denied', name: 'access-denied', component: () => import('../views/AccessDeniedView.vue') },
+  { path: '/edit/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFoundView.vue') },
 ]
 
 const router = createRouter({
@@ -65,16 +50,18 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
-  const { authChecked, user, hasRole, checkAuth } = useAuth()
-  if (!authChecked.value) {
-    await checkAuth()
+  // Ветка Porcelain (/edit) - своя авторизация, не связана с useAuth ceramic.
+  if (to.path.startsWith('/edit')) {
+    const { authChecked, user, checkAuth } = useAuth()
+    if (!authChecked.value) {
+      await checkAuth()
+    }
+    if (to.meta.requiresAuth && !user.value) {
+      return { name: 'login', query: { redirect: to.fullPath } }
+    }
+    return true
   }
-  if (to.meta.requiresAuth && !user.value) {
-    return { name: 'ceramic-admin-login', query: { redirect: to.fullPath } }
-  }
-  if (to.meta.minRole && !hasRole(to.meta.minRole)) {
-    return { name: 'ceramic-admin-login', query: { redirect: to.fullPath } }
-  }
+
   return true
 })
 

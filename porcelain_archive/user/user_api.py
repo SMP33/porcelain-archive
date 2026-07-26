@@ -45,6 +45,10 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     response.set_cookie(key="session_token", value=token, httponly=True)
+    # Сессия общая с ceramic (одна таблица session) - тот же токен нужен под именем
+    # ceramic_session_token, иначе роуты /api/ceramic/... (feedback, subscribe и т.п.),
+    # открытые теперь из /edit, не увидят пользователя как авторизованного.
+    response.set_cookie(key="ceramic_session_token", value=token, httponly=True)
     return {"message": "Login successful", "access_token": token, "token_type": "bearer"}
 
 @router.post("/logout")
@@ -52,6 +56,7 @@ async def logout(response: Response, token: Annotated[str, Depends(oauth2_scheme
     """Выход из системы."""
     await user_service.logout(token)
     response.delete_cookie(key="session_token")
+    response.delete_cookie(key="ceramic_session_token")
     return {"message": "Logout successful"}
 
 @router.get("/")

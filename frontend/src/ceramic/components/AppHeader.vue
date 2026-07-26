@@ -23,10 +23,10 @@ function isActive(path) {
         <router-link to="/materials" class="skew-btn skew-btn--nav" :class="{ active: isActive('/materials') }">Материалы</router-link>
         <router-link to="/feedback" class="skew-btn skew-btn--nav" :class="{ active: isActive('/feedback') }">Обратная связь</router-link>
 
-        <!-- Временная кнопка входа в админку (неавторизованного уводит на /admin/login) -->
-        <router-link to="/admin/objects" title="Админка" aria-label="Админка"
+        <!-- Вход в архив документов (/edit) -->
+        <router-link to="/edit/login" title="Архив документов" aria-label="Архив документов"
                      class="tw:ml-2 tw:text-gray-400 tw:border tw:border-gray-200 tw:rounded tw:p-1.5 tw:hover:text-clay-500 tw:hover:border-clay-200 tw:transition-colors"
-                     :class="{ 'tw:text-clay-500 tw:border-clay-200': isActive('/admin') }">
+                     :class="{ 'tw:text-clay-500 tw:border-clay-200': isActive('/edit') }">
           <!-- Человек, входящий в дверь (пиктограмма как на табличках «выход») -->
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
                stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">

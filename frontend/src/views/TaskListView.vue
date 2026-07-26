@@ -1,10 +1,11 @@
 <template>
-  <div>
-    <main>
-      <div class="tw:mb-4">
+  <div class="tw:min-h-screen tw:bg-gray-100">
+    <AppToolbar />
+    <main class="tw:md:pl-[232px]">
+      <div class="tw:border-b tw:border-gray-200 tw:bg-white tw:px-8 tw:py-4">
         <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">Задачи</h1>
       </div>
-      <div>
+      <div class="tw:px-8 tw:py-6">
         <div class="tw:grid tw:grid-cols-1" :class="selectedTask ? 'tw:lg:grid-cols-12 tw:gap-4' : ''">
           <div :class="selectedTask ? 'tw:lg:col-span-4' : ''" class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:overflow-hidden">
             <div class="tw:overflow-x-auto">
@@ -76,9 +77,9 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import http from '../ceramic/api/http'
-import { inject } from 'vue'
-import { useAuth } from '../ceramic/composables/useAuth'
+import http from '../api/http'
+import { useAuth } from '../composables/useAuth'
+import AppToolbar from '../components/AppToolbar.vue'
 import AppPager from '../components/AppPager.vue'
 import { usePagedTable } from '../composables/usePagedTable'
 
@@ -213,7 +214,7 @@ function connectTaskUpdates() {
 
 onMounted(() => {
   if (!hasRole('moderator')) {
-    router.push('/admin/access-denied')
+    router.push('/edit/access-denied')
     return
   }
   loadItemsAndAutoSelect()

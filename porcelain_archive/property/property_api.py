@@ -30,6 +30,10 @@ class UpdatePropertyTitleRequest(BaseModel):
     title: str
 
 
+class UpdatePropertyDescriptionRequest(BaseModel):
+    description: Optional[str] = None
+
+
 class UpdatePropertyFlagsRequest(BaseModel):
     is_editable: bool
     is_usable: bool
@@ -131,6 +135,21 @@ async def update_property_title(
     return {"ok": True}
 
 
+@router.patch("/{property_id}/description")
+async def update_property_description(
+    property_id: int,
+    payload: UpdatePropertyDescriptionRequest,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """Изменяет описание указателя. Требует роли moderator+."""
+    await _require_moderator(token)
+
+    updated = await property_service.update_property_description(property_id, payload.description)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Указатель не найден")
+    return {"ok": True}
+
+
 @router.patch("/{property_id}/flags")
 async def update_property_flags(
     property_id: int,
@@ -216,12 +235,8 @@ async def create_property_enum_value(
     """Добавляет допустимое значение указателя. Требует роли moderator+."""
     await _require_moderator(token)
 
-    value = payload.value.strip()
-    if not value:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Значение не может быть пустым")
-
     try:
-        await property_service.create_property_enum_value(property_id, value)
+        await property_service.create_property_enum_value(property_id, payload.value)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return {"ok": True}
@@ -237,12 +252,8 @@ async def update_property_enum_value(
     """Переименовывает допустимое значение указателя. Требует роли moderator+."""
     await _require_moderator(token)
 
-    new_value = payload.value.strip()
-    if not new_value:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Значение не может быть пустым")
-
     try:
-        updated = await property_service.update_property_enum_value(property_id, value, new_value)
+        updated = await property_service.update_property_enum_value(property_id, value, payload.value)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     if not updated:
@@ -278,6 +289,32 @@ async def read_property_values(
 
     values = await property_service.get_property_values(property_id)
     return {"items": values}
+
+
+@router.get("/{property_id}/value_counts")
+async def read_property_value_counts(
+    property_id: int,
+    token: Annotated[str, Depends(oauth2_scheme)],
+    q: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Возвращает значения указателя с количеством документов. Требует роли moderator+."""
+    await _require_moderator(token)
+
+    items = await property_service.get_property_value_counts(property_id, q)
+    return {"items": items}
+
+
+@router.get("/{property_id}/documents")
+async def read_property_value_documents(
+    property_id: int,
+    value: str,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
+    """Возвращает документы с данным значением указателя. Требует роли moderator+."""
+    await _require_moderator(token)
+
+    items = await property_service.get_documents_by_property_value(property_id, value)
+    return {"items": items}
 
 
 @router.get("/{property_id}/translate")

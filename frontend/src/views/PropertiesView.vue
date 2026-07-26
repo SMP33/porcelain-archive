@@ -1,7 +1,8 @@
 <template>
-  <div>
-    <main class="tw:flex tw:flex-col" style="height: calc(100vh - 9rem)">
-      <div class="tw:mb-4 tw:flex tw:items-center tw:justify-between tw:shrink-0">
+  <div class="tw:min-h-screen tw:bg-gray-100">
+    <AppToolbar />
+    <main class="tw:md:pl-[232px] tw:flex tw:flex-col tw:h-screen">
+      <div class="tw:border-b tw:border-gray-200 tw:bg-white tw:px-8 tw:py-4 tw:flex tw:items-center tw:justify-between tw:shrink-0">
         <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">Указатели</h1>
         <button
           v-if="hasRole('admin') && activeTab === 'properties'"
@@ -13,10 +14,10 @@
         </button>
       </div>
 
-      <div class="tw:flex tw:gap-1 tw:border-b tw:border-gray-200 tw:mb-4 tw:shrink-0">
+      <div class="tw:border-b tw:border-gray-200 tw:bg-white tw:px-8 tw:flex tw:gap-4 tw:shrink-0">
         <button
           type="button"
-          class="tw:px-4 tw:py-2 tw:text-sm tw:font-medium tw:border-b-2 tw:transition-colors"
+          class="tw:py-2.5 tw:text-sm tw:font-medium tw:border-b-2 tw:transition-colors"
           :class="activeTab === 'properties' ? 'tw:border-clay-500 tw:text-clay-600' : 'tw:border-transparent tw:text-gray-500 tw:hover:text-gray-700'"
           @click="activeTab = 'properties'"
         >
@@ -24,15 +25,15 @@
         </button>
         <button
           type="button"
-          class="tw:px-4 tw:py-2 tw:text-sm tw:font-medium tw:border-b-2 tw:transition-colors"
-          :class="activeTab === 'translate' ? 'tw:border-clay-500 tw:text-clay-600' : 'tw:border-transparent tw:text-gray-500 tw:hover:text-gray-700'"
-          @click="activeTab = 'translate'"
+          class="tw:py-2.5 tw:text-sm tw:font-medium tw:border-b-2 tw:transition-colors"
+          :class="activeTab === 'search' ? 'tw:border-clay-500 tw:text-clay-600' : 'tw:border-transparent tw:text-gray-500 tw:hover:text-gray-700'"
+          @click="activeTab = 'search'"
         >
-          Перевод
+          Поиск по указателям
         </button>
       </div>
 
-      <div v-if="activeTab === 'properties'" class="tw:flex-1 tw:min-h-0">
+      <div v-if="activeTab === 'properties'" class="tw:flex-1 tw:min-h-0 tw:px-8 tw:py-6">
         <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:h-full tw:overflow-hidden">
           <AppSplitter>
             <template #left>
@@ -43,7 +44,7 @@
               <div v-else-if="!properties.length" class="tw:text-sm tw:text-gray-400 tw:p-4">Указателей пока нет</div>
               <ul v-else class="tw:divide-y tw:divide-gray-100">
                 <li
-                  v-for="item in properties"
+                  v-for="(item, index) in properties"
                   :key="item.id"
                   :title="item.description || ''"
                   draggable="true"
@@ -54,9 +55,9 @@
                   @dragover.prevent
                   @drop="onDrop(item)"
                 >
-                  <span class="tw:font-medium tw:text-gray-800">{{ item.title }}</span>
+                  <span class="tw:font-medium tw:text-gray-800"><span class="tw:text-gray-400 tw:mr-1">{{ index + 1 }}.</span>{{ item.title }}</span>
                   <button
-                    v-if="hasRole('admin') && !item.in_use"
+                    v-if="hasRole('admin') && !item.in_use && !item.is_system"
                     type="button"
                     class="tw:p-1 tw:text-red-500 tw:hover:bg-red-50 tw:rounded tw:transition-colors tw:shrink-0"
                     @click.stop="handleDeleteProperty(item)"
@@ -83,11 +84,12 @@
                       <input
                         v-model="titleForm"
                         type="text"
-                        class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300"
+                        :disabled="!selectedProperty.is_editable"
+                        class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300 tw:disabled:opacity-50"
                       >
                       <button
                         type="button"
-                        :disabled="savingTitle || titleForm.trim() === selectedProperty.title"
+                        :disabled="savingTitle || titleForm.trim() === selectedProperty.title || !selectedProperty.is_editable"
                         class="tw:px-3 tw:py-2 tw:text-sm tw:font-medium tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:rounded-lg tw:transition-colors tw:disabled:opacity-50 tw:shrink-0"
                         @click="handleSaveTitle"
                       >
@@ -96,9 +98,25 @@
                     </div>
                     <div v-if="saveTitleError" class="tw:text-sm tw:text-red-600 tw:mt-1">{{ saveTitleError }}</div>
                   </div>
-                  <div v-if="selectedProperty.description">
+                  <div>
                     <label class="tw:block tw:text-xs tw:font-medium tw:text-gray-500 tw:mb-1">Описание</label>
-                    <div class="tw:text-sm tw:text-gray-600">{{ selectedProperty.description }}</div>
+                    <div class="tw:flex tw:items-center tw:gap-2">
+                      <input
+                        v-model="descriptionForm"
+                        type="text"
+                        :disabled="!selectedProperty.is_editable"
+                        class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300 tw:disabled:opacity-50"
+                      >
+                      <button
+                        type="button"
+                        :disabled="savingDescription || descriptionForm === (selectedProperty.description || '') || !selectedProperty.is_editable"
+                        class="tw:px-3 tw:py-2 tw:text-sm tw:font-medium tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:rounded-lg tw:transition-colors tw:disabled:opacity-50 tw:shrink-0"
+                        @click="handleSaveDescription"
+                      >
+                        {{ savingDescription ? '…' : 'Сохранить' }}
+                      </button>
+                    </div>
+                    <div v-if="saveDescriptionError" class="tw:text-sm tw:text-red-600 tw:mt-1">{{ saveDescriptionError }}</div>
                   </div>
                   <div>
                     <label class="tw:block tw:text-xs tw:font-medium tw:text-gray-500 tw:mb-1">Тип</label>
@@ -156,6 +174,14 @@
                         class="tw:flex-1 tw:min-w-0 tw:bg-transparent tw:border tw:border-transparent tw:hover:border-gray-300 tw:focus:border-clay-400 tw:focus:bg-gray-50 tw:focus:outline-none tw:rounded tw:px-1 tw:py-0.5 tw:text-gray-700 tw:disabled:opacity-50"
                         @change="handleUpdateEnumValue(item, $event.target.value)"
                       >
+                      <input
+                        :value="translations[item.value] || ''"
+                        type="text"
+                        placeholder="Перевод…"
+                        :disabled="!selectedProperty.is_editable"
+                        class="tw:flex-1 tw:min-w-0 tw:rounded tw:border tw:border-gray-300 tw:px-2 tw:py-1 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300 tw:disabled:opacity-50"
+                        @change="handleSaveTranslation(item, $event)"
+                      >
                       <button
                         v-if="selectedProperty.is_editable"
                         type="button"
@@ -173,57 +199,68 @@
         </div>
       </div>
 
-      <div v-else class="tw:flex-1 tw:min-h-0">
-        <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:h-full tw:overflow-hidden">
-          <AppSplitter>
-            <template #left>
-              <div v-if="propertiesLoading" class="tw:text-sm tw:text-gray-400 tw:p-4">Загрузка…</div>
-              <div v-else-if="!translatableProperties.length" class="tw:text-sm tw:text-gray-400 tw:p-4">
-                Нет указателей, для которых выполняется перевод
-              </div>
+      <div v-else class="tw:flex-1 tw:min-h-0 tw:px-8 tw:py-6">
+        <div class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:h-full tw:overflow-hidden tw:flex">
+          <div class="tw:w-1/4 tw:shrink-0 tw:border-r tw:border-gray-100 tw:overflow-auto">
+            <ul class="tw:divide-y tw:divide-gray-100">
+              <li
+                v-for="(item, index) in properties"
+                :key="item.id"
+                :title="item.description || ''"
+                class="tw:px-4 tw:py-2 tw:text-sm tw:cursor-pointer tw:transition-colors"
+                :class="searchSelectedProperty && searchSelectedProperty.id === item.id ? 'tw:bg-clay-50' : 'tw:hover:bg-gray-50'"
+                @click="selectSearchProperty(item)"
+              >
+                <span class="tw:text-gray-400 tw:mr-1">{{ index + 1 }}.</span>
+                <span class="tw:font-medium tw:text-gray-800">{{ item.title }}</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="tw:w-2/5 tw:shrink-0 tw:border-r tw:border-gray-100 tw:flex tw:flex-col tw:min-h-0">
+            <div class="tw:p-3 tw:border-b tw:border-gray-100 tw:shrink-0">
+              <input
+                v-model="valueFilter"
+                type="search"
+                placeholder="Фильтр значений…"
+                :disabled="!searchSelectedProperty"
+                class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300 tw:disabled:opacity-50"
+                @input="loadValueCounts"
+              >
+            </div>
+            <div class="tw:flex-1 tw:overflow-auto">
+              <div v-if="!searchSelectedProperty" class="tw:text-sm tw:text-gray-400 tw:p-4">Выберите указатель слева</div>
+              <div v-else-if="valueCountsError" class="tw:text-sm tw:text-red-600 tw:p-4">{{ valueCountsError }}</div>
+              <div v-else-if="valueCountsLoading" class="tw:text-sm tw:text-gray-400 tw:p-4">Загрузка…</div>
+              <div v-else-if="!valueCounts.length" class="tw:text-sm tw:text-gray-400 tw:p-4">Значений не найдено</div>
               <ul v-else class="tw:divide-y tw:divide-gray-100">
                 <li
-                  v-for="item in translatableProperties"
-                  :key="item.id"
-                  :title="item.description || ''"
-                  class="tw:px-4 tw:py-2 tw:text-sm tw:cursor-pointer tw:transition-colors"
-                  :class="selectedTranslateProperty && selectedTranslateProperty.id === item.id ? 'tw:bg-clay-50' : 'tw:hover:bg-gray-50'"
-                  @click="selectTranslateProperty(item)"
+                  v-for="v in valueCounts"
+                  :key="v.value"
+                  class="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-4 tw:py-2 tw:text-sm tw:cursor-pointer tw:transition-colors"
+                  :class="selectedValue === v.value ? 'tw:bg-clay-50' : 'tw:hover:bg-gray-50'"
+                  @click="selectValue(v)"
                 >
-                  <span class="tw:font-medium tw:text-gray-800">{{ item.title }}</span>
+                  <span class="tw:text-gray-700 tw:truncate">{{ v.value }}</span>
+                  <span class="tw:text-xs tw:text-gray-400 tw:shrink-0">{{ v.count }}</span>
                 </li>
               </ul>
-            </template>
+            </div>
+          </div>
 
-            <template #right>
-              <div v-if="!selectedTranslateProperty" class="tw:text-sm tw:text-gray-400 tw:p-4">
-                Выберите указатель слева, чтобы задать переводы его значений
-              </div>
-              <div v-else class="tw:p-4">
-                <h3 class="tw:text-sm tw:font-semibold tw:text-gray-700 tw:mb-3">{{ selectedTranslateProperty.title }}</h3>
-
-                <div v-if="translateError" class="tw:text-sm tw:text-red-600 tw:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:px-3 tw:py-2 tw:mb-2">
-                  {{ translateError }}
-                </div>
-                <div v-if="translateLoading" class="tw:text-sm tw:text-gray-400">Загрузка…</div>
-                <div v-else-if="!propertyValues.length" class="tw:text-sm tw:text-gray-400">
-                  У этого указателя ещё нет использованных значений
-                </div>
-                <ul v-else class="tw:divide-y tw:divide-gray-100 tw:border tw:border-gray-100 tw:rounded-lg">
-                  <li v-for="value in propertyValues" :key="value" class="tw:flex tw:items-center tw:gap-2 tw:px-3 tw:py-2 tw:text-sm">
-                    <span class="tw:w-1/3 tw:shrink-0 tw:truncate tw:text-gray-500">{{ value }}</span>
-                    <input
-                      :value="translations[value] || ''"
-                      type="text"
-                      placeholder="Перевод…"
-                      class="tw:flex-1 tw:min-w-0 tw:rounded tw:border tw:border-gray-300 tw:px-2 tw:py-1 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300"
-                      @change="handleSaveTranslation(value, $event.target.value)"
-                    >
-                  </li>
-                </ul>
-              </div>
-            </template>
-          </AppSplitter>
+          <div class="tw:flex-1 tw:overflow-auto">
+            <div v-if="!selectedValue" class="tw:text-sm tw:text-gray-400 tw:p-4">Выберите значение в центре</div>
+            <div v-else-if="valueDocumentsError" class="tw:text-sm tw:text-red-600 tw:p-4">{{ valueDocumentsError }}</div>
+            <div v-else-if="valueDocumentsLoading" class="tw:text-sm tw:text-gray-400 tw:p-4">Загрузка…</div>
+            <div v-else-if="!valueDocuments.length" class="tw:text-sm tw:text-gray-400 tw:p-4">Документов не найдено</div>
+            <ul v-else class="tw:divide-y tw:divide-gray-100">
+              <li v-for="doc in valueDocuments" :key="doc.id" class="tw:px-4 tw:py-2 tw:text-sm">
+                <router-link :to="`/edit/document/${doc.id}`" class="tw:text-clay-600 tw:hover:text-clay-500 tw:transition-colors">
+                  {{ doc.name }}
+                </router-link>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
     </main>
@@ -319,11 +356,11 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import http from '../ceramic/api/http'
-import { inject } from 'vue'
-import { useAuth } from '../ceramic/composables/useAuth'
+import http from '../api/http'
+import { useAuth } from '../composables/useAuth'
+import AppToolbar from '../components/AppToolbar.vue'
 import AppModal from '../components/AppModal.vue'
 import AppSplitter from '../components/AppSplitter.vue'
 
@@ -337,25 +374,32 @@ const propertiesLoading = ref(true)
 const propertiesError = ref('')
 let draggedItem = null
 
-// Перевод выполняется только для combobox/multicheckbox: у string его нет,
-// у bool значение всегда отображается как "Да"/"Нет" независимо от перевода.
-const translatableProperties = computed(() => properties.value.filter((p) => !['string', 'bool'].includes(p.type)))
-
-const selectedTranslateProperty = ref(null)
-const propertyValues = ref([])
-const translations = ref({})
-const translateLoading = ref(false)
-const translateError = ref('')
+const searchSelectedProperty = ref(null)
+const valueFilter = ref('')
+const valueCounts = ref([])
+const valueCountsLoading = ref(false)
+const valueCountsError = ref('')
+const selectedValue = ref(null)
+const valueDocuments = ref([])
+const valueDocumentsLoading = ref(false)
+const valueDocumentsError = ref('')
 
 const selectedProperty = ref(null)
 const titleForm = ref('')
 const savingTitle = ref(false)
 const saveTitleError = ref('')
+const descriptionForm = ref('')
+const savingDescription = ref(false)
+const saveDescriptionError = ref('')
 const flagsForm = ref({ is_editable: false, is_usable: false, is_visible: false })
 const savingFlags = ref(false)
 const saveFlagsError = ref('')
 
+// Перевод хранится рядом со значением в "Допустимые значения" - выполняется
+// только для combobox/multicheckbox: у string его нет, у bool значение
+// всегда отображается как "Да"/"Нет" независимо от перевода.
 const enumValues = ref([])
+const translations = ref({})
 const enumLoading = ref(false)
 const enumError = ref('')
 
@@ -383,12 +427,22 @@ async function loadProperties() {
   }
 }
 
-async function loadEnumValues(propertyId) {
+async function loadEnumValues(property) {
+  enumValues.value = []
+  translations.value = {}
+  if (!['combobox', 'multicheckbox'].includes(property.type)) return
+
   enumLoading.value = true
   enumError.value = ''
   try {
-    const response = await http.get(`/api/properties/${propertyId}/enum`)
-    enumValues.value = response.data.items
+    const [enumResponse, translateResponse] = await Promise.all([
+      http.get(`/api/properties/${property.id}/enum`),
+      http.get(`/api/properties/${property.id}/translate`),
+    ])
+    enumValues.value = enumResponse.data.items
+    const map = {}
+    for (const t of translateResponse.data.items) map[t.value] = t.translated
+    translations.value = map
   } catch (err) {
     enumError.value = 'Не удалось загрузить значения.'
     console.error('Ошибка при загрузке значений указателя:', err)
@@ -400,10 +454,12 @@ async function loadEnumValues(propertyId) {
 function selectProperty(item) {
   selectedProperty.value = item
   titleForm.value = item.title
+  descriptionForm.value = item.description || ''
   flagsForm.value = { is_editable: item.is_editable, is_usable: item.is_usable, is_visible: item.is_visible }
   saveTitleError.value = ''
+  saveDescriptionError.value = ''
   saveFlagsError.value = ''
-  loadEnumValues(item.id)
+  loadEnumValues(item)
 }
 
 function onDragStart(item) {
@@ -472,6 +528,23 @@ async function handleSaveTitle() {
   }
 }
 
+async function handleSaveDescription() {
+  if (!selectedProperty.value) return
+  savingDescription.value = true
+  saveDescriptionError.value = ''
+  try {
+    await http.patch(`/api/properties/${selectedProperty.value.id}/description`, { description: descriptionForm.value })
+    selectedProperty.value.description = descriptionForm.value
+    const idx = properties.value.findIndex((p) => p.id === selectedProperty.value.id)
+    if (idx !== -1) properties.value[idx].description = descriptionForm.value
+  } catch (err) {
+    saveDescriptionError.value = (err.response && err.response.data && err.response.data.detail) || 'Не удалось сохранить описание.'
+    console.error('Ошибка при изменении описания указателя:', err)
+  } finally {
+    savingDescription.value = false
+  }
+}
+
 async function handleSaveFlags() {
   if (!selectedProperty.value) return
   savingFlags.value = true
@@ -509,14 +582,14 @@ function openCreateEnumDialog() {
 }
 
 async function handleCreateEnumValue() {
-  const value = newEnumValue.value.trim()
-  if (!value || !selectedProperty.value) return
+  const value = newEnumValue.value
+  if (!value.trim() || !selectedProperty.value) return
   creatingEnumValue.value = true
   createEnumError.value = ''
   try {
     await http.post(`/api/properties/${selectedProperty.value.id}/enum`, { value })
     createEnumDialogOpen.value = false
-    await loadEnumValues(selectedProperty.value.id)
+    await loadEnumValues(selectedProperty.value)
   } catch (err) {
     createEnumError.value = (err.response && err.response.data && err.response.data.detail) || 'Не удалось добавить значение.'
     console.error('Ошибка при добавлении значения указателя:', err)
@@ -526,15 +599,15 @@ async function handleCreateEnumValue() {
 }
 
 async function handleUpdateEnumValue(item, newValue) {
-  if (!selectedProperty.value) return
-  const trimmed = newValue.trim()
-  if (!trimmed || trimmed === item.value) return
+  if (!selectedProperty.value || newValue === item.value) return
+  enumError.value = ''
   try {
-    await http.patch(`/api/properties/${selectedProperty.value.id}/enum/${encodeURIComponent(item.value)}`, { value: trimmed })
-    item.value = trimmed
+    await http.patch(`/api/properties/${selectedProperty.value.id}/enum/${encodeURIComponent(item.value)}`, { value: newValue })
+    item.value = newValue
   } catch (err) {
+    enumError.value = (err.response && err.response.data && err.response.data.detail) || 'Не удалось переименовать значение.'
     console.error('Ошибка при переименовании значения указателя:', err)
-    await loadEnumValues(selectedProperty.value.id)
+    await loadEnumValues(selectedProperty.value)
   }
 }
 
@@ -543,60 +616,79 @@ async function handleDeleteEnumValue(item) {
   enumError.value = ''
   try {
     await http.delete(`/api/properties/${selectedProperty.value.id}/enum/${encodeURIComponent(item.value)}`)
-    await loadEnumValues(selectedProperty.value.id)
+    await loadEnumValues(selectedProperty.value)
   } catch (err) {
     enumError.value = (err.response && err.response.data && err.response.data.detail) || 'Не удалось удалить значение.'
     console.error('Ошибка при удалении значения указателя:', err)
   }
 }
 
-async function selectTranslateProperty(item) {
-  selectedTranslateProperty.value = item
-  translateError.value = ''
-  translateLoading.value = true
+async function handleSaveTranslation(item, event) {
+  if (!selectedProperty.value) return
+  const translated = event.target.value.trim()
+
+  // Пустой перевод не сохраняется - поле возвращается к сохранённому значению.
+  if (!translated) {
+    event.target.value = translations.value[item.value] || ''
+    return
+  }
+
+  const propertyId = selectedProperty.value.id
   try {
-    const [valuesResponse, translateResponse] = await Promise.all([
-      http.get(`/api/properties/${item.id}/values`),
-      http.get(`/api/properties/${item.id}/translate`),
-    ])
-    propertyValues.value = valuesResponse.data.items
-    const map = {}
-    for (const t of translateResponse.data.items) map[t.value] = t.translated
-    translations.value = map
+    await http.put(`/api/properties/${propertyId}/translate/${encodeURIComponent(item.value)}`, { translated })
+    translations.value = { ...translations.value, [item.value]: translated }
   } catch (err) {
-    translateError.value = 'Не удалось загрузить значения указателя.'
-    console.error('Ошибка при загрузке переводов указателя:', err)
-  } finally {
-    translateLoading.value = false
+    enumError.value = (err.response && err.response.data && err.response.data.detail) || 'Не удалось сохранить перевод.'
+    console.error('Ошибка при сохранении перевода значения указателя:', err)
+    event.target.value = translations.value[item.value] || ''
   }
 }
 
-async function handleSaveTranslation(value, newTranslated) {
-  if (!selectedTranslateProperty.value) return
-  const translated = newTranslated.trim()
-  const propertyId = selectedTranslateProperty.value.id
+function selectSearchProperty(item) {
+  searchSelectedProperty.value = item
+  valueFilter.value = ''
+  selectedValue.value = null
+  valueDocuments.value = []
+  loadValueCounts()
+}
 
+async function loadValueCounts() {
+  if (!searchSelectedProperty.value) return
+  valueCountsLoading.value = true
+  valueCountsError.value = ''
   try {
-    if (!translated) {
-      if (translations.value[value] === undefined) return
-      await http.delete(`/api/properties/${propertyId}/translate/${encodeURIComponent(value)}`)
-      const map = { ...translations.value }
-      delete map[value]
-      translations.value = map
-      return
-    }
-
-    await http.put(`/api/properties/${propertyId}/translate/${encodeURIComponent(value)}`, { translated })
-    translations.value = { ...translations.value, [value]: translated }
+    const { data } = await http.get(`/api/properties/${searchSelectedProperty.value.id}/value_counts`, {
+      params: { q: valueFilter.value || undefined },
+    })
+    valueCounts.value = data.items
   } catch (err) {
-    translateError.value = (err.response && err.response.data && err.response.data.detail) || 'Не удалось сохранить перевод.'
-    console.error('Ошибка при сохранении перевода значения указателя:', err)
+    valueCountsError.value = 'Не удалось загрузить значения.'
+    console.error('Ошибка при загрузке значений указателя:', err)
+  } finally {
+    valueCountsLoading.value = false
+  }
+}
+
+async function selectValue(item) {
+  selectedValue.value = item.value
+  valueDocumentsLoading.value = true
+  valueDocumentsError.value = ''
+  try {
+    const { data } = await http.get(`/api/properties/${searchSelectedProperty.value.id}/documents`, {
+      params: { value: item.value },
+    })
+    valueDocuments.value = data.items
+  } catch (err) {
+    valueDocumentsError.value = 'Не удалось загрузить документы.'
+    console.error('Ошибка при загрузке документов по значению указателя:', err)
+  } finally {
+    valueDocumentsLoading.value = false
   }
 }
 
 onMounted(() => {
   if (!hasRole('moderator')) {
-    router.push('/admin/access-denied')
+    router.push('/edit/access-denied')
     return
   }
   loadProperties()

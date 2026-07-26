@@ -1,10 +1,11 @@
 <template>
-  <div>
-    <main>
-      <div class="tw:mb-4">
+  <div class="tw:min-h-screen tw:bg-gray-100">
+    <AppToolbar />
+    <main class="tw:md:pl-[232px]">
+      <div class="tw:border-b tw:border-gray-200 tw:bg-white tw:px-8 tw:py-4">
         <h1 class="tw:font-serif tw:text-lg tw:font-semibold tw:text-ink-900">{{ document ? document.name : 'Документ' }}</h1>
       </div>
-      <div class="tw:space-y-4">
+      <div class="tw:px-8 tw:py-6 tw:space-y-4">
         <AppModal v-model="confirmDeleteDialog" max-width="tw:max-w-md" :persistent="true" :show-close="false">
           <h2 class="tw:font-serif tw:font-bold tw:text-lg tw:text-ink-900 tw:mb-4">Удаление документа</h2>
           <p class="tw:text-sm tw:text-gray-600">
@@ -161,7 +162,7 @@
           </div>
 
           <div class="tw:flex tw:items-center tw:gap-3 tw:mt-5">
-            <router-link to="/admin/documents" class="tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors">Назад к списку</router-link>
+            <router-link to="/edit" class="tw:px-5 tw:py-2 tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors">Назад к списку</router-link>
             <button
               v-if="user"
               type="button"
@@ -415,17 +416,15 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import http from '../ceramic/api/http'
-import { useAuth } from '../ceramic/composables/useAuth'
+import http from '../api/http'
+import { useAuth } from '../composables/useAuth'
+import AppToolbar from '../components/AppToolbar.vue'
 import AppPager from '../components/AppPager.vue'
 import AppModal from '../components/AppModal.vue'
 import PageGalleryViewer from '../components/PageGalleryViewer.vue'
 import { usePagedTable } from '../composables/usePagedTable'
 
 const route = useRoute()
-const adminHeading = inject('adminHeading', ref(''))
-adminHeading.value = 'Документ'
-
 const router = useRouter()
 const { user, hasRole } = useAuth()
 
@@ -745,7 +744,6 @@ const loadDocument = async (id) => {
   try {
     const response = await http.get(`/api/documents/${id}`)
     document.value = response.data
-    adminHeading.value = document.value.name
     renameForm.value = document.value.name
     descriptionForm.value = document.value.description || ''
   } catch (err) {
@@ -755,7 +753,7 @@ const loadDocument = async (id) => {
       return
     }
     if (status === 403 || status === 404) {
-      router.push('/admin/access-denied')
+      router.push('/edit/access-denied')
       return
     }
     error.value = 'Не удалось загрузить документ.'
@@ -781,7 +779,7 @@ const loadGallery = async () => {
 }
 
 const openBranch = (item) => {
-  router.push(`/admin/branches/${item.id}`)
+  router.push(`/edit/${item.id}`)
 }
 
 const loadDocumentProperties = async () => {
@@ -854,7 +852,7 @@ const confirmDeleteDocument = async () => {
   deleteLoading.value = true
   try {
     await http.post(`/api/documents/${document.value.id}/delete`, {})
-    router.push('/admin/documents')
+    router.push('/edit')
   } catch (err) {
     deleteError.value = 'Не удалось удалить документ.'
     console.error('Ошибка при удалении документа:', err)
@@ -886,7 +884,7 @@ const handleEditDocument = async () => {
   editError.value = ''
   try {
     const response = await http.post(`/api/documents/${document.value.id}/create_branch`, {})
-    router.push(`/admin/branches/${response.data.branch_id}`)
+    router.push(`/edit/${response.data.branch_id}`)
   } catch (err) {
     editError.value = (err.response && err.response.data && err.response.data.detail) || 'Не удалось создать набор изменений для редактирования.'
     console.error('Ошибка при создании ветки:', err)

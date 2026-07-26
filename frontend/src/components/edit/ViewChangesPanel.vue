@@ -86,7 +86,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { structuralDiff } from '../../../../js-packages/structuralDiff/structuralDiff.js'
-import http from '../../ceramic/api/http'
+import http from '../../api/http'
 
 const props = defineProps({
   branchId: { type: [Number, String], required: true },

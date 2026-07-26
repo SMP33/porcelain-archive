@@ -13,7 +13,6 @@ import tempfile
 from porcelain_archive.database import db
 from porcelain_archive.user import role_at_least
 from porcelain_archive.config import config
-from porcelain_archive.property.property_service import SYSTEM_TAGS
 
 # Мок страницы документа: прозрачный PNG 1x1
 _PLACEHOLDER_PAGE_IMAGE = base64.b64decode(
@@ -243,8 +242,9 @@ class DocumentService:
         Возвращает указатели документа (document_property напрямую по tag),
         вместе с переводом значения. Для bool перевод не берётся из
         property_translate, а всегда 'Да'/'Нет'; для string перевод не
-        выполняется. Модератору+ видны все, остальным - только указатели
-        с property.is_visible.
+        выполняется. Модератору+ видны все, остальным - указатели с
+        property.is_visible, а также системные (is_system) - они показываются
+        принудительно, раз значение уже проставлено.
         """
         sees_all = False
         if user_id is not None:
@@ -261,11 +261,11 @@ class DocumentService:
             FROM document_property dp
             JOIN property p ON p.tag = dp.tag
             LEFT JOIN property_translate pt ON pt.tag = dp.tag AND pt.value = dp.value
-            WHERE dp.document_id = %s AND p.tag != ALL(%s)
+            WHERE dp.document_id = %s
         """
-        params: List[Any] = [document_id, list(SYSTEM_TAGS)]
+        params: List[Any] = [document_id]
         if not sees_all:
-            query += " AND p.is_visible = 1"
+            query += " AND (p.is_visible = 1 OR p.is_system = 1)"
         query += " ORDER BY p.view_order, p.id, dp.value"
 
         rows = await db.execute_read(query, tuple(params))
@@ -299,8 +299,6 @@ class DocumentService:
             if not rows:
                 raise ValueError("Указатель не найден")
             tag, type_, is_usable = rows[0]
-            if tag in SYSTEM_TAGS:
-                raise ValueError(f"Указатель '{tag}' управляется системой и не может быть изменён здесь")
             if not is_usable:
                 raise ValueError(f"Указатель '{tag}' недоступен для использования")
             if type_ != "multicheckbox" and len(values) > 1:
@@ -320,11 +318,10 @@ class DocumentService:
             resolved.append((tag, values))
 
         async with db.transaction() as conn:
-            # Служебные указатели (document_type и т.п.) не входят в этот набор
-            # и не должны стираться при пересохранении обычных указателей документа.
             await conn.execute(
-                "DELETE FROM document_property WHERE document_id = %s AND tag != ALL(%s)",
-                (document_id, list(SYSTEM_TAGS)),
+                "DELETE FROM document_property WHERE document_id = %s "
+                "AND tag IN (SELECT tag FROM property WHERE is_usable = 1)",
+                (document_id,),
             )
 
             for tag, values in resolved:

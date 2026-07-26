@@ -123,7 +123,7 @@
 
 <script setup>
 import { ref, computed, nextTick, watch, onUnmounted } from 'vue'
-import http from '../ceramic/api/http'
+import http from '../api/http'
 import AppModal from './AppModal.vue'
 
 const props = defineProps({
