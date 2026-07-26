@@ -26,14 +26,14 @@ ON CONFLICT (name) DO NOTHING;
 -- документов архива, 'historical_document' - обычный архивный документ.
 INSERT INTO property (tag, title, description, type, is_editable, is_usable, is_visible, is_system, view_order)
 VALUES
-    ('document_type', 'Тип документа', NULL, 'combobox', 0, 0, 0, 1, 0),
+    ('document_type', 'Тип документа', NULL, 'combobox', 1, 1, 1, 1, 0),
     ('document_status', 'Статус документа', NULL, 'combobox', 1, 1, 1, 1, 1),
-    ('datetime', 'Полная дата издания', NULL, 'combobox', 1, 1, 0, 1, 2),
-    ('year', 'Год издания', NULL, 'combobox', 1, 1, 0, 1, 3),
-    ('last_change_datetime', 'Последнее изменение', 'Дата последнего изменения', 'combobox', 0, 1, 1, 1, 4),
-    ('page_count', 'Число страниц', NULL, 'combobox', 0, 0, 1, 1, 5),
-    ('subjects', 'Тематика', NULL, 'multicheckbox', 1, 1, 1, 0, 6),
-    ('source', 'Источник', NULL, 'string', 1, 1, 0, 1, 7)
+    ('datetime', 'Полная дата издания', NULL, 'combobox', 1, 1, 1, 1, 2),
+    ('year', 'Год издания', NULL, 'combobox', 1, 1, 1, 1, 3),
+    ('last_change_datetime', 'Последнее изменение', 'Дата последнего изменения', 'combobox', 10, 1, 1, 1, 4),
+    ('page_count', 'Число страниц', NULL, 'combobox', 1, 1, 1, 1, 5),
+    ('subjects', 'Тематика', NULL, 'multicheckbox', 1, 1, 1, 1, 6),
+    ('source', 'Источник материала', NULL, 'string', 1, 1, 1, 1, 7)
 ON CONFLICT (tag) DO NOTHING;
 
 INSERT INTO document_property (document_id, tag, value)

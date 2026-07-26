@@ -200,6 +200,31 @@ async def _check_system_properties_backfill(conn: AsyncConnection) -> List[str]:
     ]
 
 
+async def _check_sync_property_flags_from_seed(conn: AsyncConnection) -> List[str]:
+    """
+    Синхронизирует базовые указатели (уже вставленные на существующих БД через
+    fill_initial_data.sql с ON CONFLICT DO NOTHING - обновления там не
+    применяются) с текущими значениями fill_initial_data.sql.
+    """
+    # (tag, title, description, type, is_editable, is_usable, is_visible, is_system, view_order)
+    rows = [
+        ("document_type", "Тип документа", "NULL", "combobox", 1, 1, 1, 1, 0),
+        ("document_status", "Статус документа", "NULL", "combobox", 1, 1, 1, 1, 1),
+        ("datetime", "Полная дата издания", "NULL", "combobox", 1, 1, 1, 1, 2),
+        ("year", "Год издания", "NULL", "combobox", 1, 1, 1, 1, 3),
+        ("last_change_datetime", "Последнее изменение", "'Дата последнего изменения'", "combobox", 10, 1, 1, 1, 4),
+        ("page_count", "Число страниц", "NULL", "combobox", 1, 1, 1, 1, 5),
+        ("subjects", "Тематика", "NULL", "multicheckbox", 1, 1, 1, 1, 6),
+        ("source", "Источник материала", "NULL", "string", 1, 1, 1, 1, 7),
+    ]
+    return [
+        f"UPDATE property SET title = '{title}', description = {description}, type = '{type_}', "
+        f"is_editable = {is_editable}, is_usable = {is_usable}, is_visible = {is_visible}, "
+        f"is_system = {is_system}, view_order = {view_order} WHERE tag = '{tag}'"
+        for tag, title, description, type_, is_editable, is_usable, is_visible, is_system, view_order in rows
+    ]
+
+
 async def _check_drop_object_tables(conn: AsyncConnection) -> List[str]:
     """
     porcelain_object/object_image/object_property (отдельная сущность "объект" со
@@ -230,6 +255,7 @@ PATCHES: List[Patch] = [
     Patch("4d8f1a6b-2c9e-4f70-8b3d-6a5e0c7d9f21", _check_system_properties_backfill),
     Patch("9b3e7d15-6a4c-4f28-b1d9-3e0a8c5f2b17", _check_page_count_not_usable),
     Patch("2f6a8c19-4d3b-4e75-9a1c-7b0e5d2f8a6c", _check_subjects_status_system_flags),
+    Patch("6e1c9a34-8f27-4b56-a1d0-3c5e7f9b2d84", _check_sync_property_flags_from_seed),
 ]
 
 
