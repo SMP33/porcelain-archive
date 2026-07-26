@@ -17,25 +17,10 @@ INSERT INTO member (name, display_name, email, hash, role)
 VALUES ('admin', 'Администратор', NULL, '$2b$12$71UKwGlo5Wyb13g7yfIEue/tJ2R76ywV56hre.UU6jv7FM9ur4bvq', 'admin')
 ON CONFLICT (name) DO NOTHING;
 
--- Базовые указатели архива (перенесены из текущей рабочей БД). Все системные
--- (is_system=1) - принудительно видны при наличии значения и не могут быть
--- удалены. "document_type" и "page_count" дополнительно заблокированы от
--- общего редактора указателей документа (is_usable=0) - управляются только
--- программно (set_document_type, regenerate_branch_cache); значение 'object'
--- отличает документы-объекты (porcelain_archive/ceramic/objects) от обычных
--- документов архива, 'historical_document' - обычный архивный документ.
-INSERT INTO property (tag, title, description, type, is_editable, is_usable, is_visible, is_system, view_order)
-VALUES
-    ('document_type', 'Тип документа', NULL, 'combobox', 1, 1, 1, 1, 0),
-    ('document_status', 'Статус документа', NULL, 'combobox', 1, 1, 1, 1, 1),
-    ('datetime', 'Полная дата издания', NULL, 'combobox', 1, 1, 1, 1, 2),
-    ('year', 'Год издания', NULL, 'combobox', 1, 1, 1, 1, 3),
-    ('last_change_datetime', 'Последнее изменение', 'Дата последнего изменения', 'combobox', 10, 1, 1, 1, 4),
-    ('page_count', 'Число страниц', NULL, 'combobox', 1, 1, 1, 1, 5),
-    ('subjects', 'Тематика', NULL, 'multicheckbox', 1, 1, 1, 1, 6),
-    ('source', 'Источник материала', NULL, 'string', 1, 1, 1, 1, 7)
-ON CONFLICT (tag) DO NOTHING;
-
+-- Указатели (property) создаются и синхронизируются в Database.fill_initial_property
+-- (вызывается до этого файла). Здесь - только пул допустимых значений и переводы.
+-- Значение 'object' отличает документы-объекты (porcelain_archive/ceramic/objects)
+-- от обычных документов архива, 'historical_document' - обычный архивный документ.
 INSERT INTO document_property (document_id, tag, value)
 VALUES
     (NULL, 'document_type', 'object'),

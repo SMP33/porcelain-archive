@@ -58,7 +58,9 @@
                   <span class="tw:font-medium tw:text-gray-800 tw:flex tw:items-center tw:gap-1.5">
                     <span class="tw:text-gray-400">{{ index + 1 }}.</span>
                     <span :class="{ 'tw:font-bold': item.is_system }">{{ item.title }}</span>
-                    <i v-if="item.is_system" class="mdi mdi-shield-lock-outline tw:text-gray-400" title="Системный указатель" />
+                    <i v-if="!item.is_editable" class="mdi mdi-lock-outline tw:text-gray-400" title="Заблокирован от редактирования" />
+                    <i v-if="!item.is_usable" class="mdi mdi-key-outline tw:text-gray-400" title="Недоступен в документах" />
+                    <i v-if="!item.is_visible" class="mdi mdi-eye-off-outline tw:text-gray-400" title="Невидим для пользователей" />
                   </span>
                   <button
                     v-if="hasRole('admin') && !item.in_use && !item.is_system"
@@ -217,7 +219,9 @@
               >
                 <span class="tw:text-gray-400 tw:mr-1">{{ index + 1 }}.</span>
                 <span class="tw:font-medium tw:text-gray-800" :class="{ 'tw:font-bold': item.is_system }">{{ item.title }}</span>
-                <i v-if="item.is_system" class="mdi mdi-shield-lock-outline tw:text-gray-400 tw:ml-1.5" title="Системный указатель" />
+                <i v-if="!item.is_editable" class="mdi mdi-lock-outline tw:text-gray-400 tw:ml-1.5" title="Заблокирован от редактирования" />
+                <i v-if="!item.is_usable" class="mdi mdi-key-outline tw:text-gray-400 tw:ml-1.5" title="Недоступен в документах" />
+                <i v-if="!item.is_visible" class="mdi mdi-eye-off-outline tw:text-gray-400 tw:ml-1.5" title="Невидим для пользователей" />
               </li>
             </ul>
           </div>
@@ -260,7 +264,7 @@
             <div v-else-if="!valueDocuments.length" class="tw:text-sm tw:text-gray-400 tw:p-4">Документов не найдено</div>
             <ul v-else class="tw:divide-y tw:divide-gray-100">
               <li v-for="doc in valueDocuments" :key="doc.id" class="tw:px-4 tw:py-2 tw:text-sm">
-                <router-link :to="`/edit/document/${doc.id}`" class="tw:text-clay-600 tw:hover:text-clay-500 tw:transition-colors">
+                <router-link :to="`/edit/document/${doc.id}`" target="_blank" class="tw:text-clay-600 tw:hover:text-clay-500 tw:transition-colors">
                   {{ doc.name }}
                 </router-link>
               </li>

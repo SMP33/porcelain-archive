@@ -17,6 +17,7 @@ class Database:
     Пул создаётся (но не открывается) при первом создании экземпляра.
     Открытие пула и создание таблиц выполняется асинхронно в init().
     """
+
     _instance = None
     _pool: Optional[AsyncConnectionPool] = None
     _initialized = False
@@ -54,31 +55,151 @@ class Database:
     async def init(self) -> None:
         """
         Открывает пул соединений и выполняет create_tables.sql и create_triggers.sql,
-        затем применяет неприменённые патчи схемы БД (см. patch.py) и выполняет
-        fill_initial_data.sql.
+        затем применяет неприменённые патчи схемы БД (см. patch.py), синхронизирует
+        базовые указатели (fill_initial_property) и выполняет fill_initial_data.sql.
         Должна вызываться из async-контекста (lifespan FastAPI при старте сервера).
         """
         await self._pool.open()
 
         async with self._pool.connection() as conn:
-            files = ['create_tables.sql', 'create_triggers.sql']
+            files = ["create_tables.sql", "create_triggers.sql"]
 
-            sql_script=''
+            sql_script = ""
             for file in files:
                 sql_file_path = os.path.join(os.path.dirname(__file__), file)
-                with open(sql_file_path, 'r', encoding='utf-8') as f:
-                    sql_script += f.read() + '\n'
+                with open(sql_file_path, "r", encoding="utf-8") as f:
+                    sql_script += f.read() + "\n"
 
             await conn.execute(sql_script)
 
         await apply_patches(self._pool)
+        await self.fill_initial_property()
 
         async with self._pool.connection() as conn:
-            sql_file_path = os.path.join(os.path.dirname(__file__), 'fill_initial_data.sql')
-            with open(sql_file_path, 'r', encoding='utf-8') as f:
+            sql_file_path = os.path.join(
+                os.path.dirname(__file__), "fill_initial_data.sql"
+            )
+            with open(sql_file_path, "r", encoding="utf-8") as f:
                 await conn.execute(f.read())
 
         print("Database pool opened, tables initialized/verified.")
+
+    async def fill_initial_property(self) -> None:
+        """
+        Создаёт базовые указатели (property) или, если тег уже существует,
+        синхронизирует его название, описание, тип и флаги с этим списком -
+        выполняется при каждом запуске сервера, до fill_initial_data.sql.
+        Порядок отображения (view_order) не указывается явно - он равен позиции
+        указателя в этом списке.
+        """
+        properties = [
+            {
+                "tag": "document_type",
+                "title": "Тип документа",
+                "description": None,
+                "type": "combobox",
+                "is_editable": False,
+                "is_usable": False,
+                "is_visible": True,
+                "is_system": True,
+            },
+            {
+                "tag": "document_status",
+                "title": "Статус документа",
+                "description": None,
+                "type": "combobox",
+                "is_editable": False,
+                "is_usable": True,
+                "is_visible": True,
+                "is_system": True,
+            },
+            {
+                "tag": "datetime",
+                "title": "Полная дата издания",
+                "description": None,
+                "type": "combobox",
+                "is_editable": True,
+                "is_usable": True,
+                "is_visible": True,
+                "is_system": True,
+            },
+            {
+                "tag": "year",
+                "title": "Год издания",
+                "description": None,
+                "type": "combobox",
+                "is_editable": True,
+                "is_usable": True,
+                "is_visible": True,
+                "is_system": True,
+            },
+            {
+                "tag": "last_change_datetime",
+                "title": "Последнее изменение",
+                "description": "Дата последнего изменения",
+                "type": "combobox",
+                "is_editable": False,
+                "is_usable": False,
+                "is_visible": True,
+                "is_system": True,
+            },
+            {
+                "tag": "page_count",
+                "title": "Число страниц",
+                "description": None,
+                "type": "combobox",
+                "is_editable": False,
+                "is_usable": False,
+                "is_visible": True,
+                "is_system": True,
+            },
+            {
+                "tag": "source",
+                "title": "Источник материала",
+                "description": None,
+                "type": "string",
+                "is_editable": True,
+                "is_usable": True,
+                "is_visible": True,
+                "is_system": True,
+            },
+            {
+                "tag": "subjects",
+                "title": "Тематика",
+                "description": None,
+                "type": "multicheckbox",
+                "is_editable": True,
+                "is_usable": True,
+                "is_visible": True,
+                "is_system": False,
+            },
+        ]
+
+        async with self._pool.connection() as conn:
+            for view_order, prop in enumerate(properties):
+                await conn.execute(
+                    """
+                    INSERT INTO property (tag, title, description, type, is_editable, is_usable, is_visible, is_system, view_order)
+                    VALUES (%(tag)s, %(title)s, %(description)s, %(type)s, %(is_editable)s, %(is_usable)s, %(is_visible)s, %(is_system)s, %(view_order)s)
+                    ON CONFLICT (tag) DO UPDATE SET
+                        title = EXCLUDED.title,
+                        description = EXCLUDED.description,
+                        type = EXCLUDED.type,
+                        is_editable = EXCLUDED.is_editable,
+                        is_usable = EXCLUDED.is_usable,
+                        is_visible = EXCLUDED.is_visible,
+                        is_system = EXCLUDED.is_system,
+                        view_order = EXCLUDED.view_order
+                    """,
+                    {
+                        **prop,
+                        "is_editable": int(prop["is_editable"]),
+                        "is_usable": int(prop["is_usable"]),
+                        "is_visible": int(prop["is_visible"]),
+                        "is_system": int(prop["is_system"]),
+                        "view_order": view_order,
+                    },
+                )
 
     async def close(self) -> None:
         """Закрывает пул соединений (вызывается при остановке сервера)."""
@@ -101,7 +222,9 @@ class Database:
         async with self._pool.connection() as conn:
             yield conn
 
-    async def execute_read(self, query: str, params: Optional[Sequence[Any]] = None) -> List[Any]:
+    async def execute_read(
+        self, query: str, params: Optional[Sequence[Any]] = None
+    ) -> List[Any]:
         """
         Выполняет READ-запрос (SELECT) в отдельном соединении из пула
         и возвращает все строки результата.
@@ -110,7 +233,9 @@ class Database:
             cursor = await conn.execute(query, params)
             return await cursor.fetchall()
 
-    async def execute_read_dict(self, query: str, params: Optional[Sequence[Any]] = None) -> List[Any]:
+    async def execute_read_dict(
+        self, query: str, params: Optional[Sequence[Any]] = None
+    ) -> List[Any]:
         """
         То же, что execute_read, но строки возвращаются словарями (row["column"]).
         Формат строк задаётся на уровне курсора - отдельный пул не нужен.
@@ -120,12 +245,16 @@ class Database:
             await cursor.execute(query, params)
             return await cursor.fetchall()
 
-    async def execute_read_one_dict(self, query: str, params: Optional[Sequence[Any]] = None) -> Optional[Any]:
+    async def execute_read_one_dict(
+        self, query: str, params: Optional[Sequence[Any]] = None
+    ) -> Optional[Any]:
         """Первая строка результата словарём, либо None."""
         rows = await self.execute_read_dict(query, params)
         return rows[0] if rows else None
 
-    async def execute_write(self, query: str, params: Optional[Sequence[Any]] = None) -> int:
+    async def execute_write(
+        self, query: str, params: Optional[Sequence[Any]] = None
+    ) -> int:
         """
         Выполняет WRITE-запрос (INSERT/UPDATE/DELETE) в отдельном соединении из пула.
         Каждый вызов - отдельная, независимая транзакция.
@@ -136,7 +265,9 @@ class Database:
             cursor = await conn.execute(query, params)
             return cursor.rowcount
 
-    async def execute_insert_returning_dict(self, query: str, params: Optional[Sequence[Any]] = None) -> Any:
+    async def execute_insert_returning_dict(
+        self, query: str, params: Optional[Sequence[Any]] = None
+    ) -> Any:
         """Выполняет INSERT ... RETURNING ... и возвращает вставленную строку словарём."""
         async with self.transaction() as conn:
             cursor = conn.cursor(row_factory=dict_row)
@@ -148,8 +279,7 @@ class Database:
         Возвращает роль пользователя (см. ROLES.md), либо None, если пользователь не найден.
         """
         rows = await self.execute_read(
-            "SELECT role FROM member WHERE id = %s",
-            (user_id,)
+            "SELECT role FROM member WHERE id = %s", (user_id,)
         )
         if not rows:
             return None
