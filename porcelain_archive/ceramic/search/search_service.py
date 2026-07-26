@@ -15,33 +15,43 @@ DOCUMENT_TYPE_TAG = "document_type"
 OBJECT_TYPE_VALUE = "object"
 
 
+def _translated_label(type_: str, value: str, translated: str | None) -> str:
+    """Отображаемая метка значения указателя: перевод, если он есть."""
+    if type_ == "bool":
+        return "Да" if value == "true" else "Нет"
+    if type_ == "string":
+        return value
+    return translated or value
+
+
 class SearchService:
     async def get_facets(self) -> dict:
         # Фасеты «указателей» (property/document_property): видимые указатели и их
         # значения, реально использованные видимыми документами-не-объектами (с количеством).
         rows = await db.execute_read(
             """
-            SELECT p.id, p.tag, p.title, p.type, dp.value, COUNT(DISTINCT dp.document_id) AS cnt
+            SELECT p.id, p.tag, p.title, p.type, dp.value, pt.translated, COUNT(DISTINCT dp.document_id) AS cnt
             FROM document_property dp
             JOIN property p ON p.tag = dp.tag
+            LEFT JOIN property_translate pt ON pt.tag = dp.tag AND pt.value = dp.value
             JOIN document d ON d.id = dp.document_id AND d.is_visible = 1
             WHERE p.is_visible = 1 AND dp.document_id IS NOT NULL AND dp.value IS NOT NULL
               AND d.id NOT IN (
                   SELECT document_id FROM document_property
                   WHERE tag = %s AND value = %s AND document_id IS NOT NULL
               )
-            GROUP BY p.id, p.tag, p.title, p.type, p.view_order, dp.value
+            GROUP BY p.id, p.tag, p.title, p.type, p.view_order, dp.value, pt.translated
             ORDER BY p.view_order, p.id, dp.value
             """,
             (DOCUMENT_TYPE_TAG, OBJECT_TYPE_VALUE),
         )
         props: dict = {}
         order: list = []
-        for pid, tag, ptitle, type_, value, cnt in rows:
+        for pid, tag, ptitle, type_, value, translated, cnt in rows:
             if pid not in props:
                 props[pid] = {"id": pid, "title": ptitle, "values": []}
                 order.append(pid)
-            label = ("Да" if value == "true" else "Нет") if type_ == "bool" else value
+            label = _translated_label(type_, value, translated)
             props[pid]["values"].append({"pointer": f"{tag}:{value}", "value": label, "count": cnt})
         properties = [props[pid] for pid in order]
 
@@ -152,18 +162,20 @@ class SearchService:
             return {}
         rows = await db.execute_read(
             """
-            SELECT dp.document_id, dp.tag, dp.value, p.id, p.title
+            SELECT dp.document_id, dp.tag, dp.value, p.id, p.title, p.type, pt.translated
             FROM document_property dp
             JOIN property p ON p.tag = dp.tag AND p.is_visible = 1
+            LEFT JOIN property_translate pt ON pt.tag = dp.tag AND pt.value = dp.value
             WHERE dp.document_id = ANY(%s) AND dp.value IS NOT NULL
             ORDER BY dp.document_id, p.view_order, p.id, dp.value
             """,
             (doc_ids,),
         )
         grouped: dict[int, list[dict]] = {}
-        for doc_id, tag, value, property_id, title in rows:
+        for doc_id, tag, value, property_id, title, type_, translated in rows:
+            label = _translated_label(type_, value, translated)
             grouped.setdefault(doc_id, []).append(
-                {"pointer": f"{tag}:{value}", "value": value, "property_id": property_id, "property_title": title}
+                {"pointer": f"{tag}:{value}", "value": label, "property_id": property_id, "property_title": title}
             )
         return grouped
 

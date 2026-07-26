@@ -327,9 +327,10 @@
                   <span
                     v-for="v in activeEntry.values"
                     :key="v"
+                    :title="v"
                     class="tw:inline-flex tw:items-center tw:gap-1 tw:px-2 tw:py-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full"
                   >
-                    {{ boolLabel(activeEntry, v) }}
+                    {{ displayLabel(activeEntry, v) }}
                     <button type="button" class="tw:hover:text-clay-900" @click="removeValueFromActiveEntry(v)">
                       <i class="mdi mdi-close tw:text-sm" />
                     </button>
@@ -374,10 +375,11 @@
                       v-for="s in valueSuggestions"
                       :key="s"
                       type="button"
+                      :title="s"
                       class="tw:block tw:w-full tw:text-left tw:px-3 tw:py-1.5 tw:text-sm tw:hover:bg-gray-50"
                       @mousedown.prevent="selectSuggestion(s)"
                     >
-                      {{ s }}
+                      {{ displayLabel(activeEntry, s) }}
                     </button>
                   </div>
                 </div>
@@ -472,6 +474,7 @@ const valueInput = ref('')
 const valueError = ref('')
 const valueSuggestionsOpen = ref(false)
 const enumCache = ref({}) // property_id -> [{value}]
+const translateCache = ref({}) // property_id -> {value: translated}
 const savingProperties = ref(false)
 const savePropertiesError = ref('')
 
@@ -509,22 +512,37 @@ const valueSuggestions = computed(() => {
   ))
 })
 
-function boolLabel(entry, value) {
-  if (entry.type !== 'bool') return value
-  return value === 'true' ? 'Да' : 'Нет'
+function displayLabel(entry, value) {
+  if (entry.type === 'bool') return value === 'true' ? 'Да' : 'Нет'
+  if (entry.type === 'combobox' || entry.type === 'multicheckbox') {
+    return translateCache.value[entry.property_id]?.[value] || value
+  }
+  return value
 }
 
 function isPropertySelected(propertyId) {
   return tabSelectedProperties.value.some((e) => e.property_id === propertyId)
 }
 
-async function ensureEnumLoaded(propertyId) {
-  if (enumCache.value[propertyId]) return
-  try {
-    const response = await http.get(`/api/properties/${propertyId}/enum`)
-    enumCache.value = { ...enumCache.value, [propertyId]: response.data.items }
-  } catch (err) {
-    console.error('Ошибка при получении значений указателя:', err)
+async function ensureEnumLoaded(property) {
+  const propertyId = property.id
+  if (!enumCache.value[propertyId]) {
+    try {
+      const response = await http.get(`/api/properties/${propertyId}/enum`)
+      enumCache.value = { ...enumCache.value, [propertyId]: response.data.items }
+    } catch (err) {
+      console.error('Ошибка при получении значений указателя:', err)
+    }
+  }
+  if ((property.type === 'combobox' || property.type === 'multicheckbox') && !translateCache.value[propertyId]) {
+    try {
+      const response = await http.get(`/api/properties/${propertyId}/translate`)
+      const map = {}
+      for (const item of response.data.items) map[item.value] = item.translated
+      translateCache.value = { ...translateCache.value, [propertyId]: map }
+    } catch (err) {
+      console.error('Ошибка при получении переводов указателя:', err)
+    }
   }
 }
 
@@ -545,7 +563,7 @@ async function togglePropertySelected(property) {
   if (originalPropertyValues.value[property.id] === undefined) {
     originalPropertyValues.value = { ...originalPropertyValues.value, [property.id]: [] }
   }
-  await ensureEnumLoaded(property.id)
+  await ensureEnumLoaded(property)
   activePropertyId.value = property.id
 }
 
@@ -567,11 +585,12 @@ async function addValueToActiveEntry(rawValue) {
 
   if (activeEntry.value.type !== 'multicheckbox') {
     activeEntry.value.values = [value]
+    valueSuggestionsOpen.value = false
   } else {
     activeEntry.value.values.push(value)
+    valueSuggestionsOpen.value = true
   }
   valueInput.value = ''
-  valueSuggestionsOpen.value = false
 }
 
 function commitValueInput() {
