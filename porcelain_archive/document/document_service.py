@@ -254,6 +254,7 @@ class DocumentService:
         query = """
             SELECT p.id, p.tag, p.title, p.type, dp.value,
                    CASE
+                       WHEN dp.value IS NULL THEN NULL
                        WHEN p.type = 'bool' THEN CASE WHEN dp.value = 'true' THEN 'Да' ELSE 'Нет' END
                        WHEN p.type = 'string' THEN NULL
                        ELSE pt.translated
@@ -349,7 +350,9 @@ class DocumentService:
         Создаёт новый документ и возвращает его id. document_type обязателен и
         записывается напрямую в document_property (минуя общий редактор
         указателей - см. is_usable=0 у document_type). Статус документа
-        (document_status) выставляется автоматически в 'in_work'.
+        (document_status) выставляется автоматически в 'in_work'. Остальные
+        системные указатели (property.is_system) сразу создаются с NULL -
+        значение ещё не задано, но указатель уже виден в списке документа.
 
         :param name: Название документа.
         :param author: Автор документа (имя пользователя).
@@ -362,6 +365,8 @@ class DocumentService:
         )
         if not valid_type:
             raise ValueError(f"Недопустимое значение '{document_type}' для типа документа")
+
+        system_tags = [row[0] for row in await db.execute_read("SELECT tag FROM property WHERE is_system = 1")]
 
         async with db.transaction() as conn:
             cursor = await conn.execute(
@@ -376,14 +381,12 @@ class DocumentService:
                     (document_id,),
                 )
 
-                await conn.execute(
-                    "INSERT INTO document_property (document_id, tag, value) VALUES (%s, 'document_type', %s)",
-                    (document_id, document_type),
-                )
-                await conn.execute(
-                    "INSERT INTO document_property (document_id, tag, value) VALUES (%s, 'document_status', 'in_work')",
-                    (document_id,),
-                )
+                default_values = {"document_type": document_type, "document_status": "in_work"}
+                for tag in system_tags:
+                    await conn.execute(
+                        "INSERT INTO document_property (document_id, tag, value) VALUES (%s, %s, %s)",
+                        (document_id, tag, default_values.get(tag)),
+                    )
 
                 task_data = {"document_id": document_id}
                 await conn.execute(

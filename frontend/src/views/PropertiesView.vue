@@ -55,7 +55,11 @@
                   @dragover.prevent
                   @drop="onDrop(item)"
                 >
-                  <span class="tw:font-medium tw:text-gray-800"><span class="tw:text-gray-400 tw:mr-1">{{ index + 1 }}.</span>{{ item.title }}</span>
+                  <span class="tw:font-medium tw:text-gray-800 tw:flex tw:items-center tw:gap-1.5">
+                    <span class="tw:text-gray-400">{{ index + 1 }}.</span>
+                    <span :class="{ 'tw:font-bold': item.is_system }">{{ item.title }}</span>
+                    <i v-if="item.is_system" class="mdi mdi-shield-lock-outline tw:text-gray-400" title="Системный указатель" />
+                  </span>
                   <button
                     v-if="hasRole('admin') && !item.in_use && !item.is_system"
                     type="button"
@@ -212,7 +216,8 @@
                 @click="selectSearchProperty(item)"
               >
                 <span class="tw:text-gray-400 tw:mr-1">{{ index + 1 }}.</span>
-                <span class="tw:font-medium tw:text-gray-800">{{ item.title }}</span>
+                <span class="tw:font-medium tw:text-gray-800" :class="{ 'tw:font-bold': item.is_system }">{{ item.title }}</span>
+                <i v-if="item.is_system" class="mdi mdi-shield-lock-outline tw:text-gray-400 tw:ml-1.5" title="Системный указатель" />
               </li>
             </ul>
           </div>

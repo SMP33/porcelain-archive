@@ -153,6 +153,33 @@ async def _check_document_status_values(conn: AsyncConnection) -> List[str]:
     ]
 
 
+async def _check_system_properties_backfill(conn: AsyncConnection) -> List[str]:
+    """
+    Каждому документу должны быть присвоены все системные указатели
+    (property.is_system) - реальным значением или NULL-заглушкой, если оно ещё
+    не задано (см. document_service.create_document). Документам без
+    document_type/document_status присваиваются значения по умолчанию.
+    """
+    return [
+        "INSERT INTO document_property (document_id, tag, value) "
+        "SELECT d.id, 'document_type', 'historical_document' FROM document d "
+        "WHERE NOT EXISTS ("
+        "    SELECT 1 FROM document_property dp WHERE dp.document_id = d.id AND dp.tag = 'document_type'"
+        ") ON CONFLICT (document_id, tag, value) DO NOTHING",
+        "INSERT INTO document_property (document_id, tag, value) "
+        "SELECT d.id, 'document_status', 'in_work' FROM document d "
+        "WHERE NOT EXISTS ("
+        "    SELECT 1 FROM document_property dp WHERE dp.document_id = d.id AND dp.tag = 'document_status'"
+        ") ON CONFLICT (document_id, tag, value) DO NOTHING",
+        "INSERT INTO document_property (document_id, tag, value) "
+        "SELECT d.id, p.tag, NULL FROM document d CROSS JOIN property p "
+        "WHERE p.is_system = 1 AND p.tag NOT IN ('document_type', 'document_status') "
+        "AND NOT EXISTS ("
+        "    SELECT 1 FROM document_property dp WHERE dp.document_id = d.id AND dp.tag = p.tag"
+        ") ON CONFLICT (document_id, tag, value) DO NOTHING",
+    ]
+
+
 async def _check_drop_object_tables(conn: AsyncConnection) -> List[str]:
     """
     porcelain_object/object_image/object_property (отдельная сущность "объект" со
@@ -180,6 +207,7 @@ PATCHES: List[Patch] = [
     Patch("d6d7f56b-e466-4603-b723-253b3f68dd69", _check_drop_object_tables),
     Patch("1a9d4b2e-5f7c-4a3d-8e9b-2c6f0d1a7b4e", _check_property_is_system),
     Patch("7c2e9f04-3b8a-4d1e-9a6c-5f1d0e8b6a3c", _check_document_status_values),
+    Patch("4d8f1a6b-2c9e-4f70-8b3d-6a5e0c7d9f21", _check_system_properties_backfill),
 ]
 
 

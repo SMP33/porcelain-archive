@@ -136,7 +136,7 @@
             <div v-else-if="!documentProperties.length" class="tw:text-sm tw:text-gray-400">Указателей пока нет</div>
             <ul v-else class="tw:space-y-1">
               <li v-for="(item, idx) in documentProperties" :key="idx" class="tw:text-sm tw:text-gray-600">
-                <strong class="tw:text-gray-800">{{ item.title }}:</strong> {{ item.translated || item.value }}
+                <strong class="tw:text-gray-800">{{ item.title }}:</strong> {{ item.translated || item.value || '—' }}
               </li>
             </ul>
           </div>
@@ -651,6 +651,8 @@ async function openPropertiesTab() {
   await loadAllProperties()
   const grouped = new Map()
   for (const item of documentProperties.value) {
+    // NULL - системный указатель ещё без значения (заглушка), не считается выбранным.
+    if (item.value === null || item.value === undefined) continue
     if (!grouped.has(item.property_id)) {
       const propertyDef = allProperties.value.find((p) => p.id === item.property_id)
       grouped.set(item.property_id, {

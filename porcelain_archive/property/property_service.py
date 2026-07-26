@@ -280,7 +280,7 @@ class PropertyService:
             SELECT dp.value, COUNT(DISTINCT dp.document_id) AS count
             FROM document_property dp
             JOIN property p ON p.tag = dp.tag
-            WHERE p.id = %s AND dp.document_id IS NOT NULL
+            WHERE p.id = %s AND dp.document_id IS NOT NULL AND dp.value IS NOT NULL
               AND (%s::text IS NULL OR dp.value ILIKE '%%' || %s || '%%')
             GROUP BY dp.value
             ORDER BY dp.value

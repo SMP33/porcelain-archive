@@ -25,10 +25,10 @@ class SearchService:
             FROM document_property dp
             JOIN property p ON p.tag = dp.tag
             JOIN document d ON d.id = dp.document_id AND d.is_visible = 1
-            WHERE p.is_visible = 1 AND dp.document_id IS NOT NULL
+            WHERE p.is_visible = 1 AND dp.document_id IS NOT NULL AND dp.value IS NOT NULL
               AND d.id NOT IN (
                   SELECT document_id FROM document_property
-                  WHERE tag = %s AND value = %s
+                  WHERE tag = %s AND value = %s AND document_id IS NOT NULL
               )
             GROUP BY p.id, p.tag, p.title, p.type, p.view_order, dp.value
             ORDER BY p.view_order, p.id, dp.value
@@ -53,7 +53,7 @@ class SearchService:
             WHERE is_visible = 1 AND deleted = 0 AND meta->>'date_from' ~ '^\\d{4}'
               AND id NOT IN (
                   SELECT document_id FROM document_property
-                  WHERE tag = %s AND value = %s
+                  WHERE tag = %s AND value = %s AND document_id IS NOT NULL
               )
             """,
             (DOCUMENT_TYPE_TAG, OBJECT_TYPE_VALUE),
@@ -80,7 +80,7 @@ class SearchService:
         conditions = [
             "document.is_visible = 1",
             "document.deleted = 0",
-            "document.id NOT IN (SELECT document_id FROM document_property WHERE tag = %s AND value = %s)",
+            "document.id NOT IN (SELECT document_id FROM document_property WHERE tag = %s AND value = %s AND document_id IS NOT NULL)",
         ]
         params: list = [DOCUMENT_TYPE_TAG, OBJECT_TYPE_VALUE]
         if q.strip():
@@ -155,7 +155,7 @@ class SearchService:
             SELECT dp.document_id, dp.tag, dp.value, p.id, p.title
             FROM document_property dp
             JOIN property p ON p.tag = dp.tag AND p.is_visible = 1
-            WHERE dp.document_id = ANY(%s)
+            WHERE dp.document_id = ANY(%s) AND dp.value IS NOT NULL
             ORDER BY dp.document_id, p.view_order, p.id, dp.value
             """,
             (doc_ids,),
