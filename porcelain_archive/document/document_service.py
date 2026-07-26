@@ -282,11 +282,13 @@ class DocumentService:
         self, document_id: int, entries: List[Dict[str, Any]]
     ) -> None:
         """
-        Полностью заменяет набор указателей документа на переданный - вызывается
-        одним пакетным сохранением со вкладки "Указатели" страницы документа.
+        Заменяет значения только тех указателей, что переданы в entries - каждый
+        указатель редактируется и сохраняется независимо от остальных (вкладка
+        "Указатели" страницы документа сохраняет по одному указателю за раз).
         Значения проверяются по тем же правилам, что и PropertyService.validate_value:
         bool - только 'true'/'false', combobox/multicheckbox - только значение,
         уже существующее в пуле допустимых (document_property, document_id = NULL).
+        Пустой values удаляет все значения указателя у документа.
 
         :param entries: [{"property_id": int, "values": [str, ...]}, ...].
         """
@@ -319,13 +321,11 @@ class DocumentService:
             resolved.append((tag, values))
 
         async with db.transaction() as conn:
-            await conn.execute(
-                "DELETE FROM document_property WHERE document_id = %s "
-                "AND tag IN (SELECT tag FROM property WHERE is_usable = 1)",
-                (document_id,),
-            )
-
             for tag, values in resolved:
+                await conn.execute(
+                    "DELETE FROM document_property WHERE document_id = %s AND tag = %s",
+                    (document_id, tag),
+                )
                 for value in values:
                     await conn.execute(
                         "INSERT INTO document_property (document_id, tag, value) VALUES (%s, %s, %s)",

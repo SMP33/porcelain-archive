@@ -256,14 +256,6 @@
         <div v-if="!loading && document && hasRole('moderator') && activeTab === 'properties'" class="tw:bg-white tw:rounded-xl tw:border tw:border-gray-200 tw:overflow-hidden">
           <div class="tw:flex tw:items-center tw:justify-between tw:px-6 tw:py-4 tw:border-b tw:border-gray-100">
             <h2 class="tw:text-sm tw:font-semibold tw:text-gray-700">Указатели документа</h2>
-            <button
-              type="button"
-              :disabled="savingProperties"
-              class="tw:px-4 tw:py-2 tw:text-sm tw:font-medium tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
-              @click="handleSaveDocumentProperties"
-            >
-              {{ savingProperties ? 'Сохранение…' : 'Сохранить изменения' }}
-            </button>
           </div>
           <div v-if="savePropertiesError" class="tw:text-sm tw:text-red-600 tw:bg-red-50 tw:border tw:border-red-200 tw:rounded-lg tw:px-3 tw:py-2 tw:mx-6 tw:mt-4">
             {{ savePropertiesError }}
@@ -298,7 +290,7 @@
                   :key="entry.property_id"
                   class="tw:px-4 tw:py-2 tw:text-sm tw:cursor-pointer tw:transition-colors"
                   :class="activePropertyId === entry.property_id ? 'tw:bg-clay-50' : 'tw:hover:bg-gray-50'"
-                  @click="activePropertyId = entry.property_id"
+                  @click="selectPropertyEntry(entry.property_id)"
                 >
                   {{ entry.title }}
                   <span v-if="entry.values.length" class="tw:text-xs tw:text-gray-400"> ({{ entry.values.length }})</span>
@@ -310,7 +302,27 @@
             <div class="tw:flex-1 tw:p-4">
               <div v-if="!activeEntry" class="tw:text-sm tw:text-gray-400">Выберите указатель слева, чтобы задать значение</div>
               <div v-else>
-                <h3 class="tw:text-sm tw:font-semibold tw:text-gray-700 tw:mb-2">{{ activeEntry.title }}</h3>
+                <div class="tw:flex tw:items-center tw:justify-between tw:mb-2">
+                  <h3 class="tw:text-sm tw:font-semibold tw:text-gray-700">{{ activeEntry.title }}</h3>
+                  <div class="tw:flex tw:items-center tw:gap-2">
+                    <button
+                      type="button"
+                      :disabled="!isActiveEntryDirty"
+                      class="tw:px-3 tw:py-1.5 tw:text-xs tw:font-medium tw:text-gray-600 tw:border tw:border-gray-300 tw:rounded-lg tw:hover:bg-gray-50 tw:transition-colors tw:disabled:opacity-50"
+                      @click="handleCancelPropertyValue"
+                    >
+                      Отменить
+                    </button>
+                    <button
+                      type="button"
+                      :disabled="!isActiveEntryDirty || savingProperties"
+                      class="tw:px-3 tw:py-1.5 tw:text-xs tw:font-medium tw:bg-clay-500 tw:hover:bg-clay-400 tw:text-white tw:rounded-lg tw:transition-colors tw:disabled:opacity-50"
+                      @click="handleSavePropertyValue"
+                    >
+                      {{ savingProperties ? 'Сохранение…' : 'Сохранить' }}
+                    </button>
+                  </div>
+                </div>
                 <div v-if="activeEntry.values.length" class="tw:flex tw:flex-wrap tw:gap-1.5 tw:mb-2">
                   <span
                     v-for="v in activeEntry.values"
@@ -447,11 +459,12 @@ const galleryRef = ref(null)
 const documentProperties = ref([])
 const documentPropertiesLoading = ref(true)
 
-// Вкладка "Указатели" - локальное состояние, ничего не применяется, пока не
-// нажата кнопка "Сохранить изменения" (см. handleSaveDocumentProperties).
+// Вкладка "Указатели" - локальное состояние, каждый указатель редактируется и
+// сохраняется независимо (см. handleSavePropertyValue/handleCancelPropertyValue).
 const propertiesTabInitialized = ref(false)
 const allProperties = ref([])
 const tabSelectedProperties = ref([]) // [{property_id, tag, title, type, values: []}]
+const originalPropertyValues = ref({}) // property_id -> [значения на сервере / при добавлении]
 const activePropertyId = ref(null)
 const addPropertyMenuOpen = ref(false)
 const addPropertyMenuRoot = ref(null)
@@ -467,6 +480,25 @@ const usableProperties = computed(() => allProperties.value.filter((p) => p.is_u
 const activeEntry = computed(() => (
   tabSelectedProperties.value.find((e) => e.property_id === activePropertyId.value) || null
 ))
+
+function sameValues(a, b) {
+  if (a.length !== b.length) return false
+  const sa = [...a].sort()
+  const sb = [...b].sort()
+  return sa.every((v, i) => v === sb[i])
+}
+
+const isActiveEntryDirty = computed(() => {
+  if (!activeEntry.value) return false
+  const original = originalPropertyValues.value[activeEntry.value.property_id] || []
+  return !sameValues(activeEntry.value.values, original)
+})
+
+function selectPropertyEntry(propertyId) {
+  activePropertyId.value = propertyId
+  valueError.value = ''
+  savePropertiesError.value = ''
+}
 
 const valueSuggestions = computed(() => {
   if (!activeEntry.value) return []
@@ -510,6 +542,9 @@ async function togglePropertySelected(property) {
     type: property.type,
     values: [],
   })
+  if (originalPropertyValues.value[property.id] === undefined) {
+    originalPropertyValues.value = { ...originalPropertyValues.value, [property.id]: [] }
+  }
   await ensureEnumLoaded(property.id)
   activePropertyId.value = property.id
 }
@@ -653,8 +688,11 @@ async function openPropertiesTab() {
   for (const item of documentProperties.value) {
     // NULL - системный указатель ещё без значения (заглушка), не считается выбранным.
     if (item.value === null || item.value === undefined) continue
+    const propertyDef = allProperties.value.find((p) => p.id === item.property_id)
+    // Указатели, недоступные для использования (is_usable=0, напр. document_type,
+    // page_count), управляются программно и не редактируются в этой форме.
+    if (propertyDef && !propertyDef.is_usable) continue
     if (!grouped.has(item.property_id)) {
-      const propertyDef = allProperties.value.find((p) => p.id === item.property_id)
       grouped.set(item.property_id, {
         property_id: item.property_id,
         tag: item.tag,
@@ -667,23 +705,37 @@ async function openPropertiesTab() {
     if (!bucket.values.includes(item.value)) bucket.values.push(item.value)
   }
   tabSelectedProperties.value = Array.from(grouped.values())
+  originalPropertyValues.value = Object.fromEntries(
+    tabSelectedProperties.value.map((e) => [e.property_id, [...e.values]]),
+  )
 }
 
-async function handleSaveDocumentProperties() {
+async function handleSavePropertyValue() {
+  if (!activeEntry.value) return
   savingProperties.value = true
   savePropertiesError.value = ''
   try {
-    const properties = tabSelectedProperties.value
-      .filter((e) => e.values.length)
-      .map((e) => ({ property_id: e.property_id, values: e.values }))
-    await http.put(`/api/documents/${document.value.id}/properties`, { properties })
+    await http.put(`/api/documents/${document.value.id}/properties`, {
+      properties: [{ property_id: activeEntry.value.property_id, values: activeEntry.value.values }],
+    })
+    originalPropertyValues.value = {
+      ...originalPropertyValues.value,
+      [activeEntry.value.property_id]: [...activeEntry.value.values],
+    }
     await loadDocumentProperties()
   } catch (err) {
-    savePropertiesError.value = (err.response && err.response.data && err.response.data.detail) || 'Не удалось сохранить указатели.'
-    console.error('Ошибка при сохранении указателей документа:', err)
+    savePropertiesError.value = (err.response && err.response.data && err.response.data.detail) || 'Не удалось сохранить указатель.'
+    console.error('Ошибка при сохранении указателя документа:', err)
   } finally {
     savingProperties.value = false
   }
+}
+
+function handleCancelPropertyValue() {
+  if (!activeEntry.value) return
+  const original = originalPropertyValues.value[activeEntry.value.property_id] || []
+  activeEntry.value.values = [...original]
+  valueError.value = ''
 }
 
 const branchStatusLabels = {

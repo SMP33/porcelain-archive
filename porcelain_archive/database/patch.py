@@ -153,6 +153,15 @@ async def _check_document_status_values(conn: AsyncConnection) -> List[str]:
     ]
 
 
+async def _check_page_count_not_usable(conn: AsyncConnection) -> List[str]:
+    """
+    page_count вычисляется автоматически (regenerate_branch_cache) и не должен
+    быть доступен для ручного изменения через общий редактор указателей -
+    is_usable=0, как у document_type.
+    """
+    return ["UPDATE property SET is_usable = 0 WHERE tag = 'page_count'"]
+
+
 async def _check_system_properties_backfill(conn: AsyncConnection) -> List[str]:
     """
     Каждому документу должны быть присвоены все системные указатели
@@ -208,6 +217,7 @@ PATCHES: List[Patch] = [
     Patch("1a9d4b2e-5f7c-4a3d-8e9b-2c6f0d1a7b4e", _check_property_is_system),
     Patch("7c2e9f04-3b8a-4d1e-9a6c-5f1d0e8b6a3c", _check_document_status_values),
     Patch("4d8f1a6b-2c9e-4f70-8b3d-6a5e0c7d9f21", _check_system_properties_backfill),
+    Patch("9b3e7d15-6a4c-4f28-b1d9-3e0a8c5f2b17", _check_page_count_not_usable),
 ]
 
 
