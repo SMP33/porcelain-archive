@@ -9,7 +9,7 @@ PROPERTY_TYPES = {"string", "bool", "combobox", "multicheckbox"}
 
 # Указатель с датой в формате YYYY-MM-DD - значение проверяется по формату,
 # а не по пулу допустимых значений (несмотря на type='combobox').
-DATE_VALUE_TAGS = {"last_change_datetime"}
+DATE_VALUE_TAGS = {"last_change_datetime", "loaded_date"}
 DATE_VALUE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 

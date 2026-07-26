@@ -512,9 +512,18 @@ const valueSuggestions = computed(() => {
   ))
 })
 
+// Указатели типа 'string', для которых перевод всё же выполняется (значение -
+// логин, а показывать нужно имя) - см. porcelain_archive/property/label.py.
+const TRANSLATABLE_STRING_TAGS = ['loaded_by']
+
+function isTranslatable(entryOrProperty) {
+  return entryOrProperty.type === 'combobox' || entryOrProperty.type === 'multicheckbox'
+    || TRANSLATABLE_STRING_TAGS.includes(entryOrProperty.tag)
+}
+
 function displayLabel(entry, value) {
   if (entry.type === 'bool') return value === 'true' ? 'Да' : 'Нет'
-  if (entry.type === 'combobox' || entry.type === 'multicheckbox') {
+  if (isTranslatable(entry)) {
     return translateCache.value[entry.property_id]?.[value] || value
   }
   return value
@@ -534,7 +543,7 @@ async function ensureEnumLoaded(property) {
       console.error('Ошибка при получении значений указателя:', err)
     }
   }
-  if ((property.type === 'combobox' || property.type === 'multicheckbox') && !translateCache.value[propertyId]) {
+  if (isTranslatable(property) && !translateCache.value[propertyId]) {
     try {
       const response = await http.get(`/api/properties/${propertyId}/translate`)
       const map = {}

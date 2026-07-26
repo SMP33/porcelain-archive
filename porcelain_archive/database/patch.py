@@ -216,6 +216,8 @@ async def _check_sync_property_flags_from_seed(conn: AsyncConnection) -> List[st
         ("page_count", "Число страниц", "NULL", "combobox", 1, 1, 1, 1, 5),
         ("subjects", "Тематика", "NULL", "multicheckbox", 1, 1, 1, 1, 6),
         ("source", "Источник материала", "NULL", "string", 1, 1, 1, 1, 7),
+        ("loaded_by", "Составитель записи", "Ответственный за добавление документа в архив", "string", 0, 1, 1, 1, 8),
+        ("loaded_date", "Запись добавлена", "Дата добавления документа в архив", "string", 0, 0, 1, 1, 9),
     ]
     return [
         f"UPDATE property SET title = '{title}', description = {description}, type = '{type_}', "
@@ -262,6 +264,64 @@ async def _check_backfill_last_change_and_page_count(conn: AsyncConnection) -> L
     ]
 
 
+async def _check_backfill_loaded_by_and_date(conn: AsyncConnection) -> List[str]:
+    """
+    loaded_date (дата первого принятого набора изменений документа, YYYY-MM-DD)
+    и loaded_by (логин принявшего пользователя) не проставлялись для документов,
+    у которых первый набор изменений был принят до появления этой логики
+    (см. task.utils._set_loaded_properties_on_first_accept) - заполняются по уже
+    существующему логу статусов веток (message, receiver_type='branch_status'):
+    'accepted' - когда набор изменений был принят, 'in_accept' (ближайший по
+    времени до 'accepted' для той же ветки) - кем.
+    """
+    return [
+        """
+        INSERT INTO document_property (document_id, tag, value)
+        SELECT DISTINCT ON (b.document_id) b.document_id, 'loaded_date', TO_CHAR(am.create_time, 'YYYY-MM-DD')
+        FROM branch b
+        JOIN message am ON am.receiver_type = 'branch_status' AND am.receiver_id = b.id AND am."text" = 'accepted'
+        WHERE b.name != 'master'
+          AND NOT EXISTS (
+              SELECT 1 FROM document_property dp
+              WHERE dp.document_id = b.document_id AND dp.tag = 'loaded_date'
+          )
+        ORDER BY b.document_id, am.create_time ASC
+        ON CONFLICT (document_id, tag, value) DO NOTHING
+        """,
+        """
+        INSERT INTO document_property (document_id, tag, value)
+        SELECT sub.document_id, 'loaded_by', m.name
+        FROM (
+            SELECT DISTINCT ON (b.document_id) b.document_id, b.id AS branch_id, am.create_time AS accepted_time
+            FROM branch b
+            JOIN message am ON am.receiver_type = 'branch_status' AND am.receiver_id = b.id AND am."text" = 'accepted'
+            WHERE b.name != 'master'
+            ORDER BY b.document_id, am.create_time ASC
+        ) sub
+        JOIN LATERAL (
+            SELECT im.author_id
+            FROM message im
+            WHERE im.receiver_type = 'branch_status' AND im.receiver_id = sub.branch_id
+              AND im."text" = 'in_accept' AND im.create_time <= sub.accepted_time
+            ORDER BY im.create_time DESC LIMIT 1
+        ) acc ON true
+        JOIN member m ON m.id = acc.author_id
+        WHERE NOT EXISTS (
+            SELECT 1 FROM document_property dp
+            WHERE dp.document_id = sub.document_id AND dp.tag = 'loaded_by'
+        )
+        ON CONFLICT (document_id, tag, value) DO NOTHING
+        """,
+        """
+        INSERT INTO property_translate (tag, value, translated)
+        SELECT 'loaded_by', m.name, COALESCE(m.display_name, m.name)
+        FROM member m
+        WHERE EXISTS (SELECT 1 FROM document_property dp WHERE dp.tag = 'loaded_by' AND dp.value = m.name)
+        ON CONFLICT (tag, value) DO UPDATE SET translated = EXCLUDED.translated
+        """,
+    ]
+
+
 async def _check_drop_object_tables(conn: AsyncConnection) -> List[str]:
     """
     porcelain_object/object_image/object_property (отдельная сущность "объект" со
@@ -294,6 +354,7 @@ PATCHES: List[Patch] = [
     Patch("2f6a8c19-4d3b-4e75-9a1c-7b0e5d2f8a6c", _check_subjects_status_system_flags),
     Patch("6e1c9a34-8f27-4b56-a1d0-3c5e7f9b2d84", _check_sync_property_flags_from_seed),
     Patch("386eefd9-2f2d-4e76-ae42-11e7078daefc", _check_backfill_last_change_and_page_count),
+    Patch("37c42df3-926e-43e5-8447-ea8c67e78b73", _check_backfill_loaded_by_and_date),
 ]
 
 

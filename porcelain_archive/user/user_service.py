@@ -121,11 +121,25 @@ class UserService:
         return rows_affected > 0
 
     async def set_display_name(self, user_id: int, display_name: str) -> bool:
-        """Обновляет ФИО (display_name) пользователя."""
-        rows_affected = await db.execute_write(
-            "UPDATE member SET display_name = %s WHERE id = %s",
-            (display_name, user_id)
-        )
+        """
+        Обновляет ФИО (display_name) пользователя. Заодно синхронизирует
+        перевод его логина в указателе loaded_by (см. property_translate) -
+        значение указателя всегда логин, а перевод должен отражать текущее ФИО.
+        """
+        async with db.transaction() as conn:
+            cursor = await conn.execute(
+                "UPDATE member SET display_name = %s WHERE id = %s",
+                (display_name, user_id)
+            )
+            rows_affected = cursor.rowcount
+            if rows_affected and display_name:
+                await conn.execute(
+                    """
+                    UPDATE property_translate SET translated = %s
+                    WHERE tag = 'loaded_by' AND value = (SELECT name FROM member WHERE id = %s)
+                    """,
+                    (display_name, user_id),
+                )
         return rows_affected > 0
 
     async def is_user_list_available(self, user_id: Optional[int]) -> bool:

@@ -417,6 +417,55 @@ def set_branch_merge_result(branch_id: int, success: bool) -> None:
             "VALUES (NULL, 'branch_status', %s, %s, 0, now())",
             (branch_id, new_status),
         )
+        if success:
+            _set_loaded_properties_on_first_accept(conn, branch_id)
+
+
+def _set_loaded_properties_on_first_accept(conn: "psycopg.Connection", branch_id: int) -> None:
+    """
+    При первом принятом наборе изменений документа проставляет loaded_date
+    (дата принятия, YYYY-MM-DD) и loaded_by (логин принявшего пользователя -
+    автора задачи merge_branch этого набора изменений). Если документу эти
+    указатели уже проставлены - ничего не делает.
+    """
+    doc_row = conn.execute("SELECT document_id FROM branch WHERE id = %s", (branch_id,)).fetchone()
+    if not doc_row:
+        return
+    document_id = doc_row[0]
+
+    already_loaded = conn.execute(
+        "SELECT 1 FROM document_property WHERE document_id = %s AND tag = 'loaded_date'",
+        (document_id,),
+    ).fetchone()
+    if already_loaded:
+        return
+
+    conn.execute(
+        "INSERT INTO document_property (document_id, tag, value) VALUES (%s, 'loaded_date', CURRENT_DATE::text) "
+        "ON CONFLICT (document_id, tag, value) DO NOTHING",
+        (document_id,),
+    )
+
+    user_row = conn.execute(
+        "SELECT m.name, m.display_name FROM task t JOIN member m ON m.id = t.author_id "
+        "WHERE t.type = 'merge_branch' AND (t.data->>'branch_id')::bigint = %s "
+        "ORDER BY t.id DESC LIMIT 1",
+        (branch_id,),
+    ).fetchone()
+    if not user_row:
+        return
+    login, display_name = user_row
+
+    conn.execute(
+        "INSERT INTO document_property (document_id, tag, value) VALUES (%s, 'loaded_by', %s) "
+        "ON CONFLICT (document_id, tag, value) DO NOTHING",
+        (document_id, login),
+    )
+    conn.execute(
+        "INSERT INTO property_translate (tag, value, translated) VALUES ('loaded_by', %s, %s) "
+        "ON CONFLICT (tag, value) DO UPDATE SET translated = EXCLUDED.translated",
+        (login, display_name or login),
+    )
 
 
 def regenerate_branch_cache(repo_path: str, branch_id: int, branch: Optional[str]):
