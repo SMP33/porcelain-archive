@@ -37,7 +37,7 @@ class ObjectsService:
         )
         grouped: dict[int, list[dict]] = {}
         for doc_id, tag, value, property_id, title, type_, translated in rows:
-            label = translated_label(type_, value, translated, tag)
+            label = translated_label(type_, value, translated)
             grouped.setdefault(doc_id, []).append(
                 {"pointer": f"{tag}:{value}", "value": label, "property_id": property_id, "property_title": title}
             )
@@ -135,7 +135,7 @@ class ObjectsService:
             if pid not in props:
                 props[pid] = {"id": pid, "title": title, "values": []}
                 order.append(pid)
-            label = translated_label(type_, value, translated, tag)
+            label = translated_label(type_, value, translated)
             props[pid]["values"].append({"pointer": f"{tag}:{value}", "value": label, "count": cnt})
         return [props[pid] for pid in order]
 

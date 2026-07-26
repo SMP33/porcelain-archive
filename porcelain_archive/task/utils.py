@@ -440,11 +440,13 @@ def _set_loaded_properties_on_first_accept(conn: "psycopg.Connection", branch_id
     if already_loaded:
         return
 
-    conn.execute(
-        "INSERT INTO document_property (document_id, tag, value) VALUES (%s, 'loaded_date', CURRENT_DATE::text) "
-        "ON CONFLICT (document_id, tag, value) DO NOTHING",
-        (document_id,),
-    )
+    loaded_date = conn.execute("SELECT CURRENT_DATE::text").fetchone()[0]
+    for insert_document_id in (document_id, None):
+        conn.execute(
+            "INSERT INTO document_property (document_id, tag, value) VALUES (%s, 'loaded_date', %s) "
+            "ON CONFLICT (document_id, tag, value) DO NOTHING",
+            (insert_document_id, loaded_date),
+        )
 
     user_row = conn.execute(
         "SELECT m.name, m.display_name FROM task t JOIN member m ON m.id = t.author_id "
@@ -456,11 +458,12 @@ def _set_loaded_properties_on_first_accept(conn: "psycopg.Connection", branch_id
         return
     login, display_name = user_row
 
-    conn.execute(
-        "INSERT INTO document_property (document_id, tag, value) VALUES (%s, 'loaded_by', %s) "
-        "ON CONFLICT (document_id, tag, value) DO NOTHING",
-        (document_id, login),
-    )
+    for insert_document_id in (document_id, None):
+        conn.execute(
+            "INSERT INTO document_property (document_id, tag, value) VALUES (%s, 'loaded_by', %s) "
+            "ON CONFLICT (document_id, tag, value) DO NOTHING",
+            (insert_document_id, login),
+        )
     conn.execute(
         "INSERT INTO property_translate (tag, value, translated) VALUES ('loaded_by', %s, %s) "
         "ON CONFLICT (tag, value) DO UPDATE SET translated = EXCLUDED.translated",

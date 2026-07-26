@@ -256,7 +256,6 @@ class DocumentService:
                    CASE
                        WHEN dp.value IS NULL THEN NULL
                        WHEN p.type = 'bool' THEN CASE WHEN dp.value = 'true' THEN 'Да' ELSE 'Нет' END
-                       WHEN p.tag = 'loaded_by' THEN pt.translated
                        WHEN p.type = 'string' THEN NULL
                        ELSE pt.translated
                    END AS translated
