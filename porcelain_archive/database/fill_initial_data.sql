@@ -32,7 +32,7 @@ VALUES
     ('year', 'Год издания', NULL, 'combobox', 1, 1, 0, 1, 3),
     ('last_change_datetime', 'Последнее изменение', 'Дата последнего изменения', 'combobox', 0, 1, 1, 1, 4),
     ('page_count', 'Число страниц', NULL, 'combobox', 0, 0, 1, 1, 5),
-    ('subjects', 'Тематика', NULL, 'multicheckbox', 1, 1, 1, 1, 6),
+    ('subjects', 'Тематика', NULL, 'multicheckbox', 1, 1, 1, 0, 6),
     ('source', 'Источник', NULL, 'string', 1, 1, 0, 1, 7)
 ON CONFLICT (tag) DO NOTHING;
 

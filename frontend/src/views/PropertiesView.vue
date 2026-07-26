@@ -361,8 +361,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, watch, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import http from '../api/http'
 import { useAuth } from '../composables/useAuth'
 import AppToolbar from '../components/AppToolbar.vue'
@@ -370,6 +370,7 @@ import AppModal from '../components/AppModal.vue'
 import AppSplitter from '../components/AppSplitter.vue'
 
 const router = useRouter()
+const route = useRoute()
 const { hasRole } = useAuth()
 
 const activeTab = ref('properties')
@@ -657,6 +658,52 @@ function selectSearchProperty(item) {
   loadValueCounts()
 }
 
+// Выбранный указатель и текст фильтра во вкладке "Поиск по указателям"
+// сохраняются в query-параметрах URL, чтобы переживать перезагрузку страницы.
+let restoringFromQuery = false
+
+function syncSearchQueryToUrl() {
+  if (restoringFromQuery) return
+  const query = { ...route.query }
+  if (activeTab.value === 'search') {
+    query.tab = 'search'
+    if (searchSelectedProperty.value) {
+      query.property = String(searchSelectedProperty.value.id)
+    } else {
+      delete query.property
+    }
+    if (valueFilter.value) {
+      query.q = valueFilter.value
+    } else {
+      delete query.q
+    }
+  } else {
+    delete query.tab
+    delete query.property
+    delete query.q
+  }
+  router.replace({ query })
+}
+
+watch([activeTab, searchSelectedProperty, valueFilter], syncSearchQueryToUrl)
+
+async function restoreSearchFromQuery() {
+  if (route.query.tab !== 'search') return
+  restoringFromQuery = true
+  try {
+    activeTab.value = 'search'
+    const propertyId = Number(route.query.property)
+    const property = properties.value.find((p) => p.id === propertyId)
+    if (property) {
+      searchSelectedProperty.value = property
+      valueFilter.value = typeof route.query.q === 'string' ? route.query.q : ''
+      await loadValueCounts()
+    }
+  } finally {
+    restoringFromQuery = false
+  }
+}
+
 async function loadValueCounts() {
   if (!searchSelectedProperty.value) return
   valueCountsLoading.value = true
@@ -691,11 +738,12 @@ async function selectValue(item) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (!hasRole('moderator')) {
     router.push('/edit/access-denied')
     return
   }
-  loadProperties()
+  await loadProperties()
+  await restoreSearchFromQuery()
 })
 </script>

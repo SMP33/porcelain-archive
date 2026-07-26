@@ -162,6 +162,17 @@ async def _check_page_count_not_usable(conn: AsyncConnection) -> List[str]:
     return ["UPDATE property SET is_usable = 0 WHERE tag = 'page_count'"]
 
 
+async def _check_subjects_status_system_flags(conn: AsyncConnection) -> List[str]:
+    """
+    "Тематика" (subjects) - обычный указатель, не системный. "Статус документа"
+    (document_status) - системный принудительно (см. property.is_system).
+    """
+    return [
+        "UPDATE property SET is_system = 0 WHERE tag = 'subjects'",
+        "UPDATE property SET is_system = 1 WHERE tag = 'document_status'",
+    ]
+
+
 async def _check_system_properties_backfill(conn: AsyncConnection) -> List[str]:
     """
     Каждому документу должны быть присвоены все системные указатели
@@ -218,6 +229,7 @@ PATCHES: List[Patch] = [
     Patch("7c2e9f04-3b8a-4d1e-9a6c-5f1d0e8b6a3c", _check_document_status_values),
     Patch("4d8f1a6b-2c9e-4f70-8b3d-6a5e0c7d9f21", _check_system_properties_backfill),
     Patch("9b3e7d15-6a4c-4f28-b1d9-3e0a8c5f2b17", _check_page_count_not_usable),
+    Patch("2f6a8c19-4d3b-4e75-9a1c-7b0e5d2f8a6c", _check_subjects_status_system_flags),
 ]
 
 
