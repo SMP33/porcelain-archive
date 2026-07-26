@@ -55,8 +55,10 @@ class Database:
     async def init(self) -> None:
         """
         Открывает пул соединений и выполняет create_tables.sql и create_triggers.sql,
-        затем применяет неприменённые патчи схемы БД (см. patch.py), синхронизирует
-        базовые указатели (fill_initial_property) и выполняет fill_initial_data.sql.
+        затем синхронизирует базовые указатели (fill_initial_property) - до патчей,
+        так как патчи могут ссылаться на эти указатели (document_property.tag - внешний
+        ключ на property.tag), затем применяет неприменённые патчи схемы БД (см. patch.py)
+        и выполняет fill_initial_data.sql.
         Должна вызываться из async-контекста (lifespan FastAPI при старте сервера).
         """
         await self._pool.open()
@@ -72,8 +74,8 @@ class Database:
 
             await conn.execute(sql_script)
 
-        await apply_patches(self._pool)
         await self.fill_initial_property()
+        await apply_patches(self._pool)
 
         async with self._pool.connection() as conn:
             sql_file_path = os.path.join(

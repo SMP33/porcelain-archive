@@ -264,7 +264,7 @@ async def _check_backfill_loaded_by_and_date(conn: AsyncConnection) -> List[str]
         # loaded_date/loaded_by - combobox, значения нужны и в пуле допустимых (document_id = NULL).
         """
         INSERT INTO document_property (document_id, tag, value)
-        SELECT DISTINCT NULL, 'loaded_date', dp.value
+        SELECT DISTINCT NULL::bigint, 'loaded_date', dp.value
         FROM document_property dp
         WHERE dp.tag = 'loaded_date' AND dp.document_id IS NOT NULL
         ON CONFLICT (document_id, tag, value) DO NOTHING
@@ -295,7 +295,7 @@ async def _check_backfill_loaded_by_and_date(conn: AsyncConnection) -> List[str]
         """,
         """
         INSERT INTO document_property (document_id, tag, value)
-        SELECT DISTINCT NULL, 'loaded_by', dp.value
+        SELECT DISTINCT NULL::bigint, 'loaded_by', dp.value
         FROM document_property dp
         WHERE dp.tag = 'loaded_by' AND dp.document_id IS NOT NULL
         ON CONFLICT (document_id, tag, value) DO NOTHING
