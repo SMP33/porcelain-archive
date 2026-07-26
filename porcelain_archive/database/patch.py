@@ -225,6 +225,43 @@ async def _check_sync_property_flags_from_seed(conn: AsyncConnection) -> List[st
     ]
 
 
+async def _check_backfill_last_change_and_page_count(conn: AsyncConnection) -> List[str]:
+    """
+    last_change_datetime и page_count заполняются/переставляются по данным,
+    уже присутствующим в master-ветке документа (last_change_time,
+    meta->>'page_count') - текущее проставленное значение заменяется.
+    last_change_datetime - в формате YYYY-MM-DD (см. property_service.validate_value).
+    """
+    return [
+        """
+        DELETE FROM document_property dp
+        USING branch b
+        WHERE b.name = 'master' AND b.last_change_time IS NOT NULL
+          AND dp.document_id = b.document_id AND dp.tag = 'last_change_datetime'
+        """,
+        """
+        INSERT INTO document_property (document_id, tag, value)
+        SELECT b.document_id, 'last_change_datetime', TO_CHAR(b.last_change_time, 'YYYY-MM-DD')
+        FROM branch b
+        WHERE b.name = 'master' AND b.last_change_time IS NOT NULL
+        ON CONFLICT (document_id, tag, value) DO NOTHING
+        """,
+        """
+        DELETE FROM document_property dp
+        USING branch b
+        WHERE b.name = 'master' AND b.meta ? 'page_count'
+          AND dp.document_id = b.document_id AND dp.tag = 'page_count'
+        """,
+        """
+        INSERT INTO document_property (document_id, tag, value)
+        SELECT b.document_id, 'page_count', b.meta->>'page_count'
+        FROM branch b
+        WHERE b.name = 'master' AND b.meta ? 'page_count'
+        ON CONFLICT (document_id, tag, value) DO NOTHING
+        """,
+    ]
+
+
 async def _check_drop_object_tables(conn: AsyncConnection) -> List[str]:
     """
     porcelain_object/object_image/object_property (отдельная сущность "объект" со
@@ -256,6 +293,7 @@ PATCHES: List[Patch] = [
     Patch("9b3e7d15-6a4c-4f28-b1d9-3e0a8c5f2b17", _check_page_count_not_usable),
     Patch("2f6a8c19-4d3b-4e75-9a1c-7b0e5d2f8a6c", _check_subjects_status_system_flags),
     Patch("6e1c9a34-8f27-4b56-a1d0-3c5e7f9b2d84", _check_sync_property_flags_from_seed),
+    Patch("386eefd9-2f2d-4e76-ae42-11e7078daefc", _check_backfill_last_change_and_page_count),
 ]
 
 

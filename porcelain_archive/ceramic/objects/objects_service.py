@@ -4,6 +4,7 @@ from typing import Any, Optional, Sequence
 
 from porcelain_archive.database import db
 from porcelain_archive.document.document_service import DocumentService
+from porcelain_archive.property.label import translated_label
 
 # Объект (фарфоровое изделие) - обычный document с этим указателем, скрытый
 # из общего поиска/списка "Материалы" (см. porcelain_archive/ceramic/search).
@@ -25,18 +26,20 @@ class ObjectsService:
             return {}
         rows = await db.execute_read(
             """
-            SELECT dp.document_id, dp.tag, dp.value, p.id, p.title
+            SELECT dp.document_id, dp.tag, dp.value, p.id, p.title, p.type, pt.translated
             FROM document_property dp
             JOIN property p ON p.tag = dp.tag AND p.is_visible = 1
+            LEFT JOIN property_translate pt ON pt.tag = dp.tag AND pt.value = dp.value
             WHERE dp.document_id = ANY(%s)
             ORDER BY dp.document_id, p.view_order, p.id, dp.value
             """,
             (list(document_ids),),
         )
         grouped: dict[int, list[dict]] = {}
-        for doc_id, tag, value, property_id, title in rows:
+        for doc_id, tag, value, property_id, title, type_, translated in rows:
+            label = translated_label(type_, value, translated)
             grouped.setdefault(doc_id, []).append(
-                {"pointer": f"{tag}:{value}", "value": value, "property_id": property_id, "property_title": title}
+                {"pointer": f"{tag}:{value}", "value": label, "property_id": property_id, "property_title": title}
             )
         return grouped
 
@@ -114,24 +117,25 @@ class ObjectsService:
         """Видимые указатели и их значения, использованные объектами (с количеством)."""
         rows = await db.execute_read(
             """
-            SELECT p.id, p.tag, p.title, p.type, dp.value, COUNT(DISTINCT dp.document_id) AS cnt
+            SELECT p.id, p.tag, p.title, p.type, dp.value, pt.translated, COUNT(DISTINCT dp.document_id) AS cnt
             FROM document_property dp
             JOIN property p ON p.tag = dp.tag
+            LEFT JOIN property_translate pt ON pt.tag = dp.tag AND pt.value = dp.value
             JOIN document d ON d.id = dp.document_id AND d.is_visible = 1 AND d.deleted = 0
             WHERE p.is_visible = 1 AND dp.document_id IS NOT NULL
               AND d.id IN (SELECT document_id FROM document_property WHERE tag = %s AND value = %s)
-            GROUP BY p.id, p.tag, p.title, p.type, p.view_order, dp.value
+            GROUP BY p.id, p.tag, p.title, p.type, p.view_order, dp.value, pt.translated
             ORDER BY p.view_order, p.id, dp.value
             """,
             (DOCUMENT_TYPE_TAG, OBJECT_TYPE_VALUE),
         )
         props: dict = {}
         order: list = []
-        for pid, tag, title, type_, value, cnt in rows:
+        for pid, tag, title, type_, value, translated, cnt in rows:
             if pid not in props:
                 props[pid] = {"id": pid, "title": title, "values": []}
                 order.append(pid)
-            label = ("Да" if value == "true" else "Нет") if type_ == "bool" else value
+            label = translated_label(type_, value, translated)
             props[pid]["values"].append({"pointer": f"{tag}:{value}", "value": label, "count": cnt})
         return [props[pid] for pid in order]
 

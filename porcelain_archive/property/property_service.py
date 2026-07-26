@@ -7,6 +7,11 @@ from porcelain_archive.database import db
 TAG_PATTERN = re.compile(r"^[a-z_]+$")
 PROPERTY_TYPES = {"string", "bool", "combobox", "multicheckbox"}
 
+# Указатель с датой в формате YYYY-MM-DD - значение проверяется по формату,
+# а не по пулу допустимых значений (несмотря на type='combobox').
+DATE_VALUE_TAGS = {"last_change_datetime"}
+DATE_VALUE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
 
 class PropertyService:
     async def get_properties(self) -> List[Dict[str, Any]]:
@@ -244,15 +249,18 @@ class PropertyService:
 
     async def validate_value(self, tag: str, value: str) -> bool:
         """
-        Проверяет, допустимо ли значение для указателя с данным tag: для bool -
-        только 'true'/'false', для combobox/multicheckbox - только значение,
-        уже существующее в пуле допустимых (document_property, document_id = NULL),
-        для string - любое значение.
+        Проверяет, допустимо ли значение для указателя с данным tag: для указателей
+        из DATE_VALUE_TAGS - формат YYYY-MM-DD, для bool - только 'true'/'false',
+        для combobox/multicheckbox - только значение, уже существующее в пуле
+        допустимых (document_property, document_id = NULL), для string - любое значение.
         """
         rows = await db.execute_read("SELECT type FROM property WHERE tag = %s", (tag,))
         if not rows:
             raise ValueError("Указатель не найден")
         type_ = rows[0][0]
+
+        if tag in DATE_VALUE_TAGS:
+            return bool(DATE_VALUE_PATTERN.match(value))
 
         if type_ == "bool":
             return value in ("true", "false")

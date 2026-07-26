@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from porcelain_archive.database import db
+from porcelain_archive.property.label import translated_label
 
 PER_PAGE_DEFAULT = 30
 
@@ -13,15 +14,6 @@ DEFAULT_YEAR_MIN = 1900
 # через отдельные /objects.
 DOCUMENT_TYPE_TAG = "document_type"
 OBJECT_TYPE_VALUE = "object"
-
-
-def _translated_label(type_: str, value: str, translated: str | None) -> str:
-    """Отображаемая метка значения указателя: перевод, если он есть."""
-    if type_ == "bool":
-        return "Да" if value == "true" else "Нет"
-    if type_ == "string":
-        return value
-    return translated or value
 
 
 class SearchService:
@@ -51,7 +43,7 @@ class SearchService:
             if pid not in props:
                 props[pid] = {"id": pid, "title": ptitle, "values": []}
                 order.append(pid)
-            label = _translated_label(type_, value, translated)
+            label = translated_label(type_, value, translated)
             props[pid]["values"].append({"pointer": f"{tag}:{value}", "value": label, "count": cnt})
         properties = [props[pid] for pid in order]
 
@@ -173,7 +165,7 @@ class SearchService:
         )
         grouped: dict[int, list[dict]] = {}
         for doc_id, tag, value, property_id, title, type_, translated in rows:
-            label = _translated_label(type_, value, translated)
+            label = translated_label(type_, value, translated)
             grouped.setdefault(doc_id, []).append(
                 {"pointer": f"{tag}:{value}", "value": label, "property_id": property_id, "property_title": title}
             )
