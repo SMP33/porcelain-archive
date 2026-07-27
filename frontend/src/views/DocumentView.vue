@@ -739,6 +739,7 @@ async function openPropertiesTab() {
 
   await loadAllProperties()
   const grouped = new Map()
+  const propertyDefs = new Map()
   for (const item of documentProperties.value) {
     // NULL - системный указатель ещё без значения (заглушка), не считается выбранным.
     if (item.value === null || item.value === undefined) continue
@@ -754,11 +755,16 @@ async function openPropertiesTab() {
         type: propertyDef ? propertyDef.type : 'string',
         values: [],
       })
+      if (propertyDef) propertyDefs.set(item.property_id, propertyDef)
     }
     const bucket = grouped.get(item.property_id)
     if (!bucket.values.includes(item.value)) bucket.values.push(item.value)
   }
   tabSelectedProperties.value = Array.from(grouped.values())
+  // Перевод (translateCache) для уже проставленных указателей иначе не подгружается,
+  // пока пользователь не переключит указатель в списке слева - чипы показывали бы
+  // сырые значения при первом открытии вкладки.
+  await Promise.all(Array.from(propertyDefs.values()).map((property) => ensureEnumLoaded(property)))
   originalPropertyValues.value = Object.fromEntries(
     tabSelectedProperties.value.map((e) => [e.property_id, [...e.values]]),
   )
