@@ -16,6 +16,7 @@
             v-model="username"
             type="text"
             required
+            autocomplete="off"
             class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300"
           >
         </div>
@@ -25,6 +26,7 @@
             v-model="password"
             type="password"
             required
+            autocomplete="off"
             class="tw:w-full tw:rounded-lg tw:border tw:border-gray-300 tw:px-3 tw:py-2 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300"
           >
         </div>
@@ -53,8 +55,8 @@ const router = useRouter()
 const route = useRoute()
 const { checkAuth } = useAuth()
 
-const username = ref('admin')
-const password = ref('admin')
+const username = ref('')
+const password = ref('')
 const loading = ref(false)
 const error = ref('')
 
