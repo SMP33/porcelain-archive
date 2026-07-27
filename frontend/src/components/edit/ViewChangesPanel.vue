@@ -63,17 +63,12 @@
                 </div>
               </div>
               <div v-if="showTextColumn" class="tw:md:col-span-5">
-                <div v-if="textLoading" class="tw:text-sm tw:text-gray-400">Загрузка…</div>
-                <div v-else class="change-view-text">
-                  <div
-                    v-for="(span, idx) in spans"
-                    :key="idx"
-                    class="change-view-span"
-                    :class="{ 'change-view-span--active': hoveredSpanIndex === idx }"
-                    @mouseenter="hoveredSpanIndex = idx"
-                    @mouseleave="hoveredSpanIndex = null"
-                  >{{ span.text }}</div>
-                </div>
+                <PageTextPanel
+                  v-model:hovered-index="hoveredSpanIndex"
+                  :spans="spans"
+                  :page-size="pageSize"
+                  :text-loading="textLoading"
+                />
               </div>
             </div>
           </div>
@@ -87,6 +82,7 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { structuralDiff } from '../../../../js-packages/structuralDiff/structuralDiff.js'
 import http from '../../api/http'
+import PageTextPanel from '../PageTextPanel.vue'
 
 const props = defineProps({
   branchId: { type: [Number, String], required: true },
@@ -113,6 +109,7 @@ const selectedRow = ref(null)
 const spans = ref([])
 const textLoading = ref(false)
 const hoveredSpanIndex = ref(null)
+const pageSize = ref({ width: 0, height: 0 })
 
 const spanHighlightStyle = (span) => ({
   left: span.rect.x + '%',
@@ -187,6 +184,7 @@ const showTextColumn = computed(() => textLoading.value || spans.value.length > 
 const loadText = async (row) => {
   spans.value = []
   hoveredSpanIndex.value = null
+  pageSize.value = { width: 0, height: 0 }
   if (!row) return
 
   textLoading.value = true
@@ -197,6 +195,9 @@ const loadText = async (row) => {
     const page = response.data.text
     if (page && page.blocks) {
       spans.value = page.blocks
+    }
+    if (page && page.width && page.height) {
+      pageSize.value = { width: page.width, height: page.height }
     }
   } catch (err) {
     console.error('Ошибка при получении текста страницы:', err)
@@ -342,21 +343,5 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 .change-view-span-highlight--active {
   background: rgba(255, 213, 0, 0.35);
   border-color: rgba(255, 152, 0, 0.9);
-}
-.change-view-text {
-  max-height: 75vh;
-  overflow-y: auto;
-  line-height: 1.5;
-}
-.change-view-span {
-  display: block;
-  cursor: default;
-  padding: 3px 4px;
-  margin-bottom: 2px;
-  border-radius: 2px;
-  white-space: pre-line;
-}
-.change-view-span--active {
-  background: rgba(255, 213, 0, 0.35);
 }
 </style>
