@@ -289,22 +289,36 @@ class PropertyService:
 
     async def get_property_value_counts(self, property_id: int, query: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Возвращает значения указателя, проставленные документам, и количество
-        документов для каждого значения. query - фильтр по подстроке (ILIKE).
+        Возвращает значения указателя, проставленные документам, их перевод (если
+        есть) и количество документов для каждого значения. query - фильтр по
+        подстроке (ILIKE): если у значения есть перевод, фильтр проверяется по
+        нему, иначе - по самому значению (как и translated - что реально
+        показывается пользователю, по тому и ищем).
         """
         rows = await db.execute_read(
             """
-            SELECT dp.value, COUNT(DISTINCT dp.document_id) AS count
-            FROM document_property dp
-            JOIN property p ON p.tag = dp.tag
-            WHERE p.id = %s AND dp.document_id IS NOT NULL AND dp.value IS NOT NULL
-              AND (%s::text IS NULL OR dp.value ILIKE '%%' || %s || '%%')
-            GROUP BY dp.value
-            ORDER BY dp.value
+            WITH labeled AS (
+                SELECT dp.value,
+                       CASE
+                           WHEN p.type = 'bool' THEN CASE WHEN dp.value = 'true' THEN 'Да' ELSE 'Нет' END
+                           WHEN p.type = 'string' THEN NULL
+                           ELSE pt.translated
+                       END AS translated,
+                       dp.document_id
+                FROM document_property dp
+                JOIN property p ON p.tag = dp.tag
+                LEFT JOIN property_translate pt ON pt.tag = dp.tag AND pt.value = dp.value
+                WHERE p.id = %s AND dp.document_id IS NOT NULL AND dp.value IS NOT NULL
+            )
+            SELECT value, translated, COUNT(DISTINCT document_id) AS count
+            FROM labeled
+            WHERE %s::text IS NULL OR COALESCE(translated, value) ILIKE '%%' || %s || '%%'
+            GROUP BY value, translated
+            ORDER BY COALESCE(translated, value)
             """,
             (property_id, query, query),
         )
-        return [{"value": row[0], "count": row[1]} for row in rows]
+        return [{"value": row[0], "translated": row[1], "count": row[2]} for row in rows]
 
     async def get_documents_by_property_value(self, property_id: int, value: str) -> List[Dict[str, Any]]:
         """Возвращает документы, у которых указателю проставлено данное значение."""

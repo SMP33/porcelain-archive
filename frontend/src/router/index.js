@@ -32,6 +32,7 @@ const routes = [
   { path: '/edit/server-log', name: 'server-log', component: () => import('../views/ServerLogView.vue'), meta: { requiresAuth: true } },
   { path: '/edit/admin', name: 'admin', component: () => import('../views/AdminView.vue'), meta: { requiresAuth: true } },
   { path: '/edit/properties', name: 'properties', component: () => import('../views/PropertiesView.vue'), meta: { requiresAuth: true } },
+  { path: '/edit/properties/search', name: 'property-search', component: () => import('../views/PropertySearchView.vue'), meta: { requiresAuth: true } },
   { path: '/edit/feedback', name: 'feedback-list', component: () => import('../views/FeedbackView.vue'), meta: { requiresAuth: true } },
   { path: '/edit/subscribers', name: 'subscriber-list', component: () => import('../views/SubscribersView.vue'), meta: { requiresAuth: true } },
   { path: '/edit/document/:documentId', name: 'document', component: () => import('../views/DocumentView.vue'), props: true },

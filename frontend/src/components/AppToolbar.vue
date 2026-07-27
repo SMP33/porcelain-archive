@@ -17,7 +17,8 @@ const navItems = computed(() => {
   ]
   if (hasRole('moderator')) {
     items.push({ to: '/edit/tasks', title: 'Задачи', icon: 'mdi mdi-format-list-checks' })
-    items.push({ to: '/edit/properties', title: 'Указатели', icon: 'mdi mdi-tag-multiple-outline' })
+    items.push({ to: '/edit/properties', title: 'Редактор указателей', icon: 'mdi mdi-tag-multiple-outline' })
+    items.push({ to: '/edit/properties/search', title: 'Поиск по указателям', icon: 'mdi mdi-magnify' })
   }
   if (hasRole('admin')) {
     items.push({ to: '/edit/feedback', title: 'Обратная связь', icon: 'mdi mdi-email-outline' })
