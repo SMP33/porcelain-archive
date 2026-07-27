@@ -50,18 +50,19 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
-  // Ветка Porcelain (/edit) - своя авторизация, не связана с useAuth ceramic.
-  if (to.path.startsWith('/edit')) {
-    const { authChecked, user, checkAuth } = useAuth()
-    if (!authChecked.value) {
-      await checkAuth()
-    }
-    if (to.meta.requiresAuth && !user.value) {
-      return { name: 'login', query: { redirect: to.fullPath } }
-    }
-    return true
+  // Основной раздел (публичный ceramic-сайт) временно отключён - редирект в /edit.
+  if (!to.path.startsWith('/edit')) {
+    return { path: '/edit' }
   }
 
+  // Ветка Porcelain (/edit) - своя авторизация, не связана с useAuth ceramic.
+  const { authChecked, user, checkAuth } = useAuth()
+  if (!authChecked.value) {
+    await checkAuth()
+  }
+  if (to.meta.requiresAuth && !user.value) {
+    return { name: 'login', query: { redirect: to.fullPath } }
+  }
   return true
 })
 
