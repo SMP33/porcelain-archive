@@ -118,6 +118,9 @@ const TASK_TYPE_LABELS = {
   reset_text: 'Убрать текст',
   merge_branch: 'Завершить правки',
   create_backup: 'Бэкап базы данных',
+  download_img_zip: 'Архив изображений',
+  download_images_pdf: 'PDF из изображений',
+  download_text_pdf: 'PDF из текста',
 }
 const taskTypeLabel = (type) => TASK_TYPE_LABELS[type] || type
 
@@ -131,6 +134,9 @@ const TASK_TYPE_ICONS = {
   reset_text: 'mdi-text-box-remove',
   merge_branch: 'mdi-source-merge',
   create_backup: 'mdi-database-arrow-down-outline',
+  download_img_zip: 'mdi-folder-zip-outline',
+  download_images_pdf: 'mdi-file-pdf-box',
+  download_text_pdf: 'mdi-file-pdf-box',
 }
 const taskTypeIcon = (type) => TASK_TYPE_ICONS[type] || 'mdi-cog'
 

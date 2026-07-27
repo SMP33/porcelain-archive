@@ -1066,12 +1066,15 @@ class DocumentService:
 
         return rows[0][0]
 
-    async def get_or_build_document_zip(self, document_id: int, user_id: Optional[int]) -> Optional[bytes]:
+    async def _get_or_build_document_file(
+        self, document_id: int, user_id: Optional[int], task_type: str, cache_subdir: str, extension: str
+    ) -> Optional[bytes]:
         """
-        Возвращает содержимое zip-архива изображений документа (текущий коммит
-        master) из кеша, если он уже собран. Если нет - запускает задачу
-        download_img_zip (если для этого коммита ещё нет активной) и возвращает
-        None - вызывающий код должен опросить метод повторно позже.
+        Возвращает содержимое сгенерированного файла документа (текущий
+        коммит master) из кеша (cache_path/cache_subdir/{commit}.{extension}),
+        если он уже собран. Если нет - запускает задачу task_type (если для
+        этого коммита ещё нет активной) и возвращает None - вызывающий код
+        должен опросить метод повторно позже.
         """
         master_branch_id = await self.get_master_branch_id(document_id)
         if master_branch_id is None:
@@ -1081,24 +1084,42 @@ class DocumentService:
         if commit is None:
             raise ValueError("У документа ещё нет ни одной версии")
 
-        zip_path = Path(config.files.cache_path) / "download_img_zip" / f"{commit}.zip"
-        if zip_path.exists():
-            return zip_path.read_bytes()
+        file_path = Path(config.files.cache_path) / cache_subdir / f"{commit}.{extension}"
+        if file_path.exists():
+            return file_path.read_bytes()
 
         async with db.transaction() as conn:
             cursor = await conn.execute(
-                "SELECT id FROM task WHERE type = 'download_img_zip' "
+                "SELECT id FROM task WHERE type = %s "
                 "AND status IN ('new', 'queued', 'running') AND data->>'commit' = %s",
-                (commit,),
+                (task_type, commit),
             )
             if not await cursor.fetchone():
                 data = {"document_id": document_id, "commit": commit}
                 await conn.execute(
-                    "INSERT INTO task (type, author_id, data) VALUES ('download_img_zip', %s, %s)",
-                    (user_id, Jsonb(data)),
+                    "INSERT INTO task (type, author_id, data) VALUES (%s, %s, %s)",
+                    (task_type, user_id, Jsonb(data)),
                 )
 
         return None
+
+    async def get_or_build_document_zip(self, document_id: int, user_id: Optional[int]) -> Optional[bytes]:
+        """Zip-архив исходных изображений документа - см. _get_or_build_document_file."""
+        return await self._get_or_build_document_file(
+            document_id, user_id, "download_img_zip", "download_img_zip", "zip"
+        )
+
+    async def get_or_build_document_images_pdf(self, document_id: int, user_id: Optional[int]) -> Optional[bytes]:
+        """PDF из изображений страниц документа - см. _get_or_build_document_file."""
+        return await self._get_or_build_document_file(
+            document_id, user_id, "download_images_pdf", "download_images_pdf", "pdf"
+        )
+
+    async def get_or_build_document_text_pdf(self, document_id: int, user_id: Optional[int]) -> Optional[bytes]:
+        """PDF из текста документа с сохранением вёрстки - см. _get_or_build_document_file."""
+        return await self._get_or_build_document_file(
+            document_id, user_id, "download_text_pdf", "download_text_pdf", "pdf"
+        )
 
     async def get_pages_hash(self, commit: Optional[str]) -> List[Dict[str, Optional[str]]]:
         """

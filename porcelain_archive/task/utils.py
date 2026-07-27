@@ -397,6 +397,24 @@ def get_master_branch_id(document_id: int) -> Optional[int]:
     return row[0] if row else None
 
 
+def get_commit_pages(commit: str) -> list[tuple[int, Optional[str], Optional[str]]]:
+    """Возвращает (pos, image_hash, text_hash) страниц коммита по возрастанию pos."""
+    conninfo = (
+        f"dbname={config.database.dbname} "
+        f"user={config.database.user} "
+        f"password={config.database.password} "
+        f"host={config.database.host} "
+        f"port={config.database.port}"
+    )
+
+    with psycopg.connect(conninfo, cursor_factory=_LoggingCursor) as conn:
+        cur = conn.execute(
+            "SELECT pos, image_hash, text_hash FROM page WHERE commit = %s ORDER BY pos",
+            (commit,),
+        )
+        return cur.fetchall()
+
+
 def set_branch_merge_result(branch_id: int, success: bool) -> None:
     """Завершает слияние ветки: accepted при успехе, in_review при ошибке."""
     new_status = "accepted" if success else "in_review"

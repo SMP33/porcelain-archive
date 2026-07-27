@@ -159,7 +159,7 @@
                 class="tw:flex tw:items-center tw:gap-1 tw:px-5 tw:py-2 tw:bg-white tw:hover:bg-gray-50 tw:border tw:border-gray-300 tw:text-ink-900 tw:text-sm tw:font-medium tw:rounded-lg tw:shadow-sm tw:transition-colors tw:disabled:opacity-50"
                 @click="downloadMenuOpen = !downloadMenuOpen"
               >
-                {{ downloading ? 'Подготовка архива…' : 'Скачать' }}
+                {{ downloading ? 'Подготовка файла…' : 'Скачать' }}
                 <i class="mdi mdi-chevron-down" />
               </button>
               <div
@@ -172,6 +172,20 @@
                   @click="handleDownloadImagesZip"
                 >
                   Исходные изображения - Архив
+                </button>
+                <button
+                  type="button"
+                  class="tw:w-full tw:text-left tw:px-4 tw:py-2 tw:text-sm tw:text-gray-700 tw:hover:bg-gray-50 tw:transition-colors"
+                  @click="handleDownloadImagesPdf"
+                >
+                  Изображения - PDF
+                </button>
+                <button
+                  type="button"
+                  class="tw:w-full tw:text-left tw:px-4 tw:py-2 tw:text-sm tw:text-gray-700 tw:hover:bg-gray-50 tw:transition-colors"
+                  @click="handleDownloadTextPdf"
+                >
+                  Текст - PDF
                 </button>
               </div>
             </div>
@@ -648,13 +662,13 @@ function filenameFromContentDisposition(header, fallback) {
   return match ? match[1] : fallback
 }
 
-async function handleDownloadImagesZip() {
+async function downloadDocumentFile(endpoint, fallbackFilename, errorMessage) {
   downloadMenuOpen.value = false
   downloadError.value = ''
   downloading.value = true
   try {
     for (;;) {
-      const response = await http.get(`/api/documents/download/${document.value.id}`, {
+      const response = await http.get(endpoint, {
         responseType: 'blob',
         validateStatus: () => true,
       })
@@ -663,28 +677,49 @@ async function handleDownloadImagesZip() {
         const url = URL.createObjectURL(response.data)
         const link = window.document.createElement('a')
         link.href = url
-        link.download = filenameFromContentDisposition(
-          response.headers['content-disposition'],
-          `document_${document.value.id}_images.zip`,
-        )
+        link.download = filenameFromContentDisposition(response.headers['content-disposition'], fallbackFilename)
         link.click()
         URL.revokeObjectURL(url)
         return
       }
 
       if (response.status !== 202) {
-        downloadError.value = 'Не удалось подготовить архив.'
+        downloadError.value = errorMessage
         return
       }
 
       await new Promise((resolve) => setTimeout(resolve, DOWNLOAD_POLL_INTERVAL_MS))
     }
   } catch (err) {
-    downloadError.value = 'Не удалось скачать архив.'
-    console.error('Ошибка при скачивании архива изображений:', err)
+    downloadError.value = errorMessage
+    console.error('Ошибка при скачивании файла документа:', err)
   } finally {
     downloading.value = false
   }
+}
+
+function handleDownloadImagesZip() {
+  return downloadDocumentFile(
+    `/api/documents/download/${document.value.id}`,
+    `document_${document.value.id}_images.zip`,
+    'Не удалось подготовить архив.',
+  )
+}
+
+function handleDownloadImagesPdf() {
+  return downloadDocumentFile(
+    `/api/documents/download_images_pdf/${document.value.id}`,
+    `document_${document.value.id}_images.pdf`,
+    'Не удалось подготовить PDF.',
+  )
+}
+
+function handleDownloadTextPdf() {
+  return downloadDocumentFile(
+    `/api/documents/download_text_pdf/${document.value.id}`,
+    `document_${document.value.id}_text.pdf`,
+    'Не удалось подготовить PDF.',
+  )
 }
 
 async function loadAllProperties() {

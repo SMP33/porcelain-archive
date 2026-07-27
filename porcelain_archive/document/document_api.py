@@ -697,6 +697,65 @@ async def download_document_zip(
     )
 
 
+@router.get("/download_images_pdf/{document_id}")
+async def download_document_images_pdf(
+    document_id: int,
+    request: Request,
+) -> Response:
+    """
+    Возвращает PDF, собранный из изображений страниц документа (текущий
+    коммит master). Если PDF ещё не собран - запускает его формирование в
+    фоне и отвечает 202; вызывающая сторона должна повторить запрос позже.
+    """
+    user_id = await _get_current_user_id(request)
+    if not await document_service.is_document_available(user_id, document_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Документ не найден")
+
+    try:
+        pdf_bytes = await document_service.get_or_build_document_images_pdf(document_id, user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    if pdf_bytes is None:
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content={"status": "processing"})
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="document_{document_id}_images.pdf"'},
+    )
+
+
+@router.get("/download_text_pdf/{document_id}")
+async def download_document_text_pdf(
+    document_id: int,
+    request: Request,
+) -> Response:
+    """
+    Возвращает PDF с текстом документа (текущий коммит master), с учётом
+    выравнивания, размера шрифта и позиций текстовых блоков. Если PDF ещё
+    не собран - запускает его формирование в фоне и отвечает 202; вызывающая
+    сторона должна повторить запрос позже.
+    """
+    user_id = await _get_current_user_id(request)
+    if not await document_service.is_document_available(user_id, document_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Документ не найден")
+
+    try:
+        pdf_bytes = await document_service.get_or_build_document_text_pdf(document_id, user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    if pdf_bytes is None:
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content={"status": "processing"})
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="document_{document_id}_text.pdf"'},
+    )
+
+
 @router.get("/{document_id}/branches")
 async def read_document_branches(
     document_id: int,
