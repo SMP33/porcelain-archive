@@ -165,8 +165,7 @@
                         :value="translations[item.value] || ''"
                         type="text"
                         placeholder="Перевод…"
-                        :disabled="!selectedProperty.is_editable"
-                        class="tw:flex-1 tw:min-w-0 tw:rounded tw:border tw:border-gray-300 tw:px-2 tw:py-1 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300 tw:disabled:opacity-50"
+                        class="tw:flex-1 tw:min-w-0 tw:rounded tw:border tw:border-gray-300 tw:px-2 tw:py-1 tw:text-sm tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-clay-300"
                         @change="handleSaveTranslation(item, $event)"
                       >
                       <button

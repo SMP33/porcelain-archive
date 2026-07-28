@@ -1,4 +1,3 @@
-import platform
 import re
 from typing import Any, Dict, List, Optional
 
@@ -114,15 +113,7 @@ class PropertyService:
     async def update_property_flags(
         self, property_id: int, is_editable: bool, is_usable: bool, is_visible: bool
     ) -> bool:
-        """
-        Изменяет флаги указателя. Флаг is_editable нельзя изменить, если сервер
-        работает не на Windows.
-        """
-        if platform.system() != "Windows":
-            rows = await db.execute_read("SELECT is_editable FROM property WHERE id = %s", (property_id,))
-            if rows and bool(rows[0][0]) != is_editable:
-                raise ValueError("Флаг 'is_editable' можно изменить только на сервере под управлением Windows")
-
+        """Изменяет флаги указателя."""
         rows_affected = await db.execute_write(
             "UPDATE property SET is_editable = %s, is_usable = %s, is_visible = %s WHERE id = %s",
             (int(is_editable), int(is_usable), int(is_visible), property_id),
@@ -350,15 +341,17 @@ class PropertyService:
         return [{"value": row[0], "translated": row[1]} for row in rows]
 
     async def _get_translatable_tag(self, property_id: int) -> str:
-        """Возвращает tag указателя, если для его типа выполняется перевод (не string) и разрешено редактирование."""
-        rows = await db.execute_read("SELECT tag, type, is_editable FROM property WHERE id = %s", (property_id,))
+        """
+        Возвращает tag указателя, если для его типа выполняется перевод (не
+        string). Перевод можно менять независимо от is_editable - он не
+        относится к самому списку допустимых значений.
+        """
+        rows = await db.execute_read("SELECT tag, type FROM property WHERE id = %s", (property_id,))
         if not rows:
             raise ValueError("Указатель не найден")
-        tag, type_, is_editable = rows[0]
+        tag, type_ = rows[0]
         if type_ == "string":
             raise ValueError("Для указателей типа 'строка' перевод не выполняется")
-        if not is_editable:
-            raise ValueError("Перевод этого указателя изменить нельзя")
         return tag
 
     async def set_property_translation(self, property_id: int, value: str, translated: str) -> None:
