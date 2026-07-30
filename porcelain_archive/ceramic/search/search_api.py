@@ -14,10 +14,14 @@ async def search(
     year_from: int = Query(0, ge=0),
     year_to: int = Query(0, ge=0),
     pointer: list[str] = Query(default=[]),
+    pages_from: int = Query(0, ge=0),
+    pages_to: int = Query(0, ge=0),
     offset: int = 0,
     limit: int = PER_PAGE_DEFAULT,
 ):
-    return await search_service.search(q, year_from, year_to, offset, limit, pointer)
+    return await search_service.search(
+        q, year_from, year_to, offset, limit, pointer, pages_from, pages_to
+    )
 
 
 @router.get("/facets")

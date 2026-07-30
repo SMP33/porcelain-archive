@@ -15,6 +15,19 @@ DEFAULT_YEAR_MIN = 1900
 DOCUMENT_TYPE_TAG = "document_type"
 OBJECT_TYPE_VALUE = "object"
 
+# Число страниц фильтруется диапазоном (page_min/page_max + pages_from/pages_to),
+# поэтому из фасетов-списков исключается - иначе к ползунку добавился бы
+# перечень всех значений.
+PAGE_COUNT_TAG = "page_count"
+
+# Число страниц берётся из master-ветки документа - первоисточник, из которого
+# бэкфиллится одноимённый указатель. Подзапрос, а не JOIN: то же условие
+# используется в запросе подсчёта total, где ветка не присоединена.
+PAGE_COUNT_SQL = (
+    "(SELECT b2.meta->>'page_count' FROM branch b2"
+    " WHERE b2.document_id = document.id AND b2.name = 'master')"
+)
+
 
 class SearchService:
     async def get_facets(self) -> dict:
@@ -27,7 +40,7 @@ class SearchService:
             JOIN property p ON p.tag = dp.tag
             LEFT JOIN property_translate pt ON pt.tag = dp.tag AND pt.value = dp.value
             JOIN document d ON d.id = dp.document_id AND d.is_visible = 1
-            WHERE p.is_visible = 1 AND dp.document_id IS NOT NULL AND dp.value IS NOT NULL
+            WHERE p.is_visible = 1 AND p.tag != %s AND dp.document_id IS NOT NULL AND dp.value IS NOT NULL
               AND d.id NOT IN (
                   SELECT document_id FROM document_property
                   WHERE tag = %s AND value = %s AND document_id IS NOT NULL
@@ -35,7 +48,7 @@ class SearchService:
             GROUP BY p.id, p.tag, p.title, p.type, p.view_order, dp.value, pt.translated
             ORDER BY p.view_order, p.id, dp.value
             """,
-            (DOCUMENT_TYPE_TAG, OBJECT_TYPE_VALUE),
+            (PAGE_COUNT_TAG, DOCUMENT_TYPE_TAG, OBJECT_TYPE_VALUE),
         )
         props: dict = {}
         order: list = []
@@ -61,10 +74,29 @@ class SearchService:
             (DOCUMENT_TYPE_TAG, OBJECT_TYPE_VALUE),
         )
         year_min, year_max = (year_rows[0] if year_rows else (None, None))
+
+        # Границы числа страниц - по master-веткам видимых документов (не объектов).
+        page_rows = await db.execute_read(
+            """
+            SELECT MIN((b.meta->>'page_count')::int), MAX((b.meta->>'page_count')::int)
+            FROM document d
+            JOIN branch b ON b.document_id = d.id AND b.name = 'master'
+            WHERE d.is_visible = 1 AND d.deleted = 0 AND b.meta->>'page_count' ~ '^[0-9]+$'
+              AND d.id NOT IN (
+                  SELECT document_id FROM document_property
+                  WHERE tag = %s AND value = %s AND document_id IS NOT NULL
+              )
+            """,
+            (DOCUMENT_TYPE_TAG, OBJECT_TYPE_VALUE),
+        )
+        page_min, page_max = (page_rows[0] if page_rows else (None, None))
+
         return {
             "properties": properties,
             "year_min": year_min or DEFAULT_YEAR_MIN,
             "year_max": year_max or date.today().year,
+            "page_min": page_min or 0,
+            "page_max": page_max or 0,
         }
 
     async def search(
@@ -75,6 +107,8 @@ class SearchService:
         offset: int,
         limit: int,
         pointers: list[str] | None = None,
+        pages_from: int = 0,
+        pages_to: int = 0,
     ) -> dict:
         # Поиск по названию и описанию документа + фильтры по указателям и датам.
         # Документы-объекты (document_type=object) в выдачу не попадают - у них
@@ -103,6 +137,16 @@ class SearchService:
         if year_to:
             conditions.append("LEFT(document.meta->>'date_from', 4)::int <= %s")
             params.append(int(year_to))
+        # Проверка ~ '^[0-9]+$' обязательна по той же причине, что и у дат: без неё
+        # отсутствующее или нечисловое значение роняет запрос на ::int.
+        if pages_from or pages_to:
+            conditions.append(f"{PAGE_COUNT_SQL} ~ '^[0-9]+$'")
+        if pages_from:
+            conditions.append(f"{PAGE_COUNT_SQL}::int >= %s")
+            params.append(int(pages_from))
+        if pages_to:
+            conditions.append(f"{PAGE_COUNT_SQL}::int <= %s")
+            params.append(int(pages_to))
         # pointer - строка "tag:value", однозначно определяющая допустимое значение указателя.
         pointer_keys = sorted({str(p) for p in (pointers or []) if p})
         if pointer_keys:

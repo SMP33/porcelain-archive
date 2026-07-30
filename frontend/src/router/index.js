@@ -13,6 +13,7 @@ const routes = [
       { path: 'objects/:id', name: 'ceramic-object', component: () => import('../ceramic/views/ObjectView.vue'), props: true },
       { path: 'document/:id', name: 'ceramic-document', component: () => import('../ceramic/views/DocumentView.vue'), props: true },
       { path: 'materials', name: 'ceramic-materials', component: () => import('../ceramic/views/SearchView.vue') },
+      { path: 'pointers', name: 'ceramic-pointers', component: () => import('../ceramic/views/PointersView.vue') },
       { path: 'search', redirect: '/materials' },
       { path: 'about', name: 'ceramic-about', component: () => import('../ceramic/views/AboutView.vue') },
       { path: 'feedback', name: 'ceramic-feedback', component: () => import('../ceramic/views/FeedbackView.vue') },

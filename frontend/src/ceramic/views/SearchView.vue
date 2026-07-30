@@ -12,6 +12,8 @@ const PAGE_SIZE = 21   // кратно трём колонкам сетки
 const q = computed(() => route.query.q || '')
 const yearFrom = computed(() => route.query.year_from || '')
 const yearTo = computed(() => route.query.year_to || '')
+const pagesFrom = computed(() => route.query.pages_from || '')
+const pagesTo = computed(() => route.query.pages_to || '')
 const page = computed(() => Math.max(1, parseInt(route.query.page) || 1))
 
 // Выбранные значения указателей ("tag:value") из query.pointer.
@@ -28,7 +30,7 @@ const results = ref([])
 const total = ref(0)
 const loading = ref(true)
 
-const facets = ref({ properties: [], year_min: null, year_max: null })
+const facets = ref({ properties: [], year_min: null, year_max: null, page_min: null, page_max: null })
 
 // pointer ("tag:value") -> подпись значения для активных фильтров.
 const pointerLabels = computed(() => {
@@ -54,6 +56,8 @@ function activeFilterParams() {
   if (q.value) params.q = q.value
   if (yearFrom.value) params.year_from = yearFrom.value
   if (yearTo.value) params.year_to = yearTo.value
+  if (pagesFrom.value) params.pages_from = pagesFrom.value
+  if (pagesTo.value) params.pages_to = pagesTo.value
   if (pointers.value.length) params.pointer = pointers.value
   return params
 }
@@ -77,6 +81,10 @@ async function loadFacets() {
     yearFrom.value ? parseInt(yearFrom.value) : data.year_min,
     yearTo.value ? parseInt(yearTo.value) : data.year_max
   )
+  pagesSlider.reset(
+    pagesFrom.value ? parseInt(pagesFrom.value) : data.page_min,
+    pagesTo.value ? parseInt(pagesTo.value) : data.page_max
+  )
 }
 
 function reload() {
@@ -86,13 +94,23 @@ function reload() {
 
 onMounted(reload)
 watch(
-  () => [q.value, yearFrom.value, yearTo.value, pointers.value.join(','), page.value],
+  () => [
+    q.value, yearFrom.value, yearTo.value,
+    pagesFrom.value, pagesTo.value,
+    pointers.value.join(','), page.value,
+  ],
   reload
 )
 
 const slider = useDualRangeSlider(
   computed(() => facets.value.year_min || 0),
   computed(() => facets.value.year_max || 0),
+  0, 0
+)
+
+const pagesSlider = useDualRangeSlider(
+  computed(() => facets.value.page_min || 0),
+  computed(() => facets.value.page_max || 0),
   0, 0
 )
 
@@ -103,6 +121,12 @@ function submitSearch() {
 function submitYearRange() {
   router.push({
     query: { ...route.query, year_from: slider.valueFrom.value, year_to: slider.valueTo.value, page: undefined },
+  })
+}
+
+function submitPagesRange() {
+  router.push({
+    query: { ...route.query, pages_from: pagesSlider.valueFrom.value, pages_to: pagesSlider.valueTo.value, page: undefined },
   })
 }
 
@@ -118,8 +142,17 @@ function goToPage(p) {
 }
 
 const hasActiveFilters = computed(
-  () => q.value || yearFrom.value || yearTo.value || pointers.value.length
+  () => q.value || yearFrom.value || yearTo.value || pagesFrom.value || pagesTo.value || pointers.value.length
 )
+
+// На карточке из всех указателей документа показывается только тип: остальные
+// либо дублируют то, что уже есть на карточке (число страниц - бейдж на
+// миниатюре), либо служебные.
+const CARD_POINTER_TAG = 'document_type:'
+
+function cardPointers(doc) {
+  return (doc.pointers || []).filter((p) => p.pointer.startsWith(CARD_POINTER_TAG))
+}
 
 // «1958» или «1955–1960» - даты документа для карточки
 function formatDates(doc) {
@@ -151,6 +184,10 @@ function formatDates(doc) {
         <router-link v-if="yearFrom || yearTo" :to="{ query: withoutKeys(['year_from', 'year_to']) }"
            class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
           {{ yearFrom || facets.year_min }}–{{ yearTo || facets.year_max }} <span class="tw:hover:text-clay-900 tw:font-bold tw:leading-none">×</span>
+        </router-link>
+        <router-link v-if="pagesFrom || pagesTo" :to="{ query: withoutKeys(['pages_from', 'pages_to']) }"
+           class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
+          {{ pagesFrom || facets.page_min }}–{{ pagesTo || facets.page_max }} стр. <span class="tw:hover:text-clay-900 tw:font-bold tw:leading-none">×</span>
         </router-link>
         <button v-for="pid in pointers" :key="pid" type="button" @click="togglePointer(pid)"
            class="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:bg-clay-100 tw:text-clay-700 tw:rounded-full tw:px-2.5 tw:py-1">
@@ -186,6 +223,30 @@ function formatDates(doc) {
 
 
 
+
+      <!-- Число страниц -->
+      <div v-if="facets.page_max && facets.page_min !== facets.page_max" class="tw:mb-6">
+        <p class="tw:text-xs tw:font-semibold tw:text-gray-400 tw:uppercase tw:tracking-wider tw:mb-3">Число страниц</p>
+        <form @submit.prevent="submitPagesRange">
+          <div class="tw:flex tw:justify-between tw:text-xs tw:text-gray-500 tw:mb-2 tw:font-medium">
+            <span>{{ pagesSlider.valueFrom.value }}</span>
+            <span>{{ pagesSlider.valueTo.value }}</span>
+          </div>
+
+          <div class="dual-range tw:relative tw:h-4 tw:mb-3">
+            <div class="tw:absolute tw:inset-x-0 tw:top-1/2 tw:-translate-y-1/2 tw:h-1 tw:bg-gray-200 tw:rounded-full"></div>
+            <div class="tw:absolute tw:top-1/2 tw:-translate-y-1/2 tw:h-1 tw:bg-clay-400 tw:rounded-full" :style="pagesSlider.trackStyle.value"></div>
+            <input type="range" v-model.number="pagesSlider.valueFrom.value" @input="pagesSlider.onFromInput"
+                   :min="facets.page_min" :max="facets.page_max">
+            <input type="range" v-model.number="pagesSlider.valueTo.value" @input="pagesSlider.onToInput"
+                   :min="facets.page_min" :max="facets.page_max">
+          </div>
+
+          <button type="submit" class="tw:w-full tw:py-1.5 tw:text-xs tw:rounded-lg tw:border tw:border-clay-200 tw:hover:bg-clay-50 tw:text-gray-600 tw:transition-colors">
+            Применить
+          </button>
+        </form>
+      </div>
 
       <!-- Указатели (из админки) -->
       <div v-for="prop in facets.properties" :key="prop.id" class="tw:mb-6">
@@ -232,13 +293,13 @@ function formatDates(doc) {
             </span>
           </div>
 
-          <div class="tw:p-4 tw:flex tw:flex-col tw:gap-1.5">
+          <div class="tw:p-4 tw:flex tw:flex-col tw:gap-1.5 tw:flex-1">
             <h2 class="tw:font-serif tw:font-semibold tw:text-base tw:text-ink-900 tw:group-hover:text-clay-500 tw:transition-colors tw:leading-snug"
                 >{{ doc.title }}</h2>
             <p v-if="formatDates(doc)" class="tw:text-xs tw:text-gray-400">{{ formatDates(doc) }}</p>
             <p v-if="doc.description" class="tw:text-sm tw:text-gray-500 tw:line-clamp-2">{{ doc.description }}</p>
-            <div v-if="doc.pointers && doc.pointers.length" class="tw:flex tw:flex-wrap tw:gap-1 tw:mt-1">
-              <span v-for="p in doc.pointers" :key="p.enum_id"
+            <div v-if="cardPointers(doc).length" class="tw:flex tw:flex-wrap tw:gap-1 tw:mt-auto tw:pt-1">
+              <span v-for="p in cardPointers(doc)" :key="p.pointer"
                     class="tw:text-xs tw:bg-clay-50 tw:text-clay-700 tw:border tw:border-clay-100 tw:rounded-full tw:px-2 tw:py-0.5">
                 {{ p.value }}
               </span>

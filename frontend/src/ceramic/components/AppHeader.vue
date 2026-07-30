@@ -21,6 +21,7 @@ function isActive(path) {
       <nav class="tw:flex tw:items-center tw:gap-2">
         <router-link to="/objects" class="skew-btn skew-btn--nav" :class="{ active: isActive('/objects') }">Объекты</router-link>
         <router-link to="/materials" class="skew-btn skew-btn--nav" :class="{ active: isActive('/materials') }">Материалы</router-link>
+        <router-link to="/pointers" class="skew-btn skew-btn--nav" :class="{ active: isActive('/pointers') }">Указатели</router-link>
         <router-link to="/feedback" class="skew-btn skew-btn--nav" :class="{ active: isActive('/feedback') }">Обратная связь</router-link>
 
         <!-- Вход в архив документов (/edit) -->
